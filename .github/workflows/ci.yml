@@ -1,4 +1,4 @@
-name: CI
+name: CI and SonarCloud Scan
 
 on:
   push:
@@ -26,3 +26,9 @@ jobs:
 
       - name: Run Unit Tests
         run: ./gradlew test
+
+      - name: Run SonarCloud Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Automatically provided by GitHub
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./gradlew sonar
