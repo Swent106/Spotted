@@ -13,7 +13,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.android.sample"
+        applicationId = "com.android.spotted"
         minSdk = 28
         targetSdk = 34
         versionCode = 1
