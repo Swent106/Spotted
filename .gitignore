@@ -1,0 +1,13 @@
+/.idea/
+.DS_Store
+.gradle
+/local.properties
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Fichiers secrets Firebase (Sécurité pour Spotted)
+google-services.json
+app/google-services.json
