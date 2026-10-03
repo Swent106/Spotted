@@ -92,7 +92,9 @@ android {
         resources.setSrcDirs(emptyList<File>())
     }
 }
-
+configurations.configureEach {
+    exclude(group = "com.google.protobuf", module = "protobuf-lite")
+}
 sonar {
     properties {
         property("sonar.projectKey", "Swent106_Spotted")
