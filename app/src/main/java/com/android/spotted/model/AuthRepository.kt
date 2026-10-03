@@ -6,7 +6,7 @@ interface AuthRepository {
 
   val currentUser: StateFlow<User?>
 
-  suspend fun signInWithGoogle(user: User): Result<User>
+  suspend fun signInWithGoogle(idToken: String): Result<User>
 
   /** Signs out the current user. */
   suspend fun signOut(): Result<Unit>

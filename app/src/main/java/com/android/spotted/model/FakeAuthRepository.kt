@@ -12,10 +12,11 @@ class FakeAuthRepository : AuthRepository {
   /** Set this to true in your tests to simulate an authentication failure. */
   var shouldSimulateFailure = false
 
-  override suspend fun signInWithGoogle(user: User): Result<User> {
+  override suspend fun signInWithGoogle(idToken: String): Result<User> {
     return if (shouldSimulateFailure) {
       Result.failure(Exception("Simulated authentication failure in FakeAuthRepository"))
     } else {
+      val user = User("fake_uid_from_token", "test@example.com")
       _currentUser.value = user
       Result.success(user)
     }

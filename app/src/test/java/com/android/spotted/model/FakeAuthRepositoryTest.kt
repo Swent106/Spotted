@@ -29,25 +29,28 @@ class FakeAuthRepositoryTest {
   fun `signInWithGoogle success updates currentUser and returns success`() = runTest {
     // Arrange
     authRepository.shouldSimulateFailure = false
+    val fakeToken = "valid_fake_token"
 
     // Act
-    val result = authRepository.signInWithGoogle(testUser)
+    val result = authRepository.signInWithGoogle(fakeToken)
 
     // Assert
     assertTrue("Result should be success", result.isSuccess)
-    assertEquals("Result should contain the test user", testUser, result.getOrNull())
+    val returnedUser = result.getOrNull()
+    assertEquals("Result uid should match", "fake_uid_from_token", returnedUser?.uid)
 
     val currentUser = authRepository.currentUser.first()
-    assertEquals("currentUser state flow should emit the logged in user", testUser, currentUser)
+    assertEquals("currentUser state flow should emit the logged in user", returnedUser, currentUser)
   }
 
   @Test
   fun `signInWithGoogle failure does not update currentUser and returns failure`() = runTest {
     // Arrange
     authRepository.shouldSimulateFailure = true
+    val fakeToken = "invalid_fake_token"
 
     // Act
-    val result = authRepository.signInWithGoogle(testUser)
+    val result = authRepository.signInWithGoogle(fakeToken)
 
     // Assert
     assertTrue("Result should be failure", result.isFailure)
@@ -63,9 +66,9 @@ class FakeAuthRepositoryTest {
   fun `signOut clears the currentUser and returns success`() = runTest {
     // Arrange
     authRepository.shouldSimulateFailure = false
-    authRepository.signInWithGoogle(testUser) // Sign in first
+    authRepository.signInWithGoogle("some_token") // Sign in first
     var currentUser = authRepository.currentUser.first()
-    assertEquals("User should be signed in", testUser, currentUser)
+    assertEquals("User should be signed in", "fake_uid_from_token", currentUser?.uid)
 
     // Act
     val result = authRepository.signOut()

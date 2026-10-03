@@ -125,6 +125,7 @@ dependencies {
     implementation(platform(libs.compose.bom))
     testImplementation(libs.junit)
     implementation("org.mockito:mockito-core:5.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     globalTestImplementation(libs.androidx.junit)
     globalTestImplementation(libs.androidx.espresso.core)
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
