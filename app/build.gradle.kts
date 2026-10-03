@@ -92,7 +92,9 @@ android {
         resources.setSrcDirs(emptyList<File>())
     }
 }
-
+configurations.configureEach {
+    exclude(group = "com.google.protobuf", module = "protobuf-lite")
+}
 sonar {
     properties {
         property("sonar.projectKey", "Swent106_Spotted")
@@ -129,6 +131,7 @@ dependencies {
     globalTestImplementation(libs.androidx.espresso.core)
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-firestore")
 
     // ------------- Jetpack Compose ------------------
     val composeBom = platform(libs.compose.bom)
