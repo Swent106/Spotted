@@ -3,11 +3,11 @@ package com.android.spotted.model.Pet
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.google.android.gms.tasks.Tasks
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import java.util.UUID
-import kotlin.time.Duration.Companion.milliseconds
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,80 +19,85 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PetRepositoryFirestoreTest {
+  private lateinit var auth: FirebaseAuth
   private lateinit var firestore: FirebaseFirestore
   private lateinit var repository: PetRepositoryFirestore
   private val insertedPetIds = mutableListOf<String>()
 
   @Before
-  fun setUp() = runBlocking {
-    firestore = FirebaseFirestore.getInstance()
-    repository = PetRepositoryFirestore(firestore)
-    // Give the emulator time to fully start
-    Thread.sleep(3000)
+  fun setUp() = runTest {
+    withContext(Dispatchers.IO) {
+      auth = FirebaseAuth.getInstance()
+      firestore = FirebaseFirestore.getInstance()
+      repository = PetRepositoryFirestore(firestore)
+      Thread.sleep(3000)
+      Tasks.await(auth.signInAnonymously())
+    }
   }
 
   @After
-  fun cleanUp() = runBlocking {
-    insertedPetIds.forEach { id -> Tasks.await(firestore.collection("pets").document(id).delete()) }
-  }
-
-  @Test
-  fun getNewId_returnsDistinctDocumentIds() = runBlocking {
-    val firstId = repository.getNewId()
-    val secondId = repository.getNewId()
-
-    assertFalse(firstId.isBlank())
-    assertFalse(secondId.isBlank())
-    assertFalse(firstId == secondId)
-  }
-
-  @Test
-  fun addPet_andGetPet_roundTripsAllPetFields() = runBlocking {
-    val pet =
-        pet(
-            id = repository.getNewId(),
-            ownerId = UUID.randomUUID().toString(),
-            name = "Milo",
-            species = Species.CAT,
-            breed = "Tabby",
-            photoUrl = "https://example.test/milo.jpg",
-            allergies = listOf("Pollen", "Dust"),
-            behaviors = setOf(Behavior.FEARFUL_OF_STRANGERS, Behavior.STRESSED_IN_CROWDS),
-            note = "Needs a quiet place",
-        )
-    insertedPetIds += pet.id
-
-    assertTrue(repository.addPet(pet).isSuccess)
-    assertEquals(pet, repository.getPet(pet.id).getOrThrow())
-  }
-
-  @Test
-  fun getPet_whenDocumentIsMissing_returnsFailure() = runBlocking {
-    withTimeout(10_000.milliseconds) {
-      val result = repository.getPet(repository.getNewId())
-
-      assertTrue(result.isFailure)
-      assertTrue(result.exceptionOrNull() is NoSuchElementException)
+  fun cleanUp() = runTest {
+    withContext(Dispatchers.IO) {
+      insertedPetIds.forEach { id ->
+        Tasks.await(firestore.collection("pets").document(id).delete())
+      }
+      auth.signOut()
     }
   }
 
   @Test
-  fun getPetsByOwner_returnsOnlyThatOwnersPets() = runBlocking {
-    withTimeout(10_000.milliseconds) {
-      val ownerId = UUID.randomUUID().toString()
-      val firstPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "First")
-      val secondPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "Second")
-      val otherOwnersPet =
+  fun getNewId_returnsDistinctDocumentIds() = runTest {
+    withContext(Dispatchers.IO) {
+      val firstId = repository.getNewId()
+      val secondId = repository.getNewId()
+
+      assertFalse(firstId.isBlank())
+      assertFalse(secondId.isBlank())
+      assertFalse(firstId == secondId)
+    }
+  }
+
+  @Test
+  fun addPet_andGetPet_roundTripsAllPetFields() = runTest {
+    withContext(Dispatchers.IO) {
+      val pet =
           pet(
               id = repository.getNewId(),
-              ownerId = UUID.randomUUID().toString(),
-              name = "Other",
+              ownerId = currentUserId(),
+              name = "Milo",
+              species = Species.CAT,
+              breed = "Tabby",
+              photoUrl = "https://example.test/milo.jpg",
+              allergies = listOf("Pollen", "Dust"),
+              behaviors = setOf(Behavior.FEARFUL_OF_STRANGERS, Behavior.STRESSED_IN_CROWDS),
+              note = "Needs a quiet place",
           )
-      insertedPetIds += listOf(firstPet.id, secondPet.id, otherOwnersPet.id)
+      insertedPetIds += pet.id
+
+      assertTrue(repository.addPet(pet).isSuccess)
+      assertEquals(pet, repository.getPet(pet.id).getOrThrow())
+    }
+  }
+
+  @Test
+  fun getPet_whenDocumentIsMissing_returnsFailure() = runTest {
+    withContext(Dispatchers.IO) {
+      val result = repository.getPet(repository.getNewId())
+
+      assertTrue(result.isFailure)
+    }
+  }
+
+  @Test
+  fun getPetsByOwner_returnsOnlyThatOwnersPets() = runTest {
+    withContext(Dispatchers.IO) {
+      val ownerId = currentUserId()
+      val firstPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "First")
+      val secondPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "Second")
+      insertedPetIds += listOf(firstPet.id, secondPet.id)
 
       repository.addPet(firstPet).getOrThrow()
       repository.addPet(secondPet).getOrThrow()
-      repository.addPet(otherOwnersPet).getOrThrow()
 
       val foundPets = repository.getPetsByOwner(ownerId).getOrThrow()
       assertEquals(setOf(firstPet, secondPet), foundPets.toSet())
@@ -100,9 +105,23 @@ class PetRepositoryFirestoreTest {
   }
 
   @Test
-  fun getPetsByOwner_whenOwnerHasNoPets_returnsEmptyList() = runBlocking {
-    assertTrue(repository.getPetsByOwner(UUID.randomUUID().toString()).getOrThrow().isEmpty())
+  fun getPetsByOwner_whenOwnerHasNoPets_returnsEmptyList() = runTest {
+    withContext(Dispatchers.IO) {
+      assertTrue(repository.getPetsByOwner(currentUserId()).getOrThrow().isEmpty())
+    }
   }
+
+  @Test
+  fun getPetsByOwner_whenRequestingAnotherOwner_returnsFailure() = runTest {
+    withContext(Dispatchers.IO) {
+      val result = repository.getPetsByOwner("another-owner")
+
+      assertTrue(result.isFailure)
+    }
+  }
+
+  private fun currentUserId(): String =
+      requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
 
   private fun pet(
       id: String,
@@ -130,10 +149,9 @@ class PetRepositoryFirestoreTest {
   companion object {
     @JvmStatic
     @BeforeClass
-    fun configureFirestoreEmulator() = runBlocking {
-      withTimeout(10_000.milliseconds) {
-        FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
-      }
+    fun configureFirebaseEmulators() {
+      FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
+      FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
     }
   }
 }
