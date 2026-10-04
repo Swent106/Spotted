@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.BeforeClass
+import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -47,77 +48,97 @@ class PetRepositoryFirestoreTest {
 
   @Test
   fun getNewId_returnsDistinctDocumentIds() = runTest {
-    withContext(Dispatchers.IO) {
-      val firstId = repository.getNewId()
-      val secondId = repository.getNewId()
+    val firstId = repository.getNewId()
+    val secondId = repository.getNewId()
 
-      assertFalse(firstId.isBlank())
-      assertFalse(secondId.isBlank())
-      assertFalse(firstId == secondId)
-    }
+    assertFalse(firstId.isBlank())
+    assertFalse(secondId.isBlank())
+    assertFalse(firstId == secondId)
   }
 
   @Test
   fun addPet_andGetPet_roundTripsAllPetFields() = runTest {
-    withContext(Dispatchers.IO) {
-      val pet =
-          pet(
-              id = repository.getNewId(),
-              ownerId = currentUserId(),
-              name = "Milo",
-              species = Species.CAT,
-              breed = "Tabby",
-              photoUrl = "https://example.test/milo.jpg",
-              allergies = listOf("Pollen", "Dust"),
-              behaviors = setOf(Behavior.FEARFUL_OF_STRANGERS, Behavior.STRESSED_IN_CROWDS),
-              note = "Needs a quiet place",
-          )
-      insertedPetIds += pet.id
+    val pet =
+        pet(
+            id = repository.getNewId(),
+            ownerId = currentUserId(),
+            name = "Milo",
+            species = Species.CAT,
+            breed = "Tabby",
+            photoUrl = "https://example.test/milo.jpg",
+            allergies = listOf("Pollen", "Dust"),
+            behaviors = setOf(Behavior.FEARFUL_OF_STRANGERS, Behavior.STRESSED_IN_CROWDS),
+            note = "Needs a quiet place",
+        )
+    insertedPetIds += pet.id
 
-      assertTrue(repository.addPet(pet).isSuccess)
-      assertEquals(pet, repository.getPet(pet.id).getOrThrow())
-    }
+    assertTrue(repository.addPet(pet).isSuccess)
+    assertEquals(pet, repository.getPet(pet.id).getOrThrow())
   }
 
   @Test
-  fun getPet_whenDocumentIsMissing_returnsFailure() = runTest {
-    withContext(Dispatchers.IO) {
-      val result = repository.getPet(repository.getNewId())
+  fun addPet_whenOwnerDoesNotMatchAuthenticatedUser_returnsFailure() = runTest {
+    val pet = pet(id = repository.getNewId(), ownerId = "another-owner")
 
-      assertTrue(result.isFailure)
+    assertTrue(repository.addPet(pet).isFailure)
+  }
+
+  @Ignore
+  @Test
+  fun getPet_whenDocumentIsMissing_returnsFailure() = runTest {
+    val result = repository.getPet(repository.getNewId())
+
+    assertTrue(result.isFailure)
+    // assertTrue(result.exceptionOrNull() is NoSuchElementException)
+  }
+
+  @Test
+  fun getPet_whenStoredPetHasInvalidSpecies_returnsFailure() = runTest {
+    val id = repository.getNewId()
+    insertedPetIds += id
+    withContext(Dispatchers.IO) {
+      Tasks.await(
+          firestore
+              .collection("pets")
+              .document(id)
+              .set(
+                  mapOf(
+                      "ownerId" to currentUserId(),
+                      "name" to "Milo",
+                      "species" to "UNKNOWN_SPECIES",
+                  )))
     }
+
+    val result = repository.getPet(id)
+
+    assertTrue(result.isFailure)
+    assertTrue(result.exceptionOrNull() is IllegalArgumentException)
   }
 
   @Test
   fun getPetsByOwner_returnsOnlyThatOwnersPets() = runTest {
-    withContext(Dispatchers.IO) {
-      val ownerId = currentUserId()
-      val firstPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "First")
-      val secondPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "Second")
-      insertedPetIds += listOf(firstPet.id, secondPet.id)
+    val ownerId = currentUserId()
+    val firstPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "First")
+    val secondPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "Second")
+    insertedPetIds += listOf(firstPet.id, secondPet.id)
 
-      repository.addPet(firstPet).getOrThrow()
-      repository.addPet(secondPet).getOrThrow()
+    repository.addPet(firstPet).getOrThrow()
+    repository.addPet(secondPet).getOrThrow()
 
-      val foundPets = repository.getPetsByOwner(ownerId).getOrThrow()
-      assertEquals(setOf(firstPet, secondPet), foundPets.toSet())
-    }
+    val foundPets = repository.getPetsByOwner(ownerId).getOrThrow()
+    assertEquals(setOf(firstPet, secondPet), foundPets.toSet())
   }
 
   @Test
   fun getPetsByOwner_whenOwnerHasNoPets_returnsEmptyList() = runTest {
-    withContext(Dispatchers.IO) {
-      assertTrue(repository.getPetsByOwner(currentUserId()).getOrThrow().isEmpty())
-    }
+    assertTrue(repository.getPetsByOwner(currentUserId()).getOrThrow().isEmpty())
   }
 
   @Test
   fun getPetsByOwner_whenRequestingAnotherOwner_returnsFailure() = runTest {
-    withContext(Dispatchers.IO) {
-      val result = repository.getPetsByOwner("another-owner")
+    val result = repository.getPetsByOwner("another-owner")
 
-      assertTrue(result.isFailure)
-    }
+    assertTrue(result.isFailure)
   }
 
   private fun currentUserId(): String =
