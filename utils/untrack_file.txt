@@ -1,0 +1,12 @@
+Remove it from Git's index while keeping it on disk, then make sure it's ignored:
+
+git rm --cached <file>             # a single file
+git rm -r --cached <folder>        # a folder
+echo "<file-or-folder>" >> .gitignore
+git commit -m "Stop tracking <file>"
+
+Commit it through a PR, as usual.
+
+--cached is essential. Without it, the file is deleted from your disk too.
+Teammates: when they pull, Git removes the file from their working folder, so warn them to back it up if it matters (like local.properties).
+Secrets: if the file contained a secret, it stays in the Git history, so rotate the key.
