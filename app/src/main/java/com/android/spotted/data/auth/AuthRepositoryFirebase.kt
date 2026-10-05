@@ -1,7 +1,11 @@
-package com.android.spotted.model
+package com.android.spotted.data.auth
 
+import com.android.spotted.model.auth.AuthRepository
+import com.android.spotted.model.auth.User
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,12 +29,16 @@ class AuthRepositoryFirebase(private val firebaseAuth: FirebaseAuth = FirebaseAu
       val authResult = firebaseAuth.signInWithCredential(credential).await()
       val firebaseUser = authResult.user
 
-      if (firebaseUser != null) {
-        val user = mapFirebaseUser(firebaseUser)!!
-        Result.success(user)
-      } else {
-        Result.failure(Exception("Firebase returned a null user after successful sign in."))
-      }
+      firebaseUser?.let {
+        val user = mapFirebaseUser(it)
+        if (user != null) {
+          Result.success(user)
+        } else {
+          Result.failure(Exception("Could not map FirebaseUser to User"))
+        }
+      } ?: Result.failure(Exception("Firebase returned a null user after successful sign in."))
+    } catch (e: CancellationException) {
+      throw e
     } catch (e: Exception) {
       Result.failure(e)
     }
@@ -40,16 +48,20 @@ class AuthRepositoryFirebase(private val firebaseAuth: FirebaseAuth = FirebaseAu
     return try {
       firebaseAuth.signOut()
       Result.success(Unit)
+    } catch (e: CancellationException) {
+      throw e
     } catch (e: Exception) {
       Result.failure(e)
     }
   }
 
-  private fun mapFirebaseUser(firebaseUser: com.google.firebase.auth.FirebaseUser?): User? {
-    return if (firebaseUser != null) {
-      User(uid = firebaseUser.uid, email = firebaseUser.email ?: "")
-    } else {
-      null
+  private fun mapFirebaseUser(firebaseUser: FirebaseUser?): User? {
+    return firebaseUser?.let {
+      // Use email if available, otherwise use a placeholder or handle the lack of email.
+      // Since Google Sign-in usually provides an email, falling back to "No email provided" is
+      // safer than an empty string.
+      val email = it.email ?: "No email provided"
+      User(uid = it.uid, email = email)
     }
   }
 }

@@ -1,5 +1,6 @@
-package com.android.spotted.model
+package com.android.spotted.data
 
+import com.android.spotted.data.auth.AuthRepositoryFirebase
 import com.google.android.gms.tasks.Task
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.AuthCredential

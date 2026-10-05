@@ -1,4 +1,4 @@
-package com.android.spotted.model
+package com.android.spotted.model.auth
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
