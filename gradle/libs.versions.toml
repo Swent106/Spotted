@@ -1,22 +1,26 @@
 [versions]
-agp = "8.4.2"
-kotlin = "1.9.0"
-coreKtx = "1.13.1"
-ktfmt = "0.17.0"
+agp = "9.4.1"
+kotlin = "2.4.20"
+coreKtx = "1.19.1"
+ktfmt = "0.27.0"
 junit = "4.13.2"
-junitVersion = "1.2.1"
-espressoCore = "3.6.1"
-appcompat = "1.7.0"
-material = "1.12.0"
-composeBom = "2024.08.00"
-composeActivity = "1.9.1"
-composeViewModel = "2.8.4"
-lifecycleRuntimeKtx = "2.8.4"
-kaspresso = "1.5.5"
-robolectric = "4.11.1"
-sonar = "4.4.1.3373"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+appcompat = "1.8.0"
+material = "1.14.0"
+composeBom = "2026.09.00"
+composeActivity = "1.13.0"
+composeViewModel = "2.11.0"
+lifecycleRuntimeKtx = "2.11.0"
+kaspresso = "1.6.1"
+robolectric = "4.17"
+sonar = "7.5.0.8588"
 firebaseAuthKtx = "24.2.0"
 firebaseAuthKtxVersion = "24.2.0"
+coil = "2.7.0"
+androidxTestCore = "1.7.0"
+androidxTestRunner = "1.7.0"
+androidxTracing = "1.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -44,9 +48,13 @@ kaspresso-compose = { group = "com.kaspersky.android-components", name = "kaspre
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-auth-ktx = { group = "com.google.firebase", name = "firebase-auth-ktx", version.ref = "firebaseAuthKtxVersion" }
-
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-tracing = { group = "androidx.tracing", name = "tracing", version.ref = "androidxTracing" }
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
-jetbrainsKotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+#jetbrainsKotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 ktfmt = { id = "com.ncorti.ktfmt.gradle", version.ref = "ktfmt" }
 sonar = { id = "org.sonarqube", version.ref = "sonar" }
