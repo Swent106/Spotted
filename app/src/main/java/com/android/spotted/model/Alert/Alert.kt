@@ -1,6 +1,7 @@
-package com.android.spotted.model.Alert
+package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 
 enum class AlertStatus {
@@ -18,4 +19,6 @@ data class Alert(
     val petName: String,
     val petSpecies: Species,
     val petPhotoUrl: String? = null,
+    val petAllergies: List<String> = emptyList(),
+    val petBehaviors: Set<Behavior> = emptySet(),
 )
