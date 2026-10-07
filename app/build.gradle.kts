@@ -126,7 +126,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(platform(libs.compose.bom))
     testImplementation(libs.junit)
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    globalTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     implementation("org.mockito:mockito-core:5.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     globalTestImplementation(libs.androidx.junit)
@@ -134,6 +134,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // ------------- Jetpack Compose ------------------
     val composeBom = platform(libs.compose.bom)
@@ -161,6 +164,9 @@ dependencies {
 
     // ----------       Robolectric     ------------
     testImplementation(libs.robolectric)
+
+    // ----------       Mockito       ------------
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
 tasks.withType<Test> {
