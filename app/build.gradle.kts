@@ -123,6 +123,7 @@ dependencies {
   implementation(libs.firebase.auth)
   implementation(libs.material)
   implementation(libs.androidx.lifecycle.runtime.ktx)
+  implementation("org.mockito:mockito-core:5.11.0")
 
   // ------------- Firebase ------------------
   implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
@@ -162,6 +163,8 @@ dependencies {
   // androidTestImplementation(libs.androidx.tracing)
   implementation(libs.kotlinx.coroutines.play.services)
   globalTestImplementation(libs.kotlinx.coroutines.test) // unit tests and instrumented tests
+  // ----------       Mockito       ------------
+  testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 
   // --------- Kaspresso test framework ----------
   globalTestImplementation(libs.kaspresso)
@@ -169,6 +172,11 @@ dependencies {
 
   // ----------       Robolectric     ------------
   testImplementation(libs.robolectric)
+
+  // ------------- Credentials ------------------
+  implementation("androidx.credentials:credentials:1.3.0")
+  implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+  implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 }
 
 tasks.withType<Test> {
