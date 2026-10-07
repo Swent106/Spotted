@@ -290,8 +290,30 @@ describe("Firestore alert access rules", () => {
     );
   });
 
-  it("read: anyone can read alerts", async () => {
-    // Seed an alert bypassing rules
+  it("read: authenticated user can read alerts", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "alerts", "alert-1"), {
+        id: "alert-1",
+        ownerId: "owner-1",
+        petId: "pet-1",
+        lostAtMillis: 1000000,
+        status: "OPEN",
+        petName: "Rex",
+        petSpecies: "DOG",
+        petAllergies: [],
+        petBehaviors: [],
+        lastKnownLocation: {
+            latitude: 46.5,
+            longitude: 6.6
+        }
+      });
+    });
+
+    const authenticatedDb = firestoreForUser("user-1");
+    await assertSucceeds(getDoc(doc(authenticatedDb, "alerts", "alert-1")));
+  });
+
+  it("read: anonymous user is denied to read alerts", async () => {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "alerts", "alert-1"), {
         id: "alert-1",
@@ -311,7 +333,7 @@ describe("Firestore alert access rules", () => {
     });
 
     const anonymousDb = firestoreForUser(null);
-    await assertSucceeds(getDoc(doc(anonymousDb, "alerts", "alert-1")));
+    await assertFails(getDoc(doc(anonymousDb, "alerts", "alert-1")));
   });
 
   it("update: alert owner is allowed to update", async () => {

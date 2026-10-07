@@ -37,7 +37,7 @@ class AlertRepositoryFirestore(
       val snapshot =
           db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100).get().await()
 
-      val alerts = snapshot.toObjects(AlertDto::class.java).map { it.toDomain() }
+      val alerts = snapshot.toObjects(AlertDto::class.java).mapNotNull { it.toDomain() }
       // Filter by distance and sort by lostAtMillis (descending) locally
       val nearbyAlerts =
           alerts

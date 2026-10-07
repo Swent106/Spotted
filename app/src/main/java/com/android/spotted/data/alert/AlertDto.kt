@@ -23,22 +23,25 @@ internal data class AlertDto(
     val petAllergies: List<String> = emptyList(),
     val petBehaviors: List<String> = emptyList()
 ) {
-  fun toDomain() =
-      Alert(
-          id = id,
-          petId = petId,
-          ownerId = ownerId,
-          lastKnownLocation = lastKnownLocation.toDomain(),
-          lostAtMillis = lostAtMillis,
-          status = runCatching { AlertStatus.valueOf(status) }.getOrDefault(AlertStatus.OPEN),
-          petName = petName,
-          petSpecies = runCatching { Species.valueOf(petSpecies) }.getOrDefault(Species.DOG),
-          petPhotoUrl = petPhotoUrl,
-          petAllergies = petAllergies,
-          petBehaviors =
-              petBehaviors
-                  .mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() }
-                  .toSet())
+  fun toDomain(): Alert? {
+    val alertStatus = runCatching { AlertStatus.valueOf(status) }.getOrNull() ?: return null
+    val species = runCatching { Species.valueOf(petSpecies) }.getOrNull() ?: return null
+    return Alert(
+        id = id,
+        petId = petId,
+        ownerId = ownerId,
+        lastKnownLocation = lastKnownLocation.toDomain(),
+        lostAtMillis = lostAtMillis,
+        status = alertStatus,
+        petName = petName,
+        petSpecies = species,
+        petPhotoUrl = petPhotoUrl,
+        petAllergies = petAllergies,
+        petBehaviors =
+            petBehaviors
+                .mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() }
+                .toSet())
+  }
 }
 
 internal fun Location.toDto() = LocationDto(latitude, longitude)

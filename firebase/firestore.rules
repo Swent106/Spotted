@@ -48,8 +48,8 @@ service cloud.firestore {
           && d.petBehaviors is list && d.petBehaviors.size() <= 50;
       }
 
-      allow get: if true; // allow everyone to read single alerts
-      allow list: if true && request.query.limit <= 100; // allow everyone to read lists of alerts (with limit)
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && request.query.limit <= 100;
 
       allow create: if request.auth != null
           && validAlert(request.resource.data)
@@ -65,9 +65,6 @@ service cloud.firestore {
                .hasOnly(['status', 'lastKnownLocation']);
 
       allow delete: if request.auth != null
-          && resource.data.ownerId == request.auth.uid;
-
-      allow delete: if isSignedIn()
           && resource.data.ownerId == request.auth.uid;
     }
 
