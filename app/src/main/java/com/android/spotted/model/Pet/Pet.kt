@@ -3,7 +3,7 @@ package com.android.spotted.model.Pet
 enum class Species {
   DOG,
   CAT,
-  OTHER
+  OTHER,
 }
 
 enum class Behavior {

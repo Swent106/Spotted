@@ -160,6 +160,8 @@ dependencies {
   androidTestImplementation(libs.androidx.test.core)
   androidTestImplementation(libs.androidx.test.runner)
   // androidTestImplementation(libs.androidx.tracing)
+  implementation(libs.kotlinx.coroutines.play.services)
+  globalTestImplementation(libs.kotlinx.coroutines.test) // unit tests and instrumented tests
 
   // --------- Kaspresso test framework ----------
   globalTestImplementation(libs.kaspresso)
