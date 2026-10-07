@@ -36,7 +36,9 @@ internal data class AlertDto(
           petPhotoUrl = petPhotoUrl,
           petAllergies = petAllergies,
           petBehaviors =
-              petBehaviors.mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() })
+              petBehaviors
+                  .mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() }
+                  .toSet())
 }
 
 internal fun Location.toDto() = LocationDto(latitude, longitude)
