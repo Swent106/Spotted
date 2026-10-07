@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * ViewModel for the Sign-In screen.
@@ -66,20 +67,17 @@ class SignInViewModel(private val repository: AuthRepository = AuthRepositoryFir
 
     /** Initiates the Google sign-in flow and updates the UI state on success or failure. */
     fun signIn(context: Context, credentialManager: CredentialManager) {
-        if (_uiState.value.isLoading) return
+        if (!startLoading()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-
+            try {
             val signInOptions = getSignInOptions(context)
             val signInRequest = signInRequest(signInOptions)
-
-            try {
                 val credential = getCredential(context, signInRequest, credentialManager)
 
-                repository.signInWithGoogle(extractGoogleIdToken(credential)).fold({ _ ->
+                repository.signInWithGoogle(extractGoogleIdToken(credential)).fold({ user ->
                     _uiState.update {
-                        it.copy(isLoading = false, user = FirebaseAuth.getInstance().currentUser, errorMessage = null)
+                        it.copy(isLoading = false, user = user, errorMessage = null)
                     }
                 }) { failure ->
                     _uiState.update {
@@ -90,7 +88,10 @@ class SignInViewModel(private val repository: AuthRepository = AuthRepositoryFir
                         )
                     }
                 }
-            } catch (e: GetCredentialCancellationException) {
+            } catch (e: CancellationException) {
+                throw e
+            }
+            catch (e: GetCredentialCancellationException) {
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = "Sign-in cancelled", user = null)
                 }
@@ -112,6 +113,14 @@ class SignInViewModel(private val repository: AuthRepository = AuthRepositoryFir
                 }
             }
         }
+    }
+    private fun startLoading(): Boolean {
+        var started = false
+        _uiState.update { current ->
+            started = !current.isLoading
+            if (started) current.copy(isLoading = true, errorMessage = null) else current
+        }
+        return started
     }
 
     /**

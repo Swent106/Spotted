@@ -39,6 +39,8 @@ import org.mockito.kotlin.verifyBlocking
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import androidx.credentials.exceptions.NoCredentialException
+import org.mockito.kotlin.doThrow
+
 /**
  * Unit tests for [SignInViewModel].
  *
@@ -118,16 +120,39 @@ class SignInViewModelTest {
     // ===================== fold: onSuccess / onFailure =====================
 
     @Test
-    fun onSuccess_setsFirebaseUser_andClearsError() = runTest(testDispatcher) {
+    fun onSuccess_setsRepositoryUser_andClearsError() = runTest(testDispatcher) {
         viewModel.signIn(context, credentialManagerReturningGoogleToken())
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
-        assertEquals(fakeFirebaseUser, state.user)
+        assertEquals("fake_uid_from_token", state.user?.uid)
         assertNull(state.errorMessage)
-        // The fake repository was called and stored its user
-        assertEquals("fake_uid_from_token", fakeRepo.currentUser.value?.uid)
+    }
+    @Test
+    fun twoCallsBeforeCoroutineRuns_startOnlyOneSignIn() = runTest(testDispatcher) {
+        val cm = credentialManagerReturningGoogleToken()
+
+        viewModel.signIn(context, cm)
+        viewModel.signIn(context, cm) // no runCurrent() in between
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        advanceUntilIdle()
+
+        verifyBlocking(cm, times(1)) { getCredential(any<Context>(), any<GetCredentialRequest>()) }
+    }
+    @Test
+    fun exceptionWhileBuildingRequest_showsUnexpectedError() = runTest(testDispatcher) {
+        val brokenContext: Context = mock {
+            on { getString(any()) } doThrow IllegalStateException("Missing client id")
+        }
+
+        viewModel.signIn(brokenContext, credentialManagerReturningGoogleToken())
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading) // the loader does not spin forever
+        assertEquals("Unexpected error: Missing client id", state.errorMessage)
     }
 
     @Test
@@ -184,7 +209,7 @@ class SignInViewModelTest {
     // ===================== extractGoogleIdToken =====================
 
     @Test
-    fun nonGoogleCredential_throwsAndShowsUnexpectedError() = runTest(testDispatcher) {
+    fun nonGoogleCredential_showsUnexpectedError() = runTest(testDispatcher) {
         // A password credential is not a Google ID token: extractGoogleIdToken throws
         val cm: CredentialManager = mock {
             onBlocking { getCredential(any<Context>(), any<GetCredentialRequest>()) } doReturn
