@@ -13,6 +13,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -26,9 +27,6 @@ class AuthRepositoryFirebaseInstrumentedTest {
   fun setUp() {
     // Get the real FirebaseAuth instance
     firebaseAuth = FirebaseAuth.getInstance()
-
-    // Connect to the local Firebase Emulator
-    firebaseAuth.useEmulator("10.0.2.2", 9099)
 
     // Ensure we start with a clean state (logged out)
     firebaseAuth.signOut()
@@ -102,5 +100,17 @@ class AuthRepositoryFirebaseInstrumentedTest {
     }
 
     assertTrue("StateFlow user should be null after sign-out", isNull)
+  }
+
+  companion object {
+    @JvmStatic
+    @BeforeClass
+    fun configureFirebaseEmulators() {
+      try {
+        FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
+      } catch (e: IllegalStateException) {
+        println("Auth emulator already initialized: ${e.message}")
+      }
+    }
   }
 }
