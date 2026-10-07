@@ -171,8 +171,13 @@ class PetRepositoryFirestoreTest {
     @JvmStatic
     @BeforeClass
     fun configureFirebaseEmulators() {
-      FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
+      try {
+        FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
+        FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
+      } catch (e: IllegalStateException) {
+        // Don't fail if emulator was already initialized by another test class
+        println("Emulator already initialized: ${e.message}")
+      }
     }
   }
 }
