@@ -20,5 +20,5 @@ data class Alert(
     val petSpecies: Species,
     val petPhotoUrl: String? = null,
     val petAllergies: List<String> = emptyList(),
-    val petBehaviors: Set<Behavior> = emptySet(),
+    val petBehaviors: List<Behavior> = emptyList(),
 )

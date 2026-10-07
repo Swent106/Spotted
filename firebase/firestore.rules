@@ -12,6 +12,65 @@ service cloud.firestore {
           && request.resource.data.ownerId == request.auth.uid;
     }
 
+    match /alerts/{alertId} {
+
+      function ownsPet(pid) {
+        let petPath = /databases/$(database)/documents/pets/$(pid);
+        return exists(petPath) && get(petPath).data.ownerId == request.auth.uid;
+      }
+
+      function validLocation(l) {
+        return l is map
+          && l.keys().hasOnly(['latitude', 'longitude'])
+          && l.latitude is number && l.latitude >= -90 && l.latitude <= 90
+          && l.longitude is number && l.longitude >= -180 && l.longitude <= 180;
+      }
+
+      // Full schema of an alert document (matches AlertDto on the Android side)
+      function validAlert(d) {
+        return d.keys().hasAll([
+                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
+                'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
+          && d.keys().hasOnly([
+                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
+                'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+          && d.id == alertId
+          && d.petId is string && d.petId.size() > 0
+          && d.ownerId is string
+          && validLocation(d.lastKnownLocation)
+          && d.lostAtMillis is int
+          && d.status in ['OPEN', 'CLOSED']
+          && d.petName is string && d.petName.size() > 0 && d.petName.size() <= 100
+          && d.petSpecies is string && d.petSpecies.size() <= 50
+          && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
+              || (d.petPhotoUrl is string && d.petPhotoUrl.size() <= 2048))
+          && d.petAllergies is list && d.petAllergies.size() <= 50
+          && d.petBehaviors is list && d.petBehaviors.size() <= 50;
+      }
+
+      allow get: if true; // allow everyone to read single alerts
+      allow list: if true && request.query.limit <= 100; // allow everyone to read lists of alerts (with limit)
+
+      allow create: if request.auth != null
+          && validAlert(request.resource.data)
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.status == 'OPEN'
+          && ownsPet(request.resource.data.petId);
+
+      // The owner may only close the alert or move it; identity fields are immutable.
+      allow update: if request.auth != null
+          && resource.data.ownerId == request.auth.uid
+          && validAlert(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'lastKnownLocation']);
+
+      allow delete: if request.auth != null
+          && resource.data.ownerId == request.auth.uid;
+
+      allow delete: if isSignedIn()
+          && resource.data.ownerId == request.auth.uid;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
