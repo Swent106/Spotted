@@ -38,8 +38,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verifyBlocking
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import android.credentials.GetCredentialException as PlatformGetCredentialException
-
+import androidx.credentials.exceptions.NoCredentialException
 /**
  * Unit tests for [SignInViewModel].
  *
@@ -161,11 +160,8 @@ class SignInViewModelTest {
 
     @Test
     fun catchGetCredentialException_showsFailedToGetCredentials() = runTest(testDispatcher) {
-        // The ViewModel catches android.credentials.GetCredentialException (platform version),
-        // so this is the exception thrown here.
-        val error = PlatformGetCredentialException("TYPE_NO_CREDENTIAL", "No Google account")
-
-        viewModel.signIn(context, credentialManagerThrowing(error))
+        // NoCredentialException is an androidx GetCredentialException (no Google account on the device)
+        viewModel.signIn(context, credentialManagerThrowing(NoCredentialException("No Google account")))
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -188,8 +184,8 @@ class SignInViewModelTest {
     // ===================== extractGoogleIdToken =====================
 
     @Test
-    fun nonGoogleCredential_sendsNullToken() = runTest(testDispatcher) {
-        // A password credential makes extractGoogleIdToken return null
+    fun nonGoogleCredential_throwsAndShowsUnexpectedError() = runTest(testDispatcher) {
+        // A password credential is not a Google ID token: extractGoogleIdToken throws
         val cm: CredentialManager = mock {
             onBlocking { getCredential(any<Context>(), any<GetCredentialRequest>()) } doReturn
                     GetCredentialResponse(PasswordCredential("user", "password"))
@@ -198,9 +194,11 @@ class SignInViewModelTest {
         viewModel.signIn(context, cm)
         advanceUntilIdle()
 
-        // The ViewModel still passes null to the repository; the fake accepts it and succeeds
-        assertFalse(viewModel.uiState.value.isLoading)
-        assertEquals("fake_uid_from_token", fakeRepo.currentUser.value?.uid)
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertNull(state.user)
+        assertTrue(state.errorMessage!!.startsWith("Unexpected error: Unexpected credential type"))
+        assertNull(fakeRepo.currentUser.value) // The repository is never called
     }
 
     // ===================== isLoading guard =====================
