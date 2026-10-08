@@ -106,7 +106,9 @@ class PetRepositoryFirestoreTest {
                       "ownerId" to currentUserId(),
                       "name" to "Milo",
                       "species" to "UNKNOWN_SPECIES",
-                  )))
+                  )
+              )
+      )
     }
 
     val result = repository.getPet(id)
