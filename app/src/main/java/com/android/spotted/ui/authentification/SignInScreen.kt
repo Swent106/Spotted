@@ -5,8 +5,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,10 +46,10 @@ import com.android.spotted.R
 
 /** Test tags used by UI tests to find the elements of the Sign-In screen. */
 object SignInScreenTestTags {
-  const val SCREEN = "signInScreen"
-  const val GOOGLE_BUTTON = "signInGoogleButton"
-  const val LOADER = "signInLoader"
-  const val ERROR_MESSAGE = "signInErrorMessage"
+    const val SCREEN = "signInScreen"
+    const val GOOGLE_BUTTON = "signInGoogleButton"
+    const val LOADER = "signInLoader"
+    const val ERROR_MESSAGE = "signInErrorMessage"
 }
 
 private val Jakarta =
@@ -74,123 +76,125 @@ private fun jakarta(
 /**
  * Stateless Sign-In screen: shows a loader while [SignInUiState.isLoading] and the error message on
  * failure.
+ *
+ * The screen fills the available space and scrolls vertically, so every element stays reachable on
+ * small screens.
  */
 @Composable
 fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
 
-  // Screen
-  Column(
-      verticalArrangement = Arrangement.SpaceBetween,
-      modifier =
-          Modifier.width(390.dp)
-              .height(844.dp)
-              .background(Color(0xFFEFEFEF))
-              .paint(
-                  painterResource(R.drawable.background_textures), contentScale = ContentScale.Crop)
-              .testTag(SignInScreenTestTags.SCREEN)) {
+    // Screen
+    Column(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(Color(0xFFEFEFEF))
+                .paint(
+                    painterResource(R.drawable.background_textures), contentScale = ContentScale.Crop)
+                .verticalScroll(rememberScrollState())
+                .testTag(SignInScreenTestTags.SCREEN)) {
         // Top
         Column(
             verticalArrangement = Arrangement.spacedBy(22.dp),
             modifier =
-                Modifier.width(390.dp)
-                    .height(522.dp)
+                Modifier.fillMaxWidth()
                     .padding(start = 24.dp, top = 72.dp, end = 24.dp, bottom = 8.dp)) {
-              // Brand
-              Row(
-                  horizontalArrangement = Arrangement.spacedBy(12.27.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  modifier = Modifier.width(176.73.dp).height(54.dp)) {
-                    Image(
-                        painterResource(R.drawable.spotted_logo),
-                        contentDescription = "Logo Spotted",
-                        contentScale = ContentScale.FillBounds,
-                        modifier = Modifier.width(53.dp))
-                    Text("Spotted", style = jakarta(27, 35.59f, 800, 0xFF14161A))
-                  }
-              // Heading
-              Column(
-                  verticalArrangement = Arrangement.spacedBy(10.dp),
-                  modifier = Modifier.width(342.dp).height(124.dp)) {
-                    Text(
-                        "Nobody finds a lost pet alone",
-                        Modifier.width(342.dp).height(74.dp),
-                        style = jakarta(30, 37f, 800, 0xFF14161A))
-                    Text(
-                        "Sign in to post an alert for your own pet, and to be told when one goes missing close to you.",
-                        Modifier.width(342.dp).height(40.dp),
-                        style = jakarta(15, 20f, 500, 0xFF5F6672))
-                  }
-              // Hero
-              Hero()
+            // Brand
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.27.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.height(54.dp)) {
+                Image(
+                    painterResource(R.drawable.spotted_logo),
+                    contentDescription = "Logo Spotted",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.width(53.dp))
+                Text("Spotted", style = jakarta(27, 35.59f, 800, 0xFF14161A))
             }
+            // Heading
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Nobody finds a lost pet alone",
+                    Modifier.fillMaxWidth(),
+                    style = jakarta(30, 37f, 800, 0xFF14161A))
+                Text(
+                    "Sign in to post an alert for your own pet, and to be told when one goes missing close to you.",
+                    Modifier.fillMaxWidth(),
+                    style = jakarta(15, 20f, 500, 0xFF5F6672))
+            }
+            // Hero
+            Hero()
+        }
         // Bottom
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(390.dp).height(300.dp).padding(horizontal = 24.dp)) {
-              Row(
-                  horizontalArrangement = Arrangement.spacedBy(10.dp),
-                  verticalAlignment = Alignment.CenterVertically,
-                  modifier =
-                      Modifier.fillMaxWidth()
-                          .height(59.dp)
-                          .background(Color(0xFFF5F6F8), RoundedCornerShape(100.dp))
-                          .padding(start = 14.dp, end = 16.dp)) {
-                    Image(
-                        painterResource(R.drawable.ic_watching),
-                        contentDescription = null,
-                        modifier = Modifier.padding(1.dp).size(18.dp),
-                        contentScale = ContentScale.None)
-                    Text(
-                        "1 240 people already watching out in Geneva",
-                        style = jakarta(12, 16f, 600, 0xFF2C3340))
-                  }
-              Spacer(Modifier.height(30.dp))
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .height(59.dp)
+                        .background(Color(0xFFF5F6F8), RoundedCornerShape(100.dp))
+                        .padding(start = 14.dp, end = 16.dp)) {
+                Image(
+                    painterResource(R.drawable.ic_watching),
+                    contentDescription = null,
+                    modifier = Modifier.padding(1.dp).size(18.dp),
+                    contentScale = ContentScale.None)
+                Text(
+                    "1 240 people already watching out in Geneva",
+                    style = jakarta(12, 16f, 600, 0xFF2C3340))
+            }
+            Spacer(Modifier.height(30.dp))
 
-              if (state.isLoading) {
+            if (state.isLoading) {
                 Box(Modifier.height(64.dp), contentAlignment = Alignment.Center) {
-                  CircularProgressIndicator(
-                      modifier =
-                          Modifier.size(40.dp).testTag(SignInScreenTestTags.LOADER).semantics {
-                            contentDescription = "Signing in"
-                          },
-                      color = Color(0xFF14161A),
-                  )
+                    CircularProgressIndicator(
+                        modifier =
+                            Modifier.size(40.dp).testTag(SignInScreenTestTags.LOADER).semantics {
+                                contentDescription = "Signing in"
+                            },
+                        color = Color(0xFF14161A),
+                    )
                 }
-              } else {
+            } else {
                 GoogleSignInButton(onSignInClick)
-              }
+            }
 
-              state.errorMessage?.let { message ->
+            state.errorMessage?.let { message ->
                 Spacer(Modifier.height(8.dp))
                 Text(
                     message,
                     Modifier.fillMaxWidth().testTag(SignInScreenTestTags.ERROR_MESSAGE),
                     style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
                 )
-              }
-
-              Spacer(Modifier.weight(1f))
-              Text(
-                  "Why an account? It keeps alerts tied to a real owner, so only you can confirm sightings of your pet.",
-                  Modifier.fillMaxWidth(),
-                  style = jakarta(12, 16f, 500, 0xFF6B7280, TextAlign.Center))
-              Spacer(Modifier.height(34.dp))
-              Text(
-                  "By continuing you accept the terms and the privacy notice",
-                  Modifier.fillMaxWidth(),
-                  style = jakarta(11, 14f, 500, 0xFF9AA0AA, TextAlign.Center))
-              Spacer(Modifier.height(24.dp))
             }
-      }
+
+            // Fixed height instead of weight(1f): weight does not work in a scrollable column
+            Spacer(Modifier.height(48.dp))
+            Text(
+                "Why an account? It keeps alerts tied to a real owner, so only you can confirm sightings of your pet.",
+                Modifier.fillMaxWidth(),
+                style = jakarta(12, 16f, 500, 0xFF6B7280, TextAlign.Center))
+            Spacer(Modifier.height(34.dp))
+            Text(
+                "By continuing you accept the terms and the privacy notice",
+                Modifier.fillMaxWidth(),
+                style = jakarta(11, 14f, 500, 0xFF9AA0AA, TextAlign.Center))
+            Spacer(Modifier.height(24.dp))
+        }
+    }
 }
 
 @Composable
 private fun Hero() {
-  Box(
-      Modifier.width(342.dp)
-          .height(220.dp)
-          .clip(RoundedCornerShape(27.dp))
-          .background(Color(0xFFE8EEFC))) {
+    Box(
+        Modifier.width(342.dp)
+            .height(220.dp)
+            .clip(RoundedCornerShape(27.dp))
+            .background(Color(0xFFE8EEFC))) {
         // Carte en fond
         Image(
             painterResource(R.drawable.hero_map),
@@ -212,18 +216,18 @@ private fun Hero() {
         PetPhoto(R.drawable.hero_helper_4, 252, 140, 44.dp, 0xFFDDE3EE, 40.dp, 64.dp, mirror = true)
         // Pins
         listOf(
-                Triple(85, 30, 22),
-                Triple(103, 129, 22),
-                Triple(282, 129, 22),
-                Triple(179, 55, 33),
-                Triple(263, 38, 22))
+            Triple(85, 30, 22),
+            Triple(103, 129, 22),
+            Triple(282, 129, 22),
+            Triple(179, 55, 33),
+            Triple(263, 38, 22))
             .forEach { (x, y, s) ->
-              Image(
-                  painterResource(R.drawable.hero_pin),
-                  contentDescription = null,
-                  modifier = Modifier.offset(x.dp, y.dp).size(s.dp))
+                Image(
+                    painterResource(R.drawable.hero_pin),
+                    contentDescription = null,
+                    modifier = Modifier.offset(x.dp, y.dp).size(s.dp))
             }
-      }
+    }
 }
 
 @Composable
@@ -241,14 +245,14 @@ private fun PetPhoto(
     imgH: Dp,
     mirror: Boolean = false
 ) {
-  Box(
-      contentAlignment = Alignment.Center,
-      modifier =
-          Modifier.offset(x.dp, y.dp)
-              .size(size)
-              .clip(CircleShape)
-              .background(Color(bg))
-              .border(3.dp, Color.White, CircleShape)) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier.offset(x.dp, y.dp)
+                .size(size)
+                .clip(CircleShape)
+                .background(Color(bg))
+                .border(3.dp, Color.White, CircleShape)) {
         Image(
             painterResource(res),
             contentDescription = null,
@@ -257,57 +261,61 @@ private fun PetPhoto(
                 Modifier.wrapContentSize(unbounded = true)
                     .size(imgW, imgH)
                     .graphicsLayer(scaleX = if (mirror) -1f else 1f))
-      }
+    }
 }
 
 @Composable
 private fun GoogleSignInButton(onSignInClick: () -> Unit) {
-  Button(
-      onClick = onSignInClick,
-      colors = ButtonDefaults.buttonColors(containerColor = Color.White), // Button color
-      shape = RoundedCornerShape(50), // Circular edges for the button
-      border = BorderStroke(1.dp, Color.LightGray),
-      modifier = Modifier.padding(8.dp).height(48.dp).testTag(SignInScreenTestTags.GOOGLE_BUTTON)) {
+    Button(
+        onClick = onSignInClick,
+        colors = ButtonDefaults.buttonColors(containerColor = Color.White), // Button color
+        shape = RoundedCornerShape(50), // Circular edges for the button
+        border = BorderStroke(1.dp, Color.LightGray),
+        modifier = Modifier.padding(8.dp).height(48.dp).testTag(SignInScreenTestTags.GOOGLE_BUTTON)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()) {
-              // Load the Google logo from resources
-              Image(
-                  painter =
-                      painterResource(id = R.drawable.google_logo), // Ensure this drawable exists
-                  contentDescription = "Google Logo",
-                  modifier =
-                      Modifier.size(30.dp) // Size of the Google logo
-                          .padding(end = 8.dp))
+            // Load the Google logo from resources
+            Image(
+                painter = painterResource(id = R.drawable.google_logo),
+                contentDescription = "Google Logo",
+                modifier = Modifier.size(30.dp).padding(end = 8.dp))
 
-              // Text for the button
-              Text(
-                  text = "Sign in with Google",
-                  color = Color.Black, // Text color
-                  fontSize = 16.sp, // Font size
-                  fontWeight = FontWeight.Medium)
-            }
-      }
+            // Text for the button
+            Text(
+                text = "Sign in with Google",
+                color = Color.Black,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium)
+        }
+    }
 }
 
 @Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun SignInContentPreview() {
-  SignInContent(state = SignInUiState(), onSignInClick = {})
+    SignInContent(state = SignInUiState(), onSignInClick = {})
+}
+
+@Preview(name = "Small screen", showBackground = true, widthDp = 320, heightDp = 640)
+@Composable
+private fun SignInContentSmallPreview() {
+    SignInContent(state = SignInUiState(), onSignInClick = {})
 }
 
 @Preview(name = "Loading", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun SignInContentLoadingPreview() {
-  SignInContent(state = SignInUiState(isLoading = true), onSignInClick = {})
+    SignInContent(state = SignInUiState(isLoading = true), onSignInClick = {})
 }
 
 @Preview(name = "Error", showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun SignInContentErrorPreview() {
-  SignInContent(state = SignInUiState(errorMessage = "Sign-in cancelled"), onSignInClick = {})
+    SignInContent(state = SignInUiState(errorMessage = "Sign-in cancelled"), onSignInClick = {})
 }
+
 /**
  * Stateful entry point of the Sign-In screen.
  *
@@ -320,12 +328,12 @@ fun SignInScreen(
     credentialManager: CredentialManager? = null,
     onSignedIn: () -> Unit = {},
 ) {
-  val context = LocalContext.current
-  val manager = credentialManager ?: remember { CredentialManager.create(context) }
-  val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val manager = credentialManager ?: remember { CredentialManager.create(context) }
+    val state by viewModel.uiState.collectAsState()
 
-  val currentOnSignedIn by rememberUpdatedState(onSignedIn)
-  LaunchedEffect(state.user) { if (state.user != null) currentOnSignedIn() }
+    val currentOnSignedIn by rememberUpdatedState(onSignedIn)
+    LaunchedEffect(state.user) { if (state.user != null) currentOnSignedIn() }
 
-  SignInContent(state = state, onSignInClick = { viewModel.signIn(context, manager) })
+    SignInContent(state = state, onSignInClick = { viewModel.signIn(context, manager) })
 }
