@@ -1,5 +1,9 @@
 package com.android.spotted.model.user
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -41,6 +45,27 @@ class FakeUserRepositoryTest {
   }
 
   @Test
+  fun concurrentSavesAndGets_areThreadSafe() = runTest {
+    coroutineScope {
+      (1..100)
+          .map { index ->
+            async(Dispatchers.Default) {
+              val user =
+                  UserProfile(
+                      uid = "user-$index",
+                      name = "Jamie",
+                      email = "jamie$index@example.com",
+                  )
+
+              assertTrue(repository.saveUser(user).isSuccess)
+              assertEquals(user, repository.getUser(user.uid).getOrThrow())
+            }
+          }
+          .awaitAll()
+    }
+  }
+
+  @Test
   fun getUser_whenUserDoesNotExist_returnsFailure() = runTest {
     val result = repository.getUser("missing")
 
@@ -69,6 +94,19 @@ class FakeUserRepositoryTest {
     assertSame(expectedFailure, result.exceptionOrNull())
     repository.failure = null
     assertTrue(repository.getUser(user.uid).isFailure)
+  }
+
+  @Test
+  fun userProfile_defaultsPhoneAndHomeArea() {
+    val user =
+        UserProfile(
+            uid = "user-1",
+            name = "Jamie",
+            email = "jamie@example.com",
+        )
+
+    assertEquals("", user.phone)
+    assertEquals("", user.homeArea)
   }
 
   private fun user(uid: String, name: String = "Jamie") =

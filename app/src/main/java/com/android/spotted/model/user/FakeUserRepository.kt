@@ -1,7 +1,9 @@
 package com.android.spotted.model.user
 
+import java.util.concurrent.ConcurrentHashMap
+
 class FakeUserRepository : UserRepository {
-  private val users = linkedMapOf<String, UserProfile>()
+  private val users = ConcurrentHashMap<String, UserProfile>()
 
   var failure: Throwable? = null
 
