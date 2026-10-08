@@ -2,6 +2,7 @@ package com.android.spotted.model.Pet
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.Pet.PetRepositoryFirestore
+import com.android.spotted.utils.FirebaseEmulators
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -173,8 +174,7 @@ class PetRepositoryFirestoreTest {
     @JvmStatic
     @BeforeClass
     fun configureFirebaseEmulators() {
-      FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
+      FirebaseEmulators.configure()
     }
   }
 }
