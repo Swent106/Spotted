@@ -2,6 +2,58 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Assumed data model:
+    // users/{uid}: uid, name, phone, email, and homeArea are required strings.
+    // phone and homeArea may be empty; all fields have size limits below.
+    // The document ID and uid field identify the authenticated profile owner.
+    // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
+    // behaviors, and note; existing pet authorization rules are unchanged.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function uidUnchanged(userId) {
+      return request.resource.data.uid == userId;
+    }
+
+    function uidNotModified(userId) {
+      return resource.data.uid == userId
+          && request.resource.data.uid == resource.data.uid;
+    }
+
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'name', 'phone', 'email', 'homeArea'])
+          && data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'homeArea'])
+          && data.uid is string
+          && data.uid.size() > 0
+          && data.uid.size() <= 128
+          && data.uid == userId
+          && data.name is string
+          && data.name.size() > 0
+          && data.name.size() <= 100
+          && data.phone is string
+          && data.phone.size() <= 32
+          && data.email is string
+          && data.email.size() > 0
+          && data.email.size() <= 254
+          && data.homeArea is string
+          && data.homeArea.size() <= 120;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId)
+          && uidUnchanged(userId)
+          && isValidUser(request.resource.data, userId);
+      allow update: if isOwner(userId)
+          && uidNotModified(userId)
+          && isValidUser(request.resource.data, userId);
+    }
+
     match /pets/{petId} {
       allow create: if request.auth != null
           && request.resource.data.ownerId == request.auth.uid;
