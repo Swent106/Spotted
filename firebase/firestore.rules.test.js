@@ -11,6 +11,7 @@ const {
   collection,
   deleteDoc,
   doc,
+  deleteField,
   getDoc,
   getDocs,
   query,
@@ -19,7 +20,7 @@ const {
   where,
 } = require("firebase/firestore");
 
-describe("Firestore pet access rules", () => {
+describe("Firestore security rules", () => {
   let testEnvironment;
 
   before(async () => {
@@ -51,6 +52,23 @@ describe("Firestore pet access rules", () => {
         name: `Pet ${id}`,
       });
     });
+  }
+
+  async function seedUser(uid) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "users", uid), userProfile(uid));
+    });
+  }
+
+  function userProfile(uid, overrides = {}) {
+    return {
+      uid,
+      name: "Jamie",
+      phone: "+41 79 123 45 67",
+      email: "jamie@example.com",
+      homeArea: "Lausanne",
+      ...overrides,
+    };
   }
 
   function firestoreForUser(userId) {
@@ -179,6 +197,136 @@ describe("Firestore pet access rules", () => {
     await assertFails(
       setDoc(doc(ownerDb, "some_unmatched_collection", "doc-1"), { ownerId: "owner-1" }),
     );
+  });
+
+  const userCreateCases = [
+    { who: "owner", userId: "user-1", profileUid: "user-1", allowed: true },
+    { who: "another user", userId: "user-2", profileUid: "user-1", allowed: false },
+    { who: "anonymous user", userId: null, profileUid: "user-1", allowed: false },
+  ];
+
+  for (const testCase of userCreateCases) {
+    it(`user create: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      const db = firestoreForUser(testCase.userId);
+      const operation = setDoc(
+        doc(db, "users", testCase.profileUid),
+        userProfile(testCase.profileUid),
+      );
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  const userReadCases = [
+    { who: "owner", userId: "user-1", allowed: true },
+    { who: "another user", userId: "user-2", allowed: false },
+    { who: "anonymous user", userId: null, allowed: false },
+  ];
+
+  for (const testCase of userReadCases) {
+    it(`user read: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedUser("user-1");
+      const db = firestoreForUser(testCase.userId);
+      const operation = getDoc(doc(db, "users", "user-1"));
+
+      if (testCase.allowed) {
+        const snapshot = await assertSucceeds(operation);
+        assert.deepEqual(snapshot.data(), userProfile("user-1"));
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  it("denies listing user profiles, including to authenticated users", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertFails(getDocs(collection(db, "users")));
+  });
+
+  it("allows an owner to check whether their profile exists", async () => {
+    const db = firestoreForUser("user-1");
+
+    const snapshot = await assertSucceeds(getDoc(doc(db, "users", "user-1")));
+    assert.equal(snapshot.exists(), false);
+  });
+
+  it("allows an owner to update their valid profile", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      updateDoc(doc(db, "users", "user-1"), { name: "Alex" }),
+    );
+  });
+
+  const userUpdateCases = [
+    { who: "another user", userId: "user-2", allowed: false },
+    { who: "anonymous user", userId: null, allowed: false },
+  ];
+
+  for (const testCase of userUpdateCases) {
+    it(`user update: ${testCase.who} is denied`, async () => {
+      await seedUser("user-1");
+      const db = firestoreForUser(testCase.userId);
+
+      await assertFails(
+        updateDoc(doc(db, "users", "user-1"), { name: "Alex" }),
+      );
+    });
+  }
+
+  it("denies profile creation with a mismatched uid", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertFails(
+      setDoc(doc(db, "users", "user-1"), userProfile("user-2")),
+    );
+  });
+
+  it("denies profile updates that change uid or add unknown fields", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+    const profile = doc(db, "users", "user-1");
+
+    await assertFails(updateDoc(profile, { uid: "user-2" }));
+    await assertFails(updateDoc(profile, { extraData: "not allowed" }));
+  });
+
+  it("denies invalid and oversized profile fields", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertFails(
+      setDoc(doc(db, "users", "user-1"), userProfile("user-1", { name: 42 })),
+    );
+    await assertFails(
+      setDoc(
+        doc(db, "users", "user-1"),
+        userProfile("user-1", { name: "x".repeat(101) }),
+      ),
+    );
+  });
+
+  it("denies profile updates that omit required or invalid fields", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+    const profile = doc(db, "users", "user-1");
+
+    await assertFails(updateDoc(profile, { phone: deleteField() }));
+    await assertFails(updateDoc(profile, { name: 42 }));
+    await assertFails(updateDoc(profile, { name: "x".repeat(101) }));
+  });
+
+  it("denies profile deletion", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertFails(deleteDoc(doc(db, "users", "user-1")));
   });
 });
 

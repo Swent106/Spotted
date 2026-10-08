@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.auth.AuthRepositoryFirebase
 import com.android.spotted.model.auth.User
 import com.android.spotted.utils.FakeJwtGenerator
+import com.android.spotted.utils.FirebaseEmulators
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -25,6 +26,7 @@ class AuthRepositoryFirebaseInstrumentedTest {
 
   @Before
   fun setUp() {
+    FirebaseEmulators.configure()
     // Get the real FirebaseAuth instance
     firebaseAuth = FirebaseAuth.getInstance()
 
