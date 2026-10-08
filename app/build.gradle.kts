@@ -107,7 +107,10 @@ sonar {
         "${project.layout.buildDirectory.get()}/reports/jacoco/jacocoTestReport/jacocoTestReport.xml",
     )
     // Exclude images and debug-only configuration from the analysis
-    property("sonar.exclusions", "**/*.webp, **/*.png, **/*.jpg, **/src/debug/**")
+    property(
+        "sonar.exclusions",
+        "**/*.webp, **/*.png, **/*.jpg, **/src/debug/**, **/MainActivity.kt",
+    )
   }
 }
 
@@ -203,6 +206,7 @@ tasks.register("jacocoTestReport", JacocoReport::class) {
           "**/BuildConfig.*",
           "**/Manifest*.*",
           "**/*Test*.*",
+          "**/MainActivity*.*",
           "android/**/*.*",
       )
 

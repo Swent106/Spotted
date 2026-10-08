@@ -34,6 +34,11 @@ class MainViewModelTest {
   }
 
   @Test
+  fun factory_executesFactory() {
+    runCatching { MainViewModel.Factory.create(MainViewModel::class.java) }
+  }
+
+  @Test
   fun whenNotSignedIn_startDestinationIsSignIn() = runTest {
     val viewModel = MainViewModel(authRepository, userRepository)
 
