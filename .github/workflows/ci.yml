@@ -52,7 +52,7 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
-          script: firebase emulators:exec --project spotted-fd9bf --only auth,firestore "./gradlew testDebugUnitTest connectedDebugAndroidTest jacocoTestReport"
+          script: firebase emulators:exec --project spotted-fd9bf --only auth,firestore,storage "./gradlew testDebugUnitTest connectedDebugAndroidTest jacocoTestReport"
 
       - name: Run SonarCloud Analysis
         env:
