@@ -54,6 +54,16 @@ jobs:
           target: google_apis
           script: firebase emulators:exec --project spotted-fd9bf --only auth,firestore "./gradlew testDebugUnitTest connectedDebugAndroidTest jacocoTestReport"
 
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/reports/tests/
+
       - name: Run SonarCloud Analysis
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
