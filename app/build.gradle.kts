@@ -123,6 +123,7 @@ dependencies {
   implementation(libs.firebase.auth)
   implementation(libs.material)
   implementation(libs.androidx.lifecycle.runtime.ktx)
+  implementation(libs.androidx.navigation.compose)
   implementation("org.mockito:mockito-core:5.11.0")
 
   // ------------- Firebase ------------------
