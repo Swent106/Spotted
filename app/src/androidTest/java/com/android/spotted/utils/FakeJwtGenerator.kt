@@ -25,7 +25,8 @@ object FakeJwtGenerator {
                 "email" to email,
                 "name" to name,
                 "picture" to "http://example.com/avatar.png",
-            ))
+            )
+        )
 
     val headerEncoded = base64UrlEncode(header.toString().toByteArray())
     val payloadEncoded = base64UrlEncode(payload.toString().toByteArray())

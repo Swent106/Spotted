@@ -59,7 +59,8 @@ class AuthRepositoryFirebaseInstrumentedTest {
 
     assertTrue(
         "Sign-in should be successful, but failed with: ${result.exceptionOrNull()?.message}",
-        result.isSuccess)
+        result.isSuccess,
+    )
 
     val returnedUser = result.getOrNull()
     assertNotNull("Returned user should not be null", returnedUser)
