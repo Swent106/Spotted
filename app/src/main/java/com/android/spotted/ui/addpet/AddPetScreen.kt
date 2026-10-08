@@ -20,7 +20,7 @@ fun AddPetScreen(
     viewModel: AddPetViewModel,
     ownerId: String,
     onSaveSuccess: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
   var name by remember { mutableStateOf("") }
   var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -42,43 +42,48 @@ fun AddPetScreen(
   Column(
       modifier = modifier.fillMaxSize().padding(16.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Pet Name") },
-            modifier = Modifier.fillMaxWidth().testTag("add_pet_name_input"))
+      verticalArrangement = Arrangement.Center,
+  ) {
+    OutlinedTextField(
+        value = name,
+        onValueChange = { name = it },
+        label = { Text("Pet Name") },
+        modifier = Modifier.fillMaxWidth().testTag("add_pet_name_input"),
+    )
 
-        Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
-            onClick = { imagePickerLauncher.launch("image/*") },
-            modifier = Modifier.testTag("add_pet_photo_button")) {
-              Text(if (selectedImageUri == null) "Select Photo" else "Photo Selected")
-            }
+    Button(
+        onClick = { imagePickerLauncher.launch("image/*") },
+        modifier = Modifier.testTag("add_pet_photo_button"),
+    ) {
+      Text(if (selectedImageUri == null) "Select Photo" else "Photo Selected")
+    }
 
-        Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
-        if (uiState.errorMessage != null) {
-          Text(text = uiState.errorMessage!!, color = androidx.compose.ui.graphics.Color.Red)
-          Spacer(modifier = Modifier.height(16.dp))
-        }
+    if (uiState.errorMessage != null) {
+      Text(text = uiState.errorMessage!!, color = androidx.compose.ui.graphics.Color.Red)
+      Spacer(modifier = Modifier.height(16.dp))
+    }
 
-        if (uiState.isSaving) {
-          CircularProgressIndicator(modifier = Modifier.testTag("add_pet_loading"))
-        } else {
-          Button(
-              onClick = {
-                viewModel.savePet(
-                    ownerId = ownerId,
-                    name = name,
-                    species = Species.DOG, // Defaults for sample
-                    photoUri = selectedImageUri)
-              },
-              enabled = name.isNotBlank(),
-              modifier = Modifier.testTag("add_pet_save_button")) {
-                Text("Save Pet")
-              }
-        }
+    if (uiState.isSaving) {
+      CircularProgressIndicator(modifier = Modifier.testTag("add_pet_loading"))
+    } else {
+      Button(
+          onClick = {
+            viewModel.savePet(
+                ownerId = ownerId,
+                name = name,
+                species = Species.DOG, // Defaults for sample
+                photoUri = selectedImageUri,
+            )
+          },
+          enabled = name.isNotBlank(),
+          modifier = Modifier.testTag("add_pet_save_button"),
+      ) {
+        Text("Save Pet")
       }
+    }
+  }
 }

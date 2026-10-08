@@ -26,39 +26,42 @@ fun PetProfileScreen(viewModel: PetProfileViewModel, petId: String, modifier: Mo
   Column(
       modifier = modifier.fillMaxSize().padding(16.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center) {
-        if (pet == null) {
-          CircularProgressIndicator(modifier = Modifier.testTag("pet_profile_loading"))
-        } else {
-          val loadedPet = pet!!
+      verticalArrangement = Arrangement.Center,
+  ) {
+    if (pet == null) {
+      CircularProgressIndicator(modifier = Modifier.testTag("pet_profile_loading"))
+    } else {
+      val loadedPet = pet!!
 
-          if (loadedPet.photoUrl != null) {
-            AsyncImage(
-                model = loadedPet.photoUrl,
-                contentDescription = "Pet Profile Picture",
-                modifier = Modifier.size(120.dp).clip(CircleShape).testTag("pet_profile_image"),
-                contentScale = ContentScale.Crop)
-          } else {
-            Box(
-                modifier =
-                    Modifier.size(120.dp)
-                        .clip(CircleShape)
-                        .testTag("pet_profile_image_placeholder"),
-                contentAlignment = Alignment.Center) {
-                  Text("No Photo")
-                }
-          }
-
-          Spacer(modifier = Modifier.height(16.dp))
-
-          Text(
-              text = loadedPet.name,
-              style = MaterialTheme.typography.headlineMedium,
-              modifier = Modifier.testTag("pet_profile_name"))
-
-          Text(
-              text = "Species: ${loadedPet.species.name}",
-              style = MaterialTheme.typography.bodyLarge)
+      if (loadedPet.photoUrl != null) {
+        AsyncImage(
+            model = loadedPet.photoUrl,
+            contentDescription = "Pet Profile Picture",
+            modifier = Modifier.size(120.dp).clip(CircleShape).testTag("pet_profile_image"),
+            contentScale = ContentScale.Crop,
+        )
+      } else {
+        Box(
+            modifier =
+                Modifier.size(120.dp).clip(CircleShape).testTag("pet_profile_image_placeholder"),
+            contentAlignment = Alignment.Center,
+        ) {
+          Text("No Photo")
         }
       }
+
+      Spacer(modifier = Modifier.height(16.dp))
+
+      Text(
+          text = loadedPet.name,
+          style = MaterialTheme.typography.headlineMedium,
+          modifier = Modifier.testTag("pet_profile_name"),
+      )
+
+      Text(
+          text = "Species: ${loadedPet.species.name}",
+          style = MaterialTheme.typography.bodyLarge,
+      )
+    }
+  }
 }

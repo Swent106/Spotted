@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 class AddPetViewModel(
     private val petRepository: PetRepository,
-    private val photoRepository: PhotoRepository
+    private val photoRepository: PhotoRepository,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(AddPetUiState())
@@ -25,7 +25,7 @@ class AddPetViewModel(
       name: String,
       species: com.android.spotted.model.Pet.Species,
       breed: String = "",
-      photoUri: Uri? = null
+      photoUri: Uri? = null,
   ) {
     viewModelScope.launch {
       _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null)
@@ -43,7 +43,8 @@ class AddPetViewModel(
                 _uiState.value.copy(
                     isSaving = false,
                     errorMessage =
-                        uploadResult.exceptionOrNull()?.message ?: "Error uploading photo")
+                        uploadResult.exceptionOrNull()?.message ?: "Error uploading photo",
+                )
             return@launch
           }
         }
@@ -55,7 +56,8 @@ class AddPetViewModel(
                 name = name,
                 species = species,
                 breed = breed,
-                photoUrl = photoUrl)
+                photoUrl = photoUrl,
+            )
 
         val result = petRepository.addPet(pet)
         if (result.isSuccess) {
@@ -64,7 +66,8 @@ class AddPetViewModel(
           _uiState.value =
               _uiState.value.copy(
                   isSaving = false,
-                  errorMessage = result.exceptionOrNull()?.message ?: "Error saving pet")
+                  errorMessage = result.exceptionOrNull()?.message ?: "Error saving pet",
+              )
         }
       } catch (e: Exception) {
         _uiState.value = _uiState.value.copy(isSaving = false, errorMessage = e.message)
@@ -76,5 +79,5 @@ class AddPetViewModel(
 data class AddPetUiState(
     val isSaving: Boolean = false,
     val saveSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )

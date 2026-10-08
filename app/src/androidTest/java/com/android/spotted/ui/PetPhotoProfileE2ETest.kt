@@ -44,7 +44,8 @@ class PetPhotoProfileE2ETest {
                   kotlinx.coroutines.runBlocking { petRepository.getPetsByOwner("owner-123") }
               createdPetId = result.getOrNull()?.firstOrNull()?.id
               currentScreen = "profile"
-            })
+            },
+        )
       } else if (currentScreen == "profile" && createdPetId != null) {
         PetProfileScreen(viewModel = petProfileViewModel, petId = createdPetId!!)
       }
