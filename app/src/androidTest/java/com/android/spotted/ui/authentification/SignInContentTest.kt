@@ -32,9 +32,9 @@ class SignInContentTest {
 
     composeTestRule.onNodeWithTag(SignInScreenTestTags.SCREEN).assertIsDisplayed()
     composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .assertIsDisplayed()
+      .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
+      .performScrollTo()
+      .assertIsDisplayed()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).assertDoesNotExist()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE).assertDoesNotExist()
   }
@@ -52,10 +52,10 @@ class SignInContentTest {
     setContent(SignInUiState(errorMessage = "Sign-in cancelled"))
 
     composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE)
-        .performScrollTo()
-        .assertIsDisplayed()
-        .assertTextEquals("Sign-in cancelled")
+      .onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE)
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertTextEquals("Sign-in cancelled")
   }
 
   @Test
@@ -63,9 +63,9 @@ class SignInContentTest {
     setContent(SignInUiState(errorMessage = "Network error"))
 
     composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .assertIsDisplayed()
+      .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
+      .performScrollTo()
+      .assertIsDisplayed()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).assertDoesNotExist()
   }
 
@@ -74,10 +74,7 @@ class SignInContentTest {
     var clicks = 0
     setContent(SignInUiState(), onSignInClick = { clicks++ })
 
-    composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .performClick()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).performScrollTo().performClick()
 
     assertEquals(1, clicks)
   }
@@ -88,8 +85,8 @@ class SignInContentTest {
     composeTestRule.setContent { SignInScreen(viewModel = viewModel) }
 
     composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .assertIsDisplayed()
+      .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
+      .performScrollTo()
+      .assertIsDisplayed()
   }
 }
