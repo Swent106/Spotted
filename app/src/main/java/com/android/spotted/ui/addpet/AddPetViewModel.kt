@@ -1,6 +1,5 @@
 package com.android.spotted.ui.addpet
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.spotted.model.Pet.Pet
@@ -25,7 +24,7 @@ class AddPetViewModel(
       name: String,
       species: com.android.spotted.model.Pet.Species,
       breed: String = "",
-      photoUri: Uri? = null,
+      photoUri: String? = null,
   ) {
     viewModelScope.launch {
       _uiState.value = _uiState.value.copy(isSaving = true, errorMessage = null)
@@ -34,8 +33,7 @@ class AddPetViewModel(
 
         var photoUrl: String? = null
         if (photoUri != null) {
-          val path = "pets/$petId/profile.jpg"
-          val uploadResult = photoRepository.uploadPhoto(photoUri, path)
+          val uploadResult = photoRepository.uploadPetPhoto(ownerId, petId, photoUri)
           if (uploadResult.isSuccess) {
             photoUrl = uploadResult.getOrNull()
           } else {

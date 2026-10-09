@@ -1,8 +1,9 @@
 package com.android.spotted.model.photo
 
-import android.net.Uri
-
 interface PhotoRepository {
-  /** Uploads a photo to a remote storage and returns the download URL. */
-  suspend fun uploadPhoto(uri: Uri, path: String): Result<String>
+  /**
+   * Uploads the image at [localUri] as the photo of pet [petId], owned by [ownerId], and returns
+   * the URL where the uploaded photo can be downloaded.
+   */
+  suspend fun uploadPetPhoto(ownerId: String, petId: String, localUri: String): Result<String>
 }

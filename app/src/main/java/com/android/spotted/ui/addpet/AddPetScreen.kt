@@ -76,7 +76,7 @@ fun AddPetScreen(
                 ownerId = ownerId,
                 name = name,
                 species = Species.DOG, // Defaults for sample
-                photoUri = selectedImageUri,
+                photoUri = selectedImageUri?.toString(),
             )
           },
           enabled = name.isNotBlank(),

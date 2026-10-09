@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Pet photos live at pets/{ownerId}/{petId}/photo.jpg.
+    // Any signed-in user can see them; only the owner can upload or delete them.
+    match /pets/{ownerId}/{petId}/{fileName} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+          && request.auth.uid == ownerId
+          && request.resource.size < 5 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null
+          && request.auth.uid == ownerId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
