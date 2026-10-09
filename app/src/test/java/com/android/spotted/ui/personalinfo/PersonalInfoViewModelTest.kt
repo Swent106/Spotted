@@ -69,6 +69,44 @@ class PersonalInfoViewModelTest {
   }
 
   @Test
+  fun firstAndLastNameChanges_combineIntoName() {
+    viewModel.onFirstNameChanged(" Rayen ")
+    viewModel.onLastNameChanged("Ben Ali")
+
+    val state = viewModel.uiState.value
+    assertEquals(" Rayen ", state.firstName)
+    assertEquals("Ben Ali", state.lastName)
+    assertEquals("Rayen Ben Ali", state.name)
+  }
+
+  @Test
+  fun firstNameOnly_isEnoughForName() {
+    viewModel.onFirstNameChanged("Rayen")
+    viewModel.onHomeAreaChanged("Plainpalais, Geneva")
+
+    assertEquals("Rayen", viewModel.uiState.value.name)
+    assertTrue(viewModel.uiState.value.canSave)
+  }
+
+  @Test
+  fun usernameChange_isReflectedInState() {
+    viewModel.onUsernameChanged("@rayen.gva")
+
+    assertEquals("@rayen.gva", viewModel.uiState.value.username)
+  }
+
+  @Test
+  fun alertRadius_defaultsToThreeKm_andAcceptsOnlyListedOptions() {
+    assertEquals(3, viewModel.uiState.value.alertRadiusKm)
+
+    viewModel.onAlertRadiusChanged(10)
+    assertEquals(10, viewModel.uiState.value.alertRadiusKm)
+
+    viewModel.onAlertRadiusChanged(7)
+    assertEquals(10, viewModel.uiState.value.alertRadiusKm)
+  }
+
+  @Test
   fun saveProfile_withMissingName_doesNotSave() =
       runTest(testDispatcher) {
         viewModel.onHomeAreaChanged("Lausanne")
