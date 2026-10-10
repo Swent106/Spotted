@@ -55,6 +55,11 @@ class PersonalInfoViewModel(
     }
   }
 
+  fun onAlertRadiusChanged(radiusKm: Int) {
+    if (radiusKm !in PersonalInfoUiState.ALERT_RADIUS_OPTIONS_KM) return
+    _uiState.update { it.copy(alertRadiusKm = radiusKm, isSaved = false) }
+  }
+
   private fun fullName(firstName: String, lastName: String): String =
       listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
