@@ -15,12 +15,13 @@ object FakeJwtGenerator {
   fun createFakeGoogleIdToken(
       name: String = "Test User",
       email: String = "test@example.com",
+      sub: String = counter.toString()
   ): String {
     val header = JSONObject(mapOf("alg" to "none"))
     val payload =
         JSONObject(
             mapOf(
-                "sub" to counter.toString(),
+                "sub" to sub,
                 "email" to email,
                 "name" to name,
                 "picture" to "http://example.com/avatar.png",
