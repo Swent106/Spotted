@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -50,9 +53,12 @@ import com.android.spotted.R
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedAvatarBackground
 import com.android.spotted.ui.theme.SpottedBlue
+import com.android.spotted.ui.theme.SpottedBlueTint
 import com.android.spotted.ui.theme.SpottedError
 import com.android.spotted.ui.theme.SpottedInk
+import com.android.spotted.ui.theme.SpottedInkSoft
 import com.android.spotted.ui.theme.SpottedInputBackground
+import com.android.spotted.ui.theme.SpottedMapBackground
 import com.android.spotted.ui.theme.SpottedScreenBackground
 import com.android.spotted.ui.theme.SpottedTextLabel
 import com.android.spotted.ui.theme.SpottedTextSecondary
@@ -68,9 +74,13 @@ object PersonalInfoScreenTestTags {
   const val LAST_NAME_INPUT = "personalInfo_lastNameInput"
   const val HOME_AREA_INPUT = "personalInfo_homeAreaInput"
   const val USE_MY_LOCATION = "personalInfo_useMyLocation"
+  const val MAP_PREVIEW = "personalInfo_mapPreview"
+  const val RADIUS_TAG = "personalInfo_radiusTag"
   const val ERROR_MESSAGE = "personalInfo_errorMessage"
   const val CREATE_PROFILE_BUTTON = "personalInfo_createProfileButton"
   const val LOADER = "personalInfo_loader"
+
+  fun radiusChip(radiusKm: Int) = "personalInfo_radiusChip_$radiusKm"
 }
 
 // Figma's Bold (700) is not bundled: SemiBold is the closest available weight.
@@ -112,6 +122,7 @@ fun PersonalInfoContent(
     onLastNameChange: (String) -> Unit,
     onHomeAreaChange: (String) -> Unit,
     onUseMyLocationClick: () -> Unit,
+    onAlertRadiusSelect: (Int) -> Unit,
     onCreateProfileClick: () -> Unit,
 ) {
   Box(
@@ -137,7 +148,7 @@ fun PersonalInfoContent(
         Header(onBackClick)
         Avatar(onChangePhotoClick)
         IdentityCard(state, onUsernameChange, onFirstNameChange, onLastNameChange)
-        HomeLocationCard(state, onHomeAreaChange, onUseMyLocationClick)
+        HomeLocationCard(state, onHomeAreaChange, onUseMyLocationClick, onAlertRadiusSelect)
         state.errorMessage?.let { message ->
           Text(
               message,
@@ -266,6 +277,7 @@ private fun HomeLocationCard(
     state: PersonalInfoUiState,
     onHomeAreaChange: (String) -> Unit,
     onUseMyLocationClick: () -> Unit,
+    onAlertRadiusSelect: (Int) -> Unit,
 ) {
   Card {
     Text("HOME LOCATION", style = labelStyle)
@@ -289,6 +301,77 @@ private fun HomeLocationCard(
     Text(
         "Used to alert you about pets missing near your home.",
         style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
+    )
+    MapPreview(state.alertRadiusKm)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+      PersonalInfoUiState.ALERT_RADIUS_OPTIONS_KM.forEach { radiusKm ->
+        RadiusChip(radiusKm, selected = radiusKm == state.alertRadiusKm, onAlertRadiusSelect)
+      }
+    }
+  }
+}
+
+/** Static preview of the alert area. The circles stay centred whatever the card width. */
+@Composable
+private fun MapPreview(alertRadiusKm: Int) {
+  Box(
+      Modifier.fillMaxWidth()
+          .height(118.dp)
+          .clip(RoundedCornerShape(16.dp))
+          .background(SpottedMapBackground)
+          .testTag(PersonalInfoScreenTestTags.MAP_PREVIEW)
+  ) {
+    Image(
+        painterResource(R.drawable.personal_info_map),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier =
+            Modifier.wrapContentSize(Alignment.TopCenter, unbounded = true)
+                .offset(y = (-106).dp)
+                .size(330.dp),
+    )
+    Image(
+        painterResource(R.drawable.personal_info_alert_radius),
+        contentDescription = null,
+        modifier = Modifier.align(Alignment.TopCenter).offset(y = 7.dp),
+    )
+    Image(
+        painterResource(R.drawable.personal_info_home_pin),
+        contentDescription = null,
+        modifier = Modifier.align(Alignment.TopCenter).offset(y = 50.dp),
+    )
+    Text(
+        "Alerts within $alertRadiusKm km",
+        style = jakarta(11, 14, Bold, SpottedInk),
+        modifier =
+            Modifier.offset(10.dp, 86.dp)
+                .clip(RoundedCornerShape(100.dp))
+                .background(Color.White.copy(alpha = 0.95f))
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+                .testTag(PersonalInfoScreenTestTags.RADIUS_TAG),
+    )
+  }
+}
+
+@Composable
+private fun RowScope.RadiusChip(radiusKm: Int, selected: Boolean, onSelect: (Int) -> Unit) {
+  val shape = RoundedCornerShape(100.dp)
+  Box(
+      contentAlignment = Alignment.Center,
+      modifier =
+          Modifier.weight(1f)
+              .clip(shape)
+              .background(if (selected) SpottedBlueTint else SpottedInputBackground)
+              .then(if (selected) Modifier.border(1.5.dp, SpottedBlue, shape) else Modifier)
+              .selectable(selected = selected, role = Role.RadioButton) { onSelect(radiusKm) }
+              .padding(vertical = 7.dp)
+              .testTag(PersonalInfoScreenTestTags.radiusChip(radiusKm)),
+  ) {
+    Text(
+        "$radiusKm km",
+        style =
+            if (selected) jakarta(13, 16, Bold, SpottedBlue)
+            else jakarta(13, 16, FontWeight.SemiBold, SpottedInkSoft),
     )
   }
 }
@@ -402,6 +485,7 @@ fun PersonalInfoScreen(
       onLastNameChange = viewModel::onLastNameChanged,
       onHomeAreaChange = viewModel::onHomeAreaChanged,
       onUseMyLocationClick = onUseMyLocationClick,
+      onAlertRadiusSelect = viewModel::onAlertRadiusChanged,
       onCreateProfileClick = viewModel::saveProfile,
   )
 }

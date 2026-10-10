@@ -3,6 +3,7 @@ package com.android.spotted.ui.personalinfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -36,6 +37,7 @@ class PersonalInfoContentTest {
       state: PersonalInfoUiState,
       onBackClick: () -> Unit = {},
       onFirstNameChange: (String) -> Unit = {},
+      onAlertRadiusSelect: (Int) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
   ) {
     composeTestRule.setContent {
@@ -48,6 +50,7 @@ class PersonalInfoContentTest {
           onLastNameChange = {},
           onHomeAreaChange = {},
           onUseMyLocationClick = {},
+          onAlertRadiusSelect = onAlertRadiusSelect,
           onCreateProfileClick = onCreateProfileClick,
       )
     }
@@ -67,6 +70,7 @@ class PersonalInfoContentTest {
             PersonalInfoScreenTestTags.FIRST_NAME_INPUT,
             PersonalInfoScreenTestTags.LAST_NAME_INPUT,
             PersonalInfoScreenTestTags.HOME_AREA_INPUT,
+            PersonalInfoScreenTestTags.MAP_PREVIEW,
         )
         .forEach { composeTestRule.onNodeWithTag(it).performScrollTo().assertIsDisplayed() }
     button().assertIsDisplayed().assertIsNotEnabled()
@@ -115,6 +119,25 @@ class PersonalInfoContentTest {
         .performTextInput("Rayen")
 
     assertEquals("Rayen", typed)
+  }
+
+  @Test
+  fun radiusChips_showSelection_andReportClicks() {
+    var selected = 0
+    setContent(PersonalInfoUiState(), onAlertRadiusSelect = { selected = it })
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(3))
+        .performScrollTo()
+        .assertIsSelected()
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.RADIUS_TAG, useUnmergedTree = true)
+        .performScrollTo()
+        .assertTextEquals("Alerts within 3 km")
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(10)).performClick()
+
+    assertEquals(10, selected)
   }
 
   @Test
