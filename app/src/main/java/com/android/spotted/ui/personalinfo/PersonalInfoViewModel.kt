@@ -28,6 +28,36 @@ class PersonalInfoViewModel(
     _uiState.update { it.copy(name = name, isSaved = false, errorMessage = null) }
   }
 
+  fun onUsernameChanged(username: String) {
+    _uiState.update { it.copy(username = username, isSaved = false, errorMessage = null) }
+  }
+
+  /** First and last name are edited separately but saved together as [PersonalInfoUiState.name]. */
+  fun onFirstNameChanged(firstName: String) {
+    _uiState.update {
+      it.copy(
+          firstName = firstName,
+          name = fullName(firstName, it.lastName),
+          isSaved = false,
+          errorMessage = null,
+      )
+    }
+  }
+
+  fun onLastNameChanged(lastName: String) {
+    _uiState.update {
+      it.copy(
+          lastName = lastName,
+          name = fullName(it.firstName, lastName),
+          isSaved = false,
+          errorMessage = null,
+      )
+    }
+  }
+
+  private fun fullName(firstName: String, lastName: String): String =
+      listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
+
   fun onPhoneChanged(phone: String) {
     _uiState.update { it.copy(phone = phone, isSaved = false, errorMessage = null) }
   }
