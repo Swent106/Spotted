@@ -178,6 +178,52 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
+  fun onSavedHandled_resetsSavedFlag() =
+      runTest(testDispatcher) {
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        viewModel.saveProfile()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isSaved)
+
+        viewModel.onSavedHandled()
+
+        assertFalse(viewModel.uiState.value.isSaved)
+      }
+
+  @Test
+  fun canSave_isFalseWhileLoggingOutOrLoggedOut() {
+    val filled = PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne")
+
+    assertTrue(filled.canSave)
+    assertFalse(filled.copy(isLoggingOut = true).canSave)
+    assertFalse(filled.copy(isLoggedOut = true).canSave)
+  }
+
+  @Test
+  fun canSave_staysTrueWithErrorMessage_soUserCanRetry() {
+    val failed =
+        PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne", errorMessage = "Save failed")
+
+    assertTrue(failed.canSave)
+  }
+
+  @Test
+  fun saveProfile_afterLogout_doesNotSave() =
+      runTest(testDispatcher) {
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        viewModel.logout()
+        advanceUntilIdle()
+
+        viewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertTrue(userRepository.getUser("user-1").isFailure)
+        assertFalse(viewModel.uiState.value.isSaved)
+      }
+
+  @Test
   fun logout_signsOutAndUpdatesState() =
       runTest(testDispatcher) {
         authRepository.signInWithGoogle("token")

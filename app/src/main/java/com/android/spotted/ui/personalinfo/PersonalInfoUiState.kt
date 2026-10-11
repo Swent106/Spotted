@@ -20,7 +20,7 @@ data class PersonalInfoUiState(
     val errorMessage: String? = null,
 ) {
   val canSave: Boolean
-    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving
+    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving && !isLoggingOut && !isLoggedOut
 
   companion object {
     val ALERT_RADIUS_OPTIONS_KM = listOf(1, 3, 5, 10)

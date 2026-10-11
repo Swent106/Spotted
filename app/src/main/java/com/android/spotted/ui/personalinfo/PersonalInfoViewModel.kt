@@ -103,6 +103,11 @@ class PersonalInfoViewModel(
     }
   }
 
+  /** Called by the View once it has navigated away, so coming back does not navigate again. */
+  fun onSavedHandled() {
+    _uiState.update { it.copy(isSaved = false) }
+  }
+
   fun logout() {
     if (_uiState.value.isLoggingOut || _uiState.value.isLoggedOut) return
 
