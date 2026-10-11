@@ -2,4 +2,7 @@
     <string name="app_name">SampleApp</string>
     <string name="title_activity_main">MainActivity</string>
     <string name="title_activity_second">SecondActivity</string>
+    <string name="pet_profile_photo_description">Pet profile picture</string>
+    <string name="pet_profile_no_photo">No Photo</string>
+    <string name="pet_profile_species">Species: %1$s</string>
 </resources>
