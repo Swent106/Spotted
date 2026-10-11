@@ -98,28 +98,59 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun savePet_withoutSpecies_showsErrorAndSavesNothing() = runTest {
+  fun canFinish_isTrueWithEmptyForm() {
+    assertTrue(viewModel.uiState.value.canFinish)
+  }
+
+  @Test
+  fun canFinish_isFalseWithIncompleteForm() {
+    viewModel.onDescriptionChanged("Brown dog")
+
+    assertFalse(viewModel.uiState.value.canFinish)
+  }
+
+  @Test
+  fun canFinish_isTrueWithCompleteForm() {
+    fillForm(name = "Rex", species = Species.DOG)
+
+    assertTrue(viewModel.uiState.value.canFinish)
+  }
+
+  @Test
+  fun savePet_withoutSpecies_savesNothing() = runTest {
     viewModel.onNameChanged("Rex")
 
     viewModel.savePet()
     advanceUntilIdle()
 
-    assertEquals(AddPetsViewModel.MISSING_FIELDS_MESSAGE, viewModel.uiState.value.errorMessage)
     assertTrue(savedPets().isEmpty())
+    assertFalse(viewModel.uiState.value.isSaving)
+    assertNull(viewModel.uiState.value.errorMessage)
   }
 
   @Test
   fun savePet_savesPetForUserAndClearsForm() = runTest {
     fillForm(name = "  Rex  ", species = Species.DOG)
+    viewModel.onBreedChanged(" Labrador ")
     viewModel.onDescriptionChanged("Brown, red collar ")
+    viewModel.onAllergiesChanged(listOf("Chicken", "Pollen"))
+    viewModel.onBehaviorToggled(Behavior.STRESSED_IN_CROWDS)
+    viewModel.onBehaviorToggled(Behavior.FEARFUL_OF_STRANGERS)
 
     viewModel.savePet()
     advanceUntilIdle()
 
     val saved = savedPets().single()
+    assertEquals(user.uid, saved.ownerId)
     assertEquals("Rex", saved.name)
     assertEquals(Species.DOG, saved.species)
+    assertEquals("Labrador", saved.breed)
     assertEquals("Brown, red collar", saved.note)
+    assertEquals(listOf("Chicken", "Pollen"), saved.allergies)
+    assertEquals(
+        setOf(Behavior.STRESSED_IN_CROWDS, Behavior.FEARFUL_OF_STRANGERS),
+        saved.behaviors,
+    )
     assertNull(saved.photoUrl)
     val state = viewModel.uiState.value
     assertEquals(listOf(saved), state.addedPets)
@@ -212,21 +243,27 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun savePet_whenNotSignedIn_showsErrorAndSavesNothing() = runTest {
+  fun savePet_whenNotSignedIn_asksToSignInAndSavesNothing() = runTest {
     viewModel = AddPetsViewModel(null, petRepository, photoRepository)
     fillForm(name = "Rex", species = Species.DOG)
 
     viewModel.savePet()
     advanceUntilIdle()
 
-    assertEquals(AddPetsViewModel.NOT_SIGNED_IN_MESSAGE, viewModel.uiState.value.errorMessage)
-    assertFalse(viewModel.uiState.value.isSaving)
+    val state = viewModel.uiState.value
+    assertTrue(state.needsSignIn)
+    assertEquals(AddPetsViewModel.NOT_SIGNED_IN_MESSAGE, state.errorMessage)
+    assertFalse(state.isSaving)
+    assertTrue(savedPets().isEmpty())
   }
 
   @Test
   fun editingAfterError_clearsError() = runTest {
+    viewModel = viewModelWithFailingSave(IllegalStateException("Denied"))
+    fillForm(name = "Rex", species = Species.DOG)
     viewModel.savePet()
     advanceUntilIdle()
+    assertEquals("Denied", viewModel.uiState.value.errorMessage)
 
     viewModel.onNameChanged("Rex")
 
@@ -265,14 +302,14 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun finish_withIncompleteForm_showsErrorAndStays() = runTest {
+  fun finish_withIncompleteForm_staysAndSavesNothing() = runTest {
     viewModel.onDescriptionChanged("Brown dog")
 
     viewModel.finish()
     advanceUntilIdle()
 
     assertFalse(viewModel.uiState.value.isDone)
-    assertEquals(AddPetsViewModel.MISSING_FIELDS_MESSAGE, viewModel.uiState.value.errorMessage)
+    assertTrue(savedPets().isEmpty())
   }
 
   @Test

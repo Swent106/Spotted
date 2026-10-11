@@ -66,15 +66,21 @@ class AddPetsViewModel(
     }
   }
 
-  /** Saves the current pet and clears the form so another pet can be added. */
+  /**
+   * Saves the current pet and clears the form so another pet can be added. Does nothing unless
+   * [AddPetsUiState.canSave] is true.
+   */
   fun savePet() {
     save(finishAfterSaving = false)
   }
 
-  /** Saves the current pet if the form was started, then ends the step. */
+  /**
+   * Saves the current pet if the form was started, then ends the step. Does nothing unless
+   * [AddPetsUiState.canFinish] is true.
+   */
   fun finish() {
     val state = _uiState.value
-    if (state.isSaving || state.isDone) return
+    if (!state.canFinish) return
     if (state.hasFormInput) {
       save(finishAfterSaving = true)
     } else {
@@ -90,15 +96,11 @@ class AddPetsViewModel(
 
   private fun save(finishAfterSaving: Boolean) {
     val state = _uiState.value
-    if (state.isSaving) return
-    val species = state.species
-    if (!state.canSave || species == null) {
-      _uiState.update { it.copy(errorMessage = MISSING_FIELDS_MESSAGE) }
-      return
-    }
+    if (!state.canSave) return
+    val species = state.species ?: return
     val ownerId = user?.uid
     if (ownerId == null) {
-      _uiState.update { it.copy(errorMessage = NOT_SIGNED_IN_MESSAGE) }
+      _uiState.update { it.copy(needsSignIn = true, errorMessage = NOT_SIGNED_IN_MESSAGE) }
       return
     }
 
@@ -144,7 +146,6 @@ class AddPetsViewModel(
   }
 
   companion object {
-    const val MISSING_FIELDS_MESSAGE = "Add a name and choose an animal"
     const val NOT_SIGNED_IN_MESSAGE = "You need to be signed in to add a pet"
     const val PHOTO_ERROR_MESSAGE = "Unable to upload the photo"
     const val SAVE_ERROR_MESSAGE = "Unable to save the pet"

@@ -15,10 +15,16 @@ data class AddPetsUiState(
     val addedPets: List<Pet> = emptyList(),
     val isSaving: Boolean = false,
     val isDone: Boolean = false,
+    val needsSignIn: Boolean = false,
     val errorMessage: String? = null,
 ) {
+  /** A name and a species are required to save a pet. */
   val canSave: Boolean
     get() = name.isNotBlank() && species != null && !isSaving
+
+  /** The step can end with an empty form, or with a complete one that is saved first. */
+  val canFinish: Boolean
+    get() = !isSaving && !isDone && (!hasFormInput || canSave)
 
   /** True when the user has started filling in the current pet. */
   val hasFormInput: Boolean
