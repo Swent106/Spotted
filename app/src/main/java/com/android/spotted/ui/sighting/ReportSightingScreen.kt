@@ -478,7 +478,8 @@ fun ReportSightingScreen(
     onSubmitClick: () -> Unit = {},
 ) {
   // ONCE THE VIEWMODEL IS COMPLETE ADD THE STATE IN HERE AS A collectAsState()
-  // + replace all the up methods by the viewModel directly methods will be taken from the viewModel
+  // + replace all the up methods by the viewModel directly : methods will be taken from the
+  // viewModel
 
   val permissionLauncher =
       rememberLauncherForActivityResult(

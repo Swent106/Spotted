@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
@@ -41,7 +42,10 @@ class ReportSightingContentTest {
         .onNodeWithTag("${ReportSightingScreenTestTags.PET_OPTION_PREFIX}alert_1")
         .assertIsDisplayed()
     composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.NO_MATCH_OPTION).assertIsDisplayed()
-    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON).assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .assertIsDisplayed()
   }
 
   @Test
@@ -50,7 +54,10 @@ class ReportSightingContentTest {
 
     composeTestRule.setContent { ReportSightingContent(state = state) }
 
-    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON).assertIsNotEnabled()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .assertIsNotEnabled()
   }
 
   @Test
@@ -64,7 +71,10 @@ class ReportSightingContentTest {
 
     composeTestRule.setContent { ReportSightingContent(state = state) }
 
-    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON).assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .assertIsDisplayed()
   }
 
   @Test
@@ -73,7 +83,10 @@ class ReportSightingContentTest {
 
     composeTestRule.setContent { ReportSightingContent(state = state) }
 
-    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.LOADER).assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.LOADER)
+        .performScrollTo()
+        .assertIsDisplayed()
   }
 
   @Test
@@ -84,6 +97,7 @@ class ReportSightingContentTest {
 
     composeTestRule
         .onNodeWithTag(ReportSightingScreenTestTags.ERROR_MESSAGE)
+        .performScrollTo()
         .assertIsDisplayed()
         .assertTextEquals("Submission failed")
   }
