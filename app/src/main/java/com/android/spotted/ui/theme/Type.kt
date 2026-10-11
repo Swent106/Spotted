@@ -10,7 +10,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.android.spotted.R
 
-val Jakarta =
+/**
+ * Plus Jakarta Sans, the font used by the Figma designs. Only Medium, SemiBold and ExtraBold are
+ * bundled, so Figma's Bold (700) text uses SemiBold.
+ */
+val PlusJakartaSans =
     FontFamily(
         Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
         Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
@@ -27,7 +31,7 @@ fun jakarta(
     TextStyle(
         fontSize = size.sp,
         lineHeight = line.sp,
-        fontFamily = Jakarta,
+        fontFamily = PlusJakartaSans,
         fontWeight = FontWeight(weight),
         color = Color(color),
         textAlign = align,
