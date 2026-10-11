@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -309,7 +310,10 @@ private fun HomeLocationCard(
         style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
     )
     MapPreview(state.alertRadiusKm)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().selectableGroup(),
+    ) {
       PersonalInfoUiState.ALERT_RADIUS_OPTIONS_KM.forEach { radiusKm ->
         RadiusChip(radiusKm, selected = radiusKm == state.alertRadiusKm, onAlertRadiusSelect)
       }
@@ -317,12 +321,22 @@ private fun HomeLocationCard(
   }
 }
 
+// Map preview layout, from the Figma design. Vertical offsets are measured from the top of the
+// preview; the map, the radius circles and the pin are centred horizontally.
+private val MapPreviewHeight = 118.dp
+private val MapImageSize = 330.dp
+private val MapImageOffsetY = (-106).dp
+private val AlertRadiusOffsetY = 7.dp
+private val HomePinOffsetY = 50.dp
+private val RadiusTagOffsetX = 10.dp
+private val RadiusTagOffsetY = 86.dp
+
 /** Static preview of the alert area. The circles stay centred whatever the card width. */
 @Composable
 private fun MapPreview(alertRadiusKm: Int) {
   Box(
       Modifier.fillMaxWidth()
-          .height(118.dp)
+          .height(MapPreviewHeight)
           .clip(RoundedCornerShape(16.dp))
           .background(SpottedMapBackground)
           .testTag(PersonalInfoScreenTestTags.MAP_PREVIEW)
@@ -333,24 +347,24 @@ private fun MapPreview(alertRadiusKm: Int) {
         contentScale = ContentScale.Crop,
         modifier =
             Modifier.wrapContentSize(Alignment.TopCenter, unbounded = true)
-                .offset(y = (-106).dp)
-                .size(330.dp),
+                .offset(y = MapImageOffsetY)
+                .size(MapImageSize),
     )
     Image(
         painterResource(R.drawable.personal_info_alert_radius),
         contentDescription = null,
-        modifier = Modifier.align(Alignment.TopCenter).offset(y = 7.dp),
+        modifier = Modifier.align(Alignment.TopCenter).offset(y = AlertRadiusOffsetY),
     )
     Image(
         painterResource(R.drawable.personal_info_home_pin),
         contentDescription = null,
-        modifier = Modifier.align(Alignment.TopCenter).offset(y = 50.dp),
+        modifier = Modifier.align(Alignment.TopCenter).offset(y = HomePinOffsetY),
     )
     Text(
         "Alerts within $alertRadiusKm km",
         style = jakarta(11, 14, Bold, SpottedInk),
         modifier =
-            Modifier.offset(10.dp, 86.dp)
+            Modifier.offset(RadiusTagOffsetX, RadiusTagOffsetY)
                 .clip(RoundedCornerShape(100.dp))
                 .background(Color.White.copy(alpha = 0.95f))
                 .padding(horizontal = 10.dp, vertical = 5.dp)

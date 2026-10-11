@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -133,14 +134,18 @@ class PersonalInfoScreenTest {
         .onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(3))
         .performScrollTo()
         .assertIsSelected()
+    listOf(1, 5, 10).forEach {
+      composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(it)).assertIsNotSelected()
+    }
     composeTestRule
         .onNodeWithTag(PersonalInfoScreenTestTags.RADIUS_TAG, useUnmergedTree = true)
         .performScrollTo()
         .assertTextEquals("Alerts within 3 km")
 
-    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(10)).performClick()
-
-    assertEquals(10, selected)
+    PersonalInfoUiState.ALERT_RADIUS_OPTIONS_KM.forEach { radiusKm ->
+      composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(radiusKm)).performClick()
+      assertEquals(radiusKm, selected)
+    }
   }
 
   @Test
