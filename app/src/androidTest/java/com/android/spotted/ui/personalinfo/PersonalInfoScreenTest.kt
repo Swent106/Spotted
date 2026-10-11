@@ -1,5 +1,8 @@
 package com.android.spotted.ui.personalinfo
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -20,7 +23,7 @@ import org.junit.Test
  * UI tests for the stateless [PersonalInfoContent], plus one test of [PersonalInfoScreen] wired to
  * a [PersonalInfoViewModel] backed by fakes.
  */
-class PersonalInfoContentTest {
+class PersonalInfoScreenTest {
 
   @get:Rule val composeTestRule = createComposeRule()
 
@@ -35,7 +38,10 @@ class PersonalInfoContentTest {
   private fun setContent(
       state: PersonalInfoUiState,
       onBackClick: () -> Unit = {},
+      onUsernameChange: (String) -> Unit = {},
       onFirstNameChange: (String) -> Unit = {},
+      onLastNameChange: (String) -> Unit = {},
+      onHomeAreaChange: (String) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
   ) {
     composeTestRule.setContent {
@@ -43,10 +49,10 @@ class PersonalInfoContentTest {
           state = state,
           onBackClick = onBackClick,
           onChangePhotoClick = {},
-          onUsernameChange = {},
+          onUsernameChange = onUsernameChange,
           onFirstNameChange = onFirstNameChange,
-          onLastNameChange = {},
-          onHomeAreaChange = {},
+          onLastNameChange = onLastNameChange,
+          onHomeAreaChange = onHomeAreaChange,
           onUseMyLocationClick = {},
           onCreateProfileClick = onCreateProfileClick,
       )
@@ -118,6 +124,36 @@ class PersonalInfoContentTest {
   }
 
   @Test
+  fun typingOtherFields_callsTheirCallbacks() {
+    var username = ""
+    var lastName = ""
+    var homeArea = ""
+    setContent(
+        PersonalInfoUiState(),
+        onUsernameChange = { username = it },
+        onLastNameChange = { lastName = it },
+        onHomeAreaChange = { homeArea = it },
+    )
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.USERNAME_INPUT)
+        .performScrollTo()
+        .performTextInput("@rayen.gva")
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.LAST_NAME_INPUT)
+        .performScrollTo()
+        .performTextInput("Ben Ali")
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.HOME_AREA_INPUT)
+        .performScrollTo()
+        .performTextInput("Plainpalais, Geneva")
+
+    assertEquals("@rayen.gva", username)
+    assertEquals("Ben Ali", lastName)
+    assertEquals("Plainpalais, Geneva", homeArea)
+  }
+
+  @Test
   fun backButton_callsOnBackClick() {
     var clicks = 0
     setContent(PersonalInfoUiState(), onBackClick = { clicks++ })
@@ -135,6 +171,41 @@ class PersonalInfoContentTest {
         .onNodeWithTag(PersonalInfoScreenTestTags.ERROR_MESSAGE)
         .performScrollTo()
         .assertTextEquals("Unable to save profile")
+  }
+
+  @Test
+  fun noErrorMessage_isShownWhenErrorIsNull() {
+    setContent(validState)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.ERROR_MESSAGE).assertDoesNotExist()
+  }
+
+  @Test
+  fun personalInfoScreen_callsOnSavedOnce_evenWhenShownAgain() {
+    val viewModel =
+        PersonalInfoViewModel(
+            user = User(uid = "user-1", email = "rayen@example.com"),
+            userRepository = FakeUserRepository(),
+            authRepository = FakeAuthRepository(),
+        )
+    var savedCalls = 0
+    var isShown by mutableStateOf(true)
+    composeTestRule.setContent {
+      if (isShown) PersonalInfoScreen(viewModel = viewModel, onSaved = { savedCalls++ })
+    }
+
+    viewModel.onFirstNameChanged("Rayen")
+    viewModel.onHomeAreaChanged("Plainpalais, Geneva")
+    button().performScrollTo().performClick()
+    composeTestRule.waitUntil { savedCalls == 1 }
+
+    // Simulates pressing Back from the next screen: Personal Info is composed again.
+    isShown = false
+    composeTestRule.waitForIdle()
+    isShown = true
+    composeTestRule.waitForIdle()
+
+    assertEquals(1, savedCalls)
   }
 
   @Test

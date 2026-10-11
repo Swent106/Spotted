@@ -147,6 +147,7 @@ dependencies {
   implementation(libs.compose.activity)
   // Integration with ViewModels
   implementation(libs.compose.viewmodel)
+  implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
   // Android Studio Preview support
   implementation(libs.compose.preview)
   debugImplementation(libs.compose.tooling)

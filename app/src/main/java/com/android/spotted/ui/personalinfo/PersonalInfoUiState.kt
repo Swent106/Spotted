@@ -19,5 +19,5 @@ data class PersonalInfoUiState(
     val errorMessage: String? = null,
 ) {
   val canSave: Boolean
-    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving
+    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving && !isLoggingOut && !isLoggedOut
 }

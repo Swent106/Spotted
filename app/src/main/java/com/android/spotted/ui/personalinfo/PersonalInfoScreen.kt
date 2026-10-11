@@ -24,10 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
 import com.android.spotted.ui.theme.PlusJakartaSans
@@ -168,12 +169,17 @@ private fun Header(onBackClick: () -> Unit) {
                 .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBackClick)
                 .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
     ) {
-      Text("<", style = jakarta(18, 22, Bold, SpottedInk))
+      Icon(
+          painterResource(R.drawable.ic_arrow_back),
+          contentDescription = "Back",
+          tint = SpottedInk,
+          modifier = Modifier.size(20.dp),
+      )
     }
     Column(Modifier.weight(1f)) {
       Text("Create your profile", style = jakarta(23, 31, FontWeight.ExtraBold, SpottedInk))
       Text(
-          "Step 2 of 2 · tell the community who you are",
+          "Step 1 of 2 · tell the community who you are",
           style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
       )
     }
@@ -388,10 +394,15 @@ fun PersonalInfoScreen(
     onChangePhotoClick: () -> Unit = {},
     onUseMyLocationClick: () -> Unit = {},
 ) {
-  val state by viewModel.uiState.collectAsState()
+  val state by viewModel.uiState.collectAsStateWithLifecycle()
 
   val currentOnSaved by rememberUpdatedState(onSaved)
-  LaunchedEffect(state.isSaved) { if (state.isSaved) currentOnSaved() }
+  LaunchedEffect(state.isSaved) {
+    if (state.isSaved) {
+      viewModel.onSavedHandled()
+      currentOnSaved()
+    }
+  }
 
   PersonalInfoContent(
       state = state,
