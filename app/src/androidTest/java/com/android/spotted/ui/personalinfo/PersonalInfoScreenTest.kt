@@ -38,10 +38,7 @@ class PersonalInfoScreenTest {
   private fun setContent(
       state: PersonalInfoUiState,
       onBackClick: () -> Unit = {},
-      onUsernameChange: (String) -> Unit = {},
       onFirstNameChange: (String) -> Unit = {},
-      onLastNameChange: (String) -> Unit = {},
-      onHomeAreaChange: (String) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
   ) {
     composeTestRule.setContent {
@@ -49,10 +46,10 @@ class PersonalInfoScreenTest {
           state = state,
           onBackClick = onBackClick,
           onChangePhotoClick = {},
-          onUsernameChange = onUsernameChange,
+          onUsernameChange = {},
           onFirstNameChange = onFirstNameChange,
-          onLastNameChange = onLastNameChange,
-          onHomeAreaChange = onHomeAreaChange,
+          onLastNameChange = {},
+          onHomeAreaChange = {},
           onUseMyLocationClick = {},
           onCreateProfileClick = onCreateProfileClick,
       )
@@ -125,15 +122,22 @@ class PersonalInfoScreenTest {
 
   @Test
   fun typingOtherFields_callsTheirCallbacks() {
-    var username = ""
-    var lastName = ""
-    var homeArea = ""
-    setContent(
-        PersonalInfoUiState(),
-        onUsernameChange = { username = it },
-        onLastNameChange = { lastName = it },
-        onHomeAreaChange = { homeArea = it },
-    )
+    // The callbacks update the state, as the ViewModel does: a field whose value never changes
+    // reports its old value again when it loses focus.
+    var state by mutableStateOf(PersonalInfoUiState())
+    composeTestRule.setContent {
+      PersonalInfoContent(
+          state = state,
+          onBackClick = {},
+          onChangePhotoClick = {},
+          onUsernameChange = { state = state.copy(username = it) },
+          onFirstNameChange = {},
+          onLastNameChange = { state = state.copy(lastName = it) },
+          onHomeAreaChange = { state = state.copy(homeArea = it) },
+          onUseMyLocationClick = {},
+          onCreateProfileClick = {},
+      )
+    }
 
     composeTestRule
         .onNodeWithTag(PersonalInfoScreenTestTags.USERNAME_INPUT)
@@ -148,9 +152,9 @@ class PersonalInfoScreenTest {
         .performScrollTo()
         .performTextInput("Plainpalais, Geneva")
 
-    assertEquals("@rayen.gva", username)
-    assertEquals("Ben Ali", lastName)
-    assertEquals("Plainpalais, Geneva", homeArea)
+    assertEquals("@rayen.gva", state.username)
+    assertEquals("Ben Ali", state.lastName)
+    assertEquals("Plainpalais, Geneva", state.homeArea)
   }
 
   @Test
@@ -196,7 +200,7 @@ class PersonalInfoScreenTest {
 
     viewModel.onFirstNameChanged("Rayen")
     viewModel.onHomeAreaChanged("Plainpalais, Geneva")
-    button().performScrollTo().performClick()
+    button().performClick()
     composeTestRule.waitUntil { savedCalls == 1 }
 
     // Simulates pressing Back from the next screen: Personal Info is composed again.
