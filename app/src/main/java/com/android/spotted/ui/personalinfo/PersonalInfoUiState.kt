@@ -1,6 +1,9 @@
 package com.android.spotted.ui.personalinfo
 
 data class PersonalInfoUiState(
+    val username: String = "",
+    val firstName: String = "",
+    val lastName: String = "",
     val name: String = "",
     val email: String = "",
     val phone: String = "",
@@ -16,5 +19,5 @@ data class PersonalInfoUiState(
     val errorMessage: String? = null,
 ) {
   val canSave: Boolean
-    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving
+    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving && !isLoggingOut && !isLoggedOut
 }

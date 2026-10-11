@@ -69,6 +69,33 @@ class PersonalInfoViewModelTest {
   }
 
   @Test
+  fun firstAndLastNameChanges_combineIntoName() {
+    viewModel.onFirstNameChanged(" Rayen ")
+    viewModel.onLastNameChanged("Ben Ali")
+
+    val state = viewModel.uiState.value
+    assertEquals(" Rayen ", state.firstName)
+    assertEquals("Ben Ali", state.lastName)
+    assertEquals("Rayen Ben Ali", state.name)
+  }
+
+  @Test
+  fun firstNameOnly_isEnoughForName() {
+    viewModel.onFirstNameChanged("Rayen")
+    viewModel.onHomeAreaChanged("Plainpalais, Geneva")
+
+    assertEquals("Rayen", viewModel.uiState.value.name)
+    assertTrue(viewModel.uiState.value.canSave)
+  }
+
+  @Test
+  fun usernameChange_isReflectedInState() {
+    viewModel.onUsernameChanged("@rayen.gva")
+
+    assertEquals("@rayen.gva", viewModel.uiState.value.username)
+  }
+
+  @Test
   fun saveProfile_withMissingName_doesNotSave() =
       runTest(testDispatcher) {
         viewModel.onHomeAreaChanged("Lausanne")
@@ -137,6 +164,52 @@ class PersonalInfoViewModelTest {
         assertEquals("Save failed", viewModel.uiState.value.errorMessage)
         assertFalse(viewModel.uiState.value.isSaved)
         assertFalse(viewModel.uiState.value.isSaving)
+      }
+
+  @Test
+  fun onSavedHandled_resetsSavedFlag() =
+      runTest(testDispatcher) {
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        viewModel.saveProfile()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isSaved)
+
+        viewModel.onSavedHandled()
+
+        assertFalse(viewModel.uiState.value.isSaved)
+      }
+
+  @Test
+  fun canSave_isFalseWhileLoggingOutOrLoggedOut() {
+    val filled = PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne")
+
+    assertTrue(filled.canSave)
+    assertFalse(filled.copy(isLoggingOut = true).canSave)
+    assertFalse(filled.copy(isLoggedOut = true).canSave)
+  }
+
+  @Test
+  fun canSave_staysTrueWithErrorMessage_soUserCanRetry() {
+    val failed =
+        PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne", errorMessage = "Save failed")
+
+    assertTrue(failed.canSave)
+  }
+
+  @Test
+  fun saveProfile_afterLogout_doesNotSave() =
+      runTest(testDispatcher) {
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        viewModel.logout()
+        advanceUntilIdle()
+
+        viewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertTrue(userRepository.getUser("user-1").isFailure)
+        assertFalse(viewModel.uiState.value.isSaved)
       }
 
   @Test
