@@ -226,80 +226,52 @@ fun ReportSightingContent(
       // Nearby Alerts list
       state.nearbyAlerts.forEach { alert ->
         val isSelected = state.selectedAlertId == alert.alertId && !state.isNoMatchingAlertSelected
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        OptionCard(
+            isSelected = isSelected,
+            onClick = { onAlertSelected(alert.alertId) },
             modifier =
-                Modifier.fillMaxWidth()
-                    .border(
-                        border =
-                            BorderStroke(
-                                if (isSelected) 2.dp else 1.dp,
-                                if (isSelected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
-                            ),
-                        shape = RoundedCornerShape(16.dp),
-                    )
-                    .background(Color.White, RoundedCornerShape(16.dp))
-                    .clickable { onAlertSelected(alert.alertId) }
-                    .padding(16.dp)
-                    .testTag("${ReportSightingScreenTestTags.PET_OPTION_PREFIX}${alert.alertId}"),
-        ) {
-          Box(
-              modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFF0E0CE)),
-              contentAlignment = Alignment.Center,
-          ) {
-            if (alert.photoUrl != null) {
-              AsyncImage(
-                  model = alert.photoUrl,
-                  contentDescription = alert.petName,
-                  contentScale = ContentScale.Crop,
-                  modifier = Modifier.fillMaxSize(),
-              )
-            } else {
-              Text(alert.petName.take(1), style = jakarta(18, 22f, 700, 0xFF14161A))
-            }
-          }
-          Spacer(Modifier.width(12.dp))
-          Column(modifier = Modifier.weight(1f)) {
-            Text(alert.petName, style = jakarta(16, 20f, 700, 0xFF14161A))
-            Text(alert.description, style = jakarta(12, 16f, 500, 0xFF5F6672))
-          }
-          RadioSelectionIndicator(isSelected = isSelected)
-        }
+                Modifier.testTag(
+                    "${ReportSightingScreenTestTags.PET_OPTION_PREFIX}${alert.alertId}",
+                ),
+            icon = {
+              Box(
+                  modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFF0E0CE)),
+                  contentAlignment = Alignment.Center,
+              ) {
+                if (alert.photoUrl != null) {
+                  AsyncImage(
+                      model = alert.photoUrl,
+                      contentDescription = alert.petName,
+                      contentScale = ContentScale.Crop,
+                      modifier = Modifier.fillMaxSize(),
+                  )
+                } else {
+                  Text(alert.petName.take(1), style = jakarta(18, 22f, 700, 0xFF14161A))
+                }
+              }
+            },
+            title = alert.petName,
+            description = alert.description,
+        )
       }
 
       // "No matching alert" Option
-      Row(
-          verticalAlignment = Alignment.CenterVertically,
-          modifier =
-              Modifier.fillMaxWidth()
-                  .border(
-                      border =
-                          BorderStroke(
-                              if (state.isNoMatchingAlertSelected) 2.dp else 1.dp,
-                              if (state.isNoMatchingAlertSelected) Color(0xFF2563EB)
-                              else Color(0xFFE5E7EB),
-                          ),
-                      shape = RoundedCornerShape(16.dp),
-                  )
-                  .background(Color.White, RoundedCornerShape(16.dp))
-                  .clickable { onNoMatchSelected() }
-                  .padding(16.dp)
-                  .testTag(ReportSightingScreenTestTags.NO_MATCH_OPTION),
-      ) {
-        Box(
-            modifier =
-                Modifier.size(44.dp).background(Color(0xFFF3F4F6), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-          Text("?", style = jakarta(20, 24f, 700, 0xFF4B5563))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-          Text("No matching alert", style = jakarta(16, 20f, 700, 0xFF14161A))
-          Text("Report it as a stray I saw", style = jakarta(12, 16f, 500, 0xFF5F6672))
-        }
-        RadioSelectionIndicator(isSelected = state.isNoMatchingAlertSelected)
-      }
+      OptionCard(
+          isSelected = state.isNoMatchingAlertSelected,
+          onClick = onNoMatchSelected,
+          modifier = Modifier.testTag(ReportSightingScreenTestTags.NO_MATCH_OPTION),
+          icon = {
+            Box(
+                modifier =
+                    Modifier.size(44.dp).background(Color(0xFFF3F4F6), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+              Text("?", style = jakarta(20, 24f, 700, 0xFF4B5563))
+            }
+          },
+          title = "No matching alert",
+          description = "Report it as a stray I saw",
+      )
 
       // Offline Banner
       if (state.isOffline) {
@@ -367,6 +339,42 @@ fun ReportSightingContent(
         )
       }
     }
+  }
+}
+
+@Composable
+private fun OptionCard(
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+    title: String,
+    description: String,
+) {
+  Row(
+      verticalAlignment = Alignment.CenterVertically,
+      modifier =
+          modifier
+              .fillMaxWidth()
+              .border(
+                  border =
+                      BorderStroke(
+                          if (isSelected) 2.dp else 1.dp,
+                          if (isSelected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
+                      ),
+                  shape = RoundedCornerShape(16.dp),
+              )
+              .background(Color.White, RoundedCornerShape(16.dp))
+              .clickable { onClick() }
+              .padding(16.dp),
+  ) {
+    icon()
+    Spacer(Modifier.width(12.dp))
+    Column(modifier = Modifier.weight(1f)) {
+      Text(title, style = jakarta(16, 20f, 700, 0xFF14161A))
+      Text(description, style = jakarta(12, 16f, 500, 0xFF5F6672))
+    }
+    RadioSelectionIndicator(isSelected = isSelected)
   }
 }
 
