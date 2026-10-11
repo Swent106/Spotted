@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -39,6 +41,7 @@ class PersonalInfoScreenTest {
       state: PersonalInfoUiState,
       onBackClick: () -> Unit = {},
       onFirstNameChange: (String) -> Unit = {},
+      onAlertRadiusSelect: (Int) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
   ) {
     composeTestRule.setContent {
@@ -51,6 +54,7 @@ class PersonalInfoScreenTest {
           onLastNameChange = {},
           onHomeAreaChange = {},
           onUseMyLocationClick = {},
+          onAlertRadiusSelect = onAlertRadiusSelect,
           onCreateProfileClick = onCreateProfileClick,
       )
     }
@@ -70,6 +74,7 @@ class PersonalInfoScreenTest {
             PersonalInfoScreenTestTags.FIRST_NAME_INPUT,
             PersonalInfoScreenTestTags.LAST_NAME_INPUT,
             PersonalInfoScreenTestTags.HOME_AREA_INPUT,
+            PersonalInfoScreenTestTags.MAP_PREVIEW,
         )
         .forEach { composeTestRule.onNodeWithTag(it).performScrollTo().assertIsDisplayed() }
     button().assertIsDisplayed().assertIsNotEnabled()
@@ -121,6 +126,29 @@ class PersonalInfoScreenTest {
   }
 
   @Test
+  fun radiusChips_showSelection_andReportClicks() {
+    var selected = 0
+    setContent(PersonalInfoUiState(), onAlertRadiusSelect = { selected = it })
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(3))
+        .performScrollTo()
+        .assertIsSelected()
+    listOf(1, 5, 10).forEach {
+      composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(it)).assertIsNotSelected()
+    }
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.RADIUS_TAG, useUnmergedTree = true)
+        .performScrollTo()
+        .assertTextEquals("Alerts within 3 km")
+
+    PersonalInfoUiState.ALERT_RADIUS_OPTIONS_KM.forEach { radiusKm ->
+      composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(radiusKm)).performClick()
+      assertEquals(radiusKm, selected)
+    }
+  }
+
+  @Test
   fun typingOtherFields_callsTheirCallbacks() {
     // The callbacks update the state, as the ViewModel does: a field whose value never changes
     // reports its old value again when it loses focus.
@@ -135,6 +163,7 @@ class PersonalInfoScreenTest {
           onLastNameChange = { state = state.copy(lastName = it) },
           onHomeAreaChange = { state = state.copy(homeArea = it) },
           onUseMyLocationClick = {},
+          onAlertRadiusSelect = {},
           onCreateProfileClick = {},
       )
     }

@@ -96,6 +96,17 @@ class PersonalInfoViewModelTest {
   }
 
   @Test
+  fun alertRadius_defaultsToThreeKm_andAcceptsOnlyListedOptions() {
+    assertEquals(3, viewModel.uiState.value.alertRadiusKm)
+
+    viewModel.onAlertRadiusChanged(10)
+    assertEquals(10, viewModel.uiState.value.alertRadiusKm)
+
+    viewModel.onAlertRadiusChanged(7)
+    assertEquals(10, viewModel.uiState.value.alertRadiusKm)
+  }
+
+  @Test
   fun saveProfile_withMissingName_doesNotSave() =
       runTest(testDispatcher) {
         viewModel.onHomeAreaChanged("Lausanne")
