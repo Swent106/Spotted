@@ -41,15 +41,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.ui.theme.jakarta
 
 object ReportSightingScreenTestTags {
   const val SCREEN = "sightingScreen"
@@ -62,29 +58,6 @@ object ReportSightingScreenTestTags {
   const val LOADER = "sightingLoader"
   const val ERROR_MESSAGE = "sightingErrorMessage"
 }
-
-private val Jakarta =
-    FontFamily(
-        Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
-        Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
-        Font(R.font.plus_jakarta_sans_extrabold, FontWeight.ExtraBold),
-    )
-
-private fun jakarta(
-    size: Int,
-    line: Float,
-    weight: Int,
-    color: Long,
-    align: TextAlign = TextAlign.Start,
-) =
-    TextStyle(
-        fontSize = size.sp,
-        lineHeight = line.sp,
-        fontFamily = Jakarta,
-        fontWeight = FontWeight(weight),
-        color = Color(color),
-        textAlign = align,
-    )
 
 @Composable
 fun ReportSightingContent(
@@ -226,52 +199,80 @@ fun ReportSightingContent(
       // Nearby Alerts list
       state.nearbyAlerts.forEach { alert ->
         val isSelected = state.selectedAlertId == alert.alertId && !state.isNoMatchingAlertSelected
-        OptionCard(
-            isSelected = isSelected,
-            onClick = { onAlertSelected(alert.alertId) },
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier =
-                Modifier.testTag(
-                    "${ReportSightingScreenTestTags.PET_OPTION_PREFIX}${alert.alertId}",
-                ),
-            icon = {
-              Box(
-                  modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFF0E0CE)),
-                  contentAlignment = Alignment.Center,
-              ) {
-                if (alert.photoUrl != null) {
-                  AsyncImage(
-                      model = alert.photoUrl,
-                      contentDescription = alert.petName,
-                      contentScale = ContentScale.Crop,
-                      modifier = Modifier.fillMaxSize(),
-                  )
-                } else {
-                  Text(alert.petName.take(1), style = jakarta(18, 22f, 700, 0xFF14161A))
-                }
-              }
-            },
-            title = alert.petName,
-            description = alert.description,
-        )
+                Modifier.fillMaxWidth()
+                    .border(
+                        border =
+                            BorderStroke(
+                                if (isSelected) 2.dp else 1.dp,
+                                if (isSelected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+                    .background(Color.White, RoundedCornerShape(16.dp))
+                    .clickable { onAlertSelected(alert.alertId) }
+                    .padding(16.dp)
+                    .testTag("${ReportSightingScreenTestTags.PET_OPTION_PREFIX}${alert.alertId}"),
+        ) {
+          Box(
+              modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFF0E0CE)),
+              contentAlignment = Alignment.Center,
+          ) {
+            if (alert.photoUrl != null) {
+              AsyncImage(
+                  model = alert.photoUrl,
+                  contentDescription = alert.petName,
+                  contentScale = ContentScale.Crop,
+                  modifier = Modifier.fillMaxSize(),
+              )
+            } else {
+              Text(alert.petName.take(1), style = jakarta(18, 22f, 700, 0xFF14161A))
+            }
+          }
+          Spacer(Modifier.width(12.dp))
+          Column(modifier = Modifier.weight(1f)) {
+            Text(alert.petName, style = jakarta(16, 20f, 700, 0xFF14161A))
+            Text(alert.description, style = jakarta(12, 16f, 500, 0xFF5F6672))
+          }
+          RadioSelectionIndicator(isSelected = isSelected)
+        }
       }
 
       // "No matching alert" Option
-      OptionCard(
-          isSelected = state.isNoMatchingAlertSelected,
-          onClick = onNoMatchSelected,
-          modifier = Modifier.testTag(ReportSightingScreenTestTags.NO_MATCH_OPTION),
-          icon = {
-            Box(
-                modifier =
-                    Modifier.size(44.dp).background(Color(0xFFF3F4F6), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-              Text("?", style = jakarta(20, 24f, 700, 0xFF4B5563))
-            }
-          },
-          title = "No matching alert",
-          description = "Report it as a stray I saw",
-      )
+      Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier =
+              Modifier.fillMaxWidth()
+                  .border(
+                      border =
+                          BorderStroke(
+                              if (state.isNoMatchingAlertSelected) 2.dp else 1.dp,
+                              if (state.isNoMatchingAlertSelected) Color(0xFF2563EB)
+                              else Color(0xFFE5E7EB),
+                          ),
+                      shape = RoundedCornerShape(16.dp),
+                  )
+                  .background(Color.White, RoundedCornerShape(16.dp))
+                  .clickable { onNoMatchSelected() }
+                  .padding(16.dp)
+                  .testTag(ReportSightingScreenTestTags.NO_MATCH_OPTION),
+      ) {
+        Box(
+            modifier =
+                Modifier.size(44.dp).background(Color(0xFFF3F4F6), RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+          Text("?", style = jakarta(20, 24f, 700, 0xFF4B5563))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+          Text("No matching alert", style = jakarta(16, 20f, 700, 0xFF14161A))
+          Text("Report it as a stray I saw", style = jakarta(12, 16f, 500, 0xFF5F6672))
+        }
+        RadioSelectionIndicator(isSelected = state.isNoMatchingAlertSelected)
+      }
 
       // Offline Banner
       if (state.isOffline) {
@@ -339,42 +340,6 @@ fun ReportSightingContent(
         )
       }
     }
-  }
-}
-
-@Composable
-private fun OptionCard(
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: @Composable () -> Unit,
-    title: String,
-    description: String,
-) {
-  Row(
-      verticalAlignment = Alignment.CenterVertically,
-      modifier =
-          modifier
-              .fillMaxWidth()
-              .border(
-                  border =
-                      BorderStroke(
-                          if (isSelected) 2.dp else 1.dp,
-                          if (isSelected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
-                      ),
-                  shape = RoundedCornerShape(16.dp),
-              )
-              .background(Color.White, RoundedCornerShape(16.dp))
-              .clickable { onClick() }
-              .padding(16.dp),
-  ) {
-    icon()
-    Spacer(Modifier.width(12.dp))
-    Column(modifier = Modifier.weight(1f)) {
-      Text(title, style = jakarta(16, 20f, 700, 0xFF14161A))
-      Text(description, style = jakarta(12, 16f, 500, 0xFF5F6672))
-    }
-    RadioSelectionIndicator(isSelected = isSelected)
   }
 }
 
