@@ -263,24 +263,7 @@ fun ReportSightingContent(
             Text(alert.petName, style = jakarta(16, 20f, 700, 0xFF14161A))
             Text(alert.description, style = jakarta(12, 16f, 500, 0xFF5F6672))
           }
-          Box(
-              modifier =
-                  Modifier.size(24.dp)
-                      .background(
-                          if (isSelected) Color(0xFF2563EB) else Color.Transparent,
-                          CircleShape,
-                      )
-                      .border(
-                          1.5.dp,
-                          if (isSelected) Color(0xFF2563EB) else Color(0xFF9CA3AF),
-                          CircleShape,
-                      ),
-              contentAlignment = Alignment.Center,
-          ) {
-            if (isSelected) {
-              CheckIcon(modifier = Modifier.size(14.dp))
-            }
-          }
+          RadioSelectionIndicator(isSelected = isSelected)
         }
       }
 
@@ -315,26 +298,7 @@ fun ReportSightingContent(
           Text("No matching alert", style = jakarta(16, 20f, 700, 0xFF14161A))
           Text("Report it as a stray I saw", style = jakarta(12, 16f, 500, 0xFF5F6672))
         }
-        Box(
-            modifier =
-                Modifier.size(24.dp)
-                    .background(
-                        if (state.isNoMatchingAlertSelected) Color(0xFF2563EB)
-                        else Color.Transparent,
-                        CircleShape,
-                    )
-                    .border(
-                        1.5.dp,
-                        if (state.isNoMatchingAlertSelected) Color(0xFF2563EB)
-                        else Color(0xFF9CA3AF),
-                        CircleShape,
-                    ),
-            contentAlignment = Alignment.Center,
-        ) {
-          if (state.isNoMatchingAlertSelected) {
-            CheckIcon(modifier = Modifier.size(14.dp))
-          }
-        }
+        RadioSelectionIndicator(isSelected = state.isNoMatchingAlertSelected)
       }
 
       // Offline Banner
@@ -402,6 +366,28 @@ fun ReportSightingContent(
             style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
         )
       }
+    }
+  }
+}
+
+@Composable
+private fun RadioSelectionIndicator(isSelected: Boolean) {
+  Box(
+      modifier =
+          Modifier.size(24.dp)
+              .background(
+                  if (isSelected) Color(0xFF2563EB) else Color.Transparent,
+                  CircleShape,
+              )
+              .border(
+                  1.5.dp,
+                  if (isSelected) Color(0xFF2563EB) else Color(0xFF9CA3AF),
+                  CircleShape,
+              ),
+      contentAlignment = Alignment.Center,
+  ) {
+    if (isSelected) {
+      CheckIcon(modifier = Modifier.size(14.dp))
     }
   }
 }
