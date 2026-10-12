@@ -14,3 +14,4 @@ app/google-services.json
 firebase-debug.log
 firebase-debug.*.log
 gradle/gradle-daemon-jvm.properties
+commit_message.txt
