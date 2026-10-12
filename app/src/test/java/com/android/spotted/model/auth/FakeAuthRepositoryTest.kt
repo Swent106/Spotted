@@ -1,7 +1,5 @@
-package com.android.spotted.model.FakeAuth
+package com.android.spotted.model.auth
 
-import com.android.spotted.model.auth.FakeAuthRepository
-import com.android.spotted.model.auth.User
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert
@@ -41,7 +39,10 @@ class FakeAuthRepositoryTest {
 
     val currentUser = authRepository.currentUser.first()
     Assert.assertEquals(
-        "currentUser state flow should emit the logged in user", returnedUser, currentUser)
+        "currentUser state flow should emit the logged in user",
+        returnedUser,
+        currentUser,
+    )
   }
 
   @Test
@@ -57,7 +58,8 @@ class FakeAuthRepositoryTest {
     Assert.assertTrue("Result should be failure", result.isFailure)
     Assert.assertTrue(
         "Exception message should match",
-        result.exceptionOrNull()?.message?.contains("Simulated authentication failure") == true)
+        result.exceptionOrNull()?.message?.contains("Simulated authentication failure") == true,
+    )
 
     val currentUser = authRepository.currentUser.first()
     Assert.assertNull("currentUser state flow should remain null after failure", currentUser)
