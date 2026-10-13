@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.android.spotted.model.Location
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -81,5 +82,15 @@ class MapPickerTest {
 
     composeTestRule.onNodeWithTag(MapPickerTestTags.MAP).performClick()
     composeTestRule.waitUntil(timeoutMillis = 10_000) { tapped != null }
+
+    // The click lands on the centre of the map, which shows DefaultMapCenter when no location is
+    // set. The tolerance (~1 km) covers rounding to the nearest pixel.
+    val location = tapped!!
+    assertEquals(DefaultMapCenter.latitude, location.latitude, COORDINATE_TOLERANCE)
+    assertEquals(DefaultMapCenter.longitude, location.longitude, COORDINATE_TOLERANCE)
+  }
+
+  private companion object {
+    const val COORDINATE_TOLERANCE = 0.01
   }
 }
