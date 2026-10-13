@@ -7,14 +7,20 @@ import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
-import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.auth.AuthRepository
+import com.android.spotted.model.auth.User
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.user.FakeUserRepository
+import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -28,22 +34,25 @@ import org.junit.Test
 /**
  * Unit tests for [HomeViewModel] with fake repositories and a fixed clock.
  *
- * Covers the list, empty and error states of the pets and of the lost pets nearby, and [refresh].
+ * Covers the list, empty and error states of each section, their independence, the profile header,
+ * switching user, signing out and [HomeViewModel.refresh].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
 
   private val testDispatcher = StandardTestDispatcher()
-  private lateinit var authRepository: FakeAuthRepository
-  private lateinit var petRepository: SwitchablePetRepository
+  private lateinit var authRepository: SwitchableAuthRepository
+  private lateinit var userRepository: FakeUserRepository
+  private lateinit var petRepository: ControllablePetRepository
   private lateinit var alertRepository: FakeAlertRepository
 
   @Before
   fun setUp() {
     // viewModelScope runs on Dispatchers.Main, which does not exist in unit tests
     Dispatchers.setMain(testDispatcher)
-    authRepository = FakeAuthRepository()
-    petRepository = SwitchablePetRepository()
+    authRepository = SwitchableAuthRepository()
+    userRepository = FakeUserRepository()
+    petRepository = ControllablePetRepository()
     alertRepository = FakeAlertRepository()
   }
 
@@ -52,20 +61,38 @@ class HomeViewModelTest {
     Dispatchers.resetMain()
   }
 
-  // ===================== Helpers =====================
+  // ===================== Test doubles =====================
 
-  /** [PetRepositoryLocal] whose reads fail while [failure] is set. */
-  private class SwitchablePetRepository(
+  /** [AuthRepository] whose signed-in user is set directly by the test. */
+  private class SwitchableAuthRepository : AuthRepository {
+    override val currentUser = MutableStateFlow<User?>(null)
+
+    override suspend fun signInWithGoogle(idToken: String): Result<User> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun signOut(): Result<Unit> {
+      currentUser.value = null
+      return Result.success(Unit)
+    }
+  }
+
+  /** [PetRepositoryLocal] that can fail, and can answer slowly for some owners. */
+  private class ControllablePetRepository(
       private val local: PetRepositoryLocal = PetRepositoryLocal()
   ) : PetRepository by local {
     var failure: Throwable? = null
+    val slowOwners = mutableSetOf<String>()
 
-    override suspend fun getPetsByOwner(ownerId: String): Result<List<Pet>> =
-        failure?.let { Result.failure(it) } ?: local.getPetsByOwner(ownerId)
+    override suspend fun getPetsByOwner(ownerId: String): Result<List<Pet>> {
+      if (ownerId in slowOwners) delay(SLOW_MILLIS)
+      return failure?.let { Result.failure(it) } ?: local.getPetsByOwner(ownerId)
+    }
   }
 
-  private fun signIn(): String = runBlocking {
-    authRepository.signInWithGoogle("fake-token").getOrThrow().uid
+  // ===================== Helpers =====================
+
+  private fun signIn(user: User) {
+    authRepository.currentUser.value = user
   }
 
   private fun addPets(vararg pets: Pet) = runBlocking { pets.forEach { petRepository.addPet(it) } }
@@ -74,9 +101,12 @@ class HomeViewModelTest {
     alerts.forEach { alertRepository.publishAlert(it) }
   }
 
+  private fun saveProfile(profile: UserProfile) = runBlocking { userRepository.saveUser(profile) }
+
   private fun viewModel() =
       HomeViewModel(
           authRepository = authRepository,
+          userRepository = userRepository,
           petRepository = petRepository,
           alertRepository = alertRepository,
           searchCenter = CENTER,
@@ -84,215 +114,343 @@ class HomeViewModelTest {
           now = { NOW },
       )
 
-  // ===================== Pets =====================
+  // ===================== Your pets =====================
 
   @Test
-  fun init_loadsOnlyTheSignedInUsersPets() =
+  fun pets_list_onlyTheSignedInUsersPets() =
       runTest(testDispatcher) {
-        val uid = signIn()
-        val luna = pet("luna", uid)
-        addPets(luna, pet("rex", ownerId = "someone-else"))
+        signIn(ALICE)
+        addPets(LUNA, REX)
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(listOf(luna), state.myPets)
-        assertFalse(state.isLoading)
-        assertNull(state.errorMessage)
-        assertFalse(state.hasNoPets)
+        val pets = viewModel.uiState.value.pets
+        assertEquals(listOf(LUNA), pets.items)
+        assertFalse(pets.isLoading)
+        assertNull(pets.errorMessage)
+        assertFalse(pets.isEmpty)
       }
 
   @Test
-  fun init_noPets_showsEmptyState() =
+  fun pets_empty_whenTheUserHasNoPet() =
       runTest(testDispatcher) {
-        signIn()
+        signIn(ALICE)
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.myPets.isEmpty())
-        assertTrue(state.hasNoPets)
-        assertNull(state.errorMessage)
+        assertTrue(viewModel.uiState.value.pets.isEmpty)
       }
 
   @Test
-  fun init_petsFail_showsErrorAndNoEmptyState() =
+  fun pets_error_whenLoadingFails() =
       runTest(testDispatcher) {
-        signIn()
+        signIn(ALICE)
         petRepository.failure = Exception("offline")
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.LOAD_FAILED, state.errorMessage)
-        assertFalse(state.isLoading)
-        assertFalse(state.hasNoPets)
+        val pets = viewModel.uiState.value.pets
+        assertEquals(HomeViewModel.PETS_LOAD_FAILED, pets.errorMessage)
+        assertFalse(pets.isLoading)
+        assertFalse(pets.isEmpty)
       }
 
-  // ===================== Lost pets nearby =====================
+  // ===================== Lost near you =====================
 
   @Test
-  fun init_loadsOpenAlertsInTheRadius_newestFirst_withoutTheUsersOwn() =
+  fun lostPets_list_openAlertsInTheRadius_newestFirst_withoutTheUsersOwn() =
       runTest(testDispatcher) {
-        val uid = signIn()
+        signIn(ALICE)
         val older = alert("older", lostAtMillis = 1_000)
         val newer = alert("newer", lostAtMillis = 2_000)
-        val far = alert("far", location = FAR_AWAY)
-        val closed = alert("closed", status = AlertStatus.CLOSED)
-        val mine = alert("mine", ownerId = uid)
-        publish(older, newer, far, closed, mine)
+        publish(
+            older,
+            newer,
+            alert("far", location = FAR_AWAY),
+            alert("closed", status = AlertStatus.CLOSED),
+            alert("mine", ownerId = ALICE.uid),
+        )
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(listOf(newer, older), state.lostPetsNearby)
+        assertEquals(listOf(newer, older), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
         assertEquals(NOW, state.nowMillis)
-        assertFalse(state.hasNoLostPetsNearby)
       }
 
   @Test
-  fun init_noAlertsNearby_showsEmptyState() =
+  fun lostPets_empty_whenNoAlertIsNearby() =
       runTest(testDispatcher) {
-        signIn()
+        signIn(ALICE)
         publish(alert("far", location = FAR_AWAY))
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.lostPetsNearby.isEmpty())
-        assertTrue(state.hasNoLostPetsNearby)
+        assertTrue(viewModel.uiState.value.lostPetsNearby.isEmpty)
       }
 
   @Test
-  fun init_alertsFail_showsErrorButStillShowsThePets() =
+  fun lostPets_error_whenLoadingFails() =
       runTest(testDispatcher) {
-        val uid = signIn()
-        val luna = pet("luna", uid)
-        addPets(luna)
+        signIn(ALICE)
+        alertRepository.failure = Exception("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val lostPets = viewModel.uiState.value.lostPetsNearby
+        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, lostPets.errorMessage)
+        assertFalse(lostPets.isEmpty)
+      }
+
+  // ===================== Independent sections =====================
+
+  @Test
+  fun alertsFailing_doesNotHideThePets() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
         alertRepository.failure = Exception("offline")
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.LOAD_FAILED, state.errorMessage)
-        assertEquals(listOf(luna), state.myPets)
-        assertFalse(state.hasNoLostPetsNearby)
+        assertEquals(listOf(LUNA), state.pets.items)
+        assertNull(state.pets.errorMessage)
+        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, state.lostPetsNearby.errorMessage)
       }
 
-  // ===================== Signed out =====================
+  @Test
+  fun petsFailing_doesNotHideTheLostPets() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val lost = alert("lost")
+        publish(lost)
+        petRepository.failure = Exception("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(lost), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertEquals(HomeViewModel.PETS_LOAD_FAILED, state.pets.errorMessage)
+      }
 
   @Test
-  fun init_notSignedIn_showsErrorAndLoadsNothing() =
+  fun slowPets_doNotDelayTheLostPets() =
       runTest(testDispatcher) {
-        addPets(pet("luna", "fake_uid_from_token"))
-        publish(alert("a1"))
+        signIn(ALICE)
+        addPets(LUNA)
+        val lost = alert("lost")
+        publish(lost)
+        petRepository.slowOwners += ALICE.uid
+
+        val viewModel = viewModel()
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(lost), state.lostPetsNearby.items)
+        assertTrue(state.pets.isLoading)
+      }
+
+  // ===================== Header =====================
+
+  @Test
+  fun profile_givesTheNameAndHomeArea() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals("Alice", viewModel.uiState.value.userName)
+        assertEquals("Plainpalais, Geneva", viewModel.uiState.value.homeArea)
+      }
+
+  @Test
+  fun profileFailing_leavesTheHeaderEmpty_andStillLoadsTheSections() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        userRepository.failure = Exception("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("", state.userName)
+        assertEquals(listOf(LUNA), state.pets.items)
+        assertNull(state.errorMessage)
+      }
+
+  // ===================== Signed-in user =====================
+
+  @Test
+  fun notSignedIn_showsErrorAndLoadsNothing() =
+      runTest(testDispatcher) {
+        addPets(LUNA)
+        publish(alert("lost"))
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertEquals(HomeViewModel.NOT_SIGNED_IN, state.errorMessage)
-        assertTrue(state.myPets.isEmpty())
-        assertTrue(state.lostPetsNearby.isEmpty())
-        assertFalse(state.isLoading)
+        assertTrue(state.pets.items.isEmpty())
+        assertTrue(state.lostPetsNearby.items.isEmpty())
+      }
+
+  @Test
+  fun signOut_clearsTheUsersData() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+        addPets(LUNA)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        authRepository.signOut()
+        advanceUntilIdle()
+
+        assertEquals(
+            HomeUiState(errorMessage = HomeViewModel.NOT_SIGNED_IN),
+            viewModel.uiState.value,
+        )
+      }
+
+  @Test
+  fun switchingUser_neverShowsThePreviousUsersData() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+        addPets(LUNA, REX)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(listOf(LUNA), viewModel.uiState.value.pets.items)
+
+        petRepository.slowOwners += BOB.uid
+        signIn(BOB)
+        runCurrent() // Bob's pets are still loading
+
+        // Right after the switch, nothing of Alice is left
+        var state = viewModel.uiState.value
+        assertTrue(state.pets.items.isEmpty())
+        assertTrue(state.pets.isLoading)
+        assertEquals("", state.userName)
+        assertEquals("", state.homeArea)
+
+        advanceUntilIdle()
+        state = viewModel.uiState.value
+        assertEquals(listOf(REX), state.pets.items)
+      }
+
+  @Test
+  fun switchingUser_dropsTheSlowLoadOfThePreviousUser() =
+      runTest(testDispatcher) {
+        addPets(LUNA, REX)
+        petRepository.slowOwners += ALICE.uid
+        signIn(ALICE)
+        val viewModel = viewModel()
+        runCurrent() // Alice's pets are still loading
+
+        signIn(BOB)
+        advanceUntilIdle() // Alice's slow load would finish here if it were not cancelled
+
+        assertEquals(listOf(REX), viewModel.uiState.value.pets.items)
       }
 
   // ===================== Refresh =====================
 
   @Test
-  fun refresh_isLoadingUntilTheDataArrives() =
-      runTest(testDispatcher) {
-        signIn()
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.refresh()
-        assertTrue(viewModel.uiState.value.isLoading)
-        advanceUntilIdle()
-        assertFalse(viewModel.uiState.value.isLoading)
-      }
-
-  @Test
   fun refresh_fetchesTheUpdatedListOfLostPets() =
       runTest(testDispatcher) {
-        val uid = signIn()
+        signIn(ALICE)
         val first = alert("first", lostAtMillis = 1_000)
         publish(first)
         val viewModel = viewModel()
         advanceUntilIdle()
-        assertEquals(listOf(first), viewModel.uiState.value.lostPetsNearby)
+        assertEquals(listOf(first), viewModel.uiState.value.lostPetsNearby.items)
 
         val second = alert("second", lostAtMillis = 2_000)
         publish(second)
-        val luna = pet("luna", uid)
-        addPets(luna)
+        addPets(LUNA)
         viewModel.refresh()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(listOf(second, first), state.lostPetsNearby)
-        assertEquals(listOf(luna), state.myPets)
+        assertEquals(listOf(second, first), state.lostPetsNearby.items)
+        assertEquals(listOf(LUNA), state.pets.items)
       }
 
   @Test
-  fun refresh_failure_keepsTheListsAlreadyShown_thenRetrySucceeds() =
+  fun refresh_keepsTheItemsShownWhileLoading() =
       runTest(testDispatcher) {
-        val uid = signIn()
-        val luna = pet("luna", uid)
+        signIn(ALICE)
+        addPets(LUNA)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.refresh()
+
+        val pets = viewModel.uiState.value.pets
+        assertTrue(pets.isLoading)
+        assertEquals(listOf(LUNA), pets.items)
+      }
+
+  @Test
+  fun refresh_failure_keepsTheItemsAndShowsTheError_thenRetrySucceeds() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
         val first = alert("first")
-        addPets(luna)
         publish(first)
         val viewModel = viewModel()
         advanceUntilIdle()
 
         alertRepository.failure = Exception("offline")
-        petRepository.failure = Exception("offline")
         viewModel.refresh()
         advanceUntilIdle()
 
-        var state = viewModel.uiState.value
-        assertEquals(HomeViewModel.LOAD_FAILED, state.errorMessage)
-        assertEquals(listOf(luna), state.myPets)
-        assertEquals(listOf(first), state.lostPetsNearby)
+        var lostPets = viewModel.uiState.value.lostPetsNearby
+        assertEquals(listOf(first), lostPets.items)
+        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, lostPets.errorMessage)
 
         alertRepository.failure = null
-        petRepository.failure = null
         viewModel.refresh()
         advanceUntilIdle()
 
-        state = viewModel.uiState.value
-        assertNull(state.errorMessage)
-        assertEquals(listOf(first), state.lostPetsNearby)
-      }
-
-  @Test
-  fun clearErrorMsg_hidesTheError() =
-      runTest(testDispatcher) {
-        signIn()
-        alertRepository.failure = Exception("offline")
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.clearErrorMsg()
-
-        assertNull(viewModel.uiState.value.errorMessage)
+        lostPets = viewModel.uiState.value.lostPetsNearby
+        assertNull(lostPets.errorMessage)
+        assertEquals(listOf(first), lostPets.items)
       }
 
   private companion object {
     const val NOW = 1_700_000_000_000L
+    const val SLOW_MILLIS = 1_000L
     const val RADIUS_KM = 3.0
     val CENTER = Location(latitude = 46.2044, longitude = 6.1432)
     val NEARBY = Location(latitude = 46.2050, longitude = 6.1440)
     val FAR_AWAY = Location(latitude = 47.3769, longitude = 8.5417) // Zurich
 
-    fun pet(id: String, ownerId: String) =
-        Pet(id = id, ownerId = ownerId, name = id, species = Species.DOG)
+    val ALICE = User(uid = "alice", email = "alice@example.com")
+    val BOB = User(uid = "bob", email = "bob@example.com")
+    val ALICE_PROFILE =
+        UserProfile(
+            uid = ALICE.uid,
+            name = "Alice",
+            email = ALICE.email,
+            homeArea = "Plainpalais, Geneva",
+        )
+    val LUNA = Pet(id = "luna", ownerId = ALICE.uid, name = "Luna", species = Species.DOG)
+    val REX = Pet(id = "rex", ownerId = BOB.uid, name = "Rex", species = Species.DOG)
 
     fun alert(
         id: String,
