@@ -4,6 +4,8 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.model.sighting.Sighting
+import com.android.spotted.model.sighting.SightingRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -50,8 +52,20 @@ class ReportSightingViewModelTest {
   }
 
   @Test
-  fun factory_executesFactory() {
-    runCatching { ReportSightingViewModel.Factory.create(ReportSightingViewModel::class.java) }
+  fun defaultConstructorParameters_workCorrectly() {
+    val vm = ReportSightingViewModel(sightingRepository, photoRepository)
+    assertNotNull(vm)
+  }
+
+  @Test
+  fun factory_executesFactoryAndInnerRepo() = runTest {
+    runCatching {
+      val factoryVm = ReportSightingViewModel.Factory.create(ReportSightingViewModel::class.java)
+      factoryVm.setSpecies(Species.CAT)
+      factoryVm.setLocation(Location(46.5, 6.6))
+      factoryVm.selectNoMatchingAlert()
+      factoryVm.submitSighting()
+    }
   }
 
   @Test
@@ -106,7 +120,6 @@ class ReportSightingViewModelTest {
 
   @Test
   fun submitSighting_validationError_whenSpeciesMissing() = runTest {
-    // Location is set, but species is null
     viewModel.setLocation(Location(46.5, 6.6))
     viewModel.selectNoMatchingAlert()
 
@@ -136,7 +149,6 @@ class ReportSightingViewModelTest {
     assertFalse("isSubmitting should be false", state.isSubmitting)
     assertEquals("Upload failed", state.errorMessage)
 
-    // Form data preserved
     assertEquals(Species.CAT, state.selectedSpecies)
     assertEquals("content://media/cat.jpg", state.photoUri)
     assertTrue(sightingRepository.reportedSightings.isEmpty())
@@ -157,7 +169,35 @@ class ReportSightingViewModelTest {
     assertFalse("isSubmitting should be false", state.isSubmitting)
     assertEquals("Database write error", state.errorMessage)
 
-    // Form data preserved
     assertEquals(Species.DOG, state.selectedSpecies)
+  }
+
+  @Test
+  fun submitSighting_unexpectedException_setsErrorMessage() = runTest {
+    val throwingRepo =
+        object : SightingRepository {
+          override fun getNewId(): String = throw RuntimeException("Unexpected crash")
+
+          override suspend fun reportSighting(sighting: Sighting): Result<Unit> =
+              Result.success(Unit)
+
+          override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
+              Result.success(emptyList())
+        }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = throwingRepo,
+            photoRepository = photoRepository,
+        )
+
+    vm.setSpecies(Species.DOG)
+    vm.setLocation(Location(46.5, 6.6))
+    vm.selectNoMatchingAlert()
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertFalse(state.isSubmitting)
+    assertEquals("Unexpected crash", state.errorMessage)
   }
 }
