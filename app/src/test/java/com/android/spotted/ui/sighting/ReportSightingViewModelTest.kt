@@ -52,6 +52,18 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun nearbyAlertOption_propertiesAndEquals() {
+    val option1 = NearbyAlertOption("1", "Milo", "Orange cat", "http://photo.jpg")
+    val option2 = NearbyAlertOption("1", "Milo", "Orange cat", "http://photo.jpg")
+
+    assertEquals("1", option1.alertId)
+    assertEquals("Milo", option1.petName)
+    assertEquals("Orange cat", option1.description)
+    assertEquals("http://photo.jpg", option1.photoUrl)
+    assertEquals(option1, option2)
+  }
+
+  @Test
   fun defaultConstructorParameters_workCorrectly() {
     val vm = ReportSightingViewModel(sightingRepository, photoRepository)
     assertNotNull(vm)
@@ -66,6 +78,24 @@ class ReportSightingViewModelTest {
       factoryVm.selectNoMatchingAlert()
       factoryVm.submitSighting()
     }
+
+    val innerRepo =
+        object : SightingRepository {
+          override fun getNewId(): String = "id"
+
+          override suspend fun reportSighting(sighting: Sighting): Result<Unit> =
+              Result.success(Unit)
+
+          override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
+              Result.success(emptyList())
+        }
+    assertEquals("id", innerRepo.getNewId())
+    assertTrue(
+        innerRepo
+            .reportSighting(Sighting("id", "rep", Location(0.0, 0.0), 1L, Species.DOG))
+            .isSuccess,
+    )
+    assertTrue(innerRepo.getSightingsForAlert("alert-1").getOrNull()?.isEmpty() == true)
   }
 
   @Test
