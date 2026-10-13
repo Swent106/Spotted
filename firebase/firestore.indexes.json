@@ -1,4 +1,14 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "sightings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "alertId", "order": "ASCENDING" },
+        { "fieldPath": "seenAtMillis", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
