@@ -64,23 +64,22 @@ class HomeViewModel(
     }
 
     _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-    loadJob =
-        viewModelScope.launch {
-          val pets = petRepository.getPetsByOwner(user.uid)
-          val alerts = alertRepository.getOpenAlertsNear(searchCenter, radiusKm)
-          _uiState.update { state ->
-            state.copy(
-                isLoading = false,
-                errorMessage = if (pets.isFailure || alerts.isFailure) LOAD_FAILED else null,
-                myPets = pets.getOrDefault(state.myPets),
-                lostPetsNearby =
-                    alerts
-                        .map { list -> list.filter { it.ownerId != user.uid } }
-                        .getOrDefault(state.lostPetsNearby),
-                nowMillis = now(),
-            )
-          }
-        }
+    loadJob = viewModelScope.launch {
+      val pets = petRepository.getPetsByOwner(user.uid)
+      val alerts = alertRepository.getOpenAlertsNear(searchCenter, radiusKm)
+      _uiState.update { state ->
+        state.copy(
+            isLoading = false,
+            errorMessage = if (pets.isFailure || alerts.isFailure) LOAD_FAILED else null,
+            myPets = pets.getOrDefault(state.myPets),
+            lostPetsNearby =
+                alerts
+                    .map { list -> list.filter { it.ownerId != user.uid } }
+                    .getOrDefault(state.lostPetsNearby),
+            nowMillis = now(),
+        )
+      }
+    }
   }
 
   /** Hides the error message. */

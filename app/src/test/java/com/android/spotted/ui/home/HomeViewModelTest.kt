@@ -55,8 +55,9 @@ class HomeViewModelTest {
   // ===================== Helpers =====================
 
   /** [PetRepositoryLocal] whose reads fail while [failure] is set. */
-  private class SwitchablePetRepository(private val local: PetRepositoryLocal = PetRepositoryLocal()) :
-      PetRepository by local {
+  private class SwitchablePetRepository(
+      private val local: PetRepositoryLocal = PetRepositoryLocal()
+  ) : PetRepository by local {
     var failure: Throwable? = null
 
     override suspend fun getPetsByOwner(ownerId: String): Result<List<Pet>> =

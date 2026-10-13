@@ -9,8 +9,8 @@ import com.android.spotted.model.alert.Alert
  * @property isLoading true while the pets and the lost pets are being loaded.
  * @property errorMessage message to show when loading failed, or null.
  * @property myPets pets owned by the signed-in user.
- * @property lostPetsNearby open alerts around the search area, newest first, without the user's
- *   own alerts.
+ * @property lostPetsNearby open alerts around the search area, newest first, without the user's own
+ *   alerts.
  * @property nowMillis time of the last successful load, used to show "lost 2 h ago".
  */
 data class HomeUiState(
