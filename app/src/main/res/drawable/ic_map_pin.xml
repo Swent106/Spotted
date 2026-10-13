@@ -1,0 +1,16 @@
+<!-- Red map pin for the map picker, based on the Material "location_on" icon. The tip is at
+     (12, 22) of the 24x24 viewport, which MapPicker uses as the marker anchor. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="36dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFEA4335"
+        android:pathData="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13c0,-3.87 -3.13,-7 -7,-7z"
+        android:strokeWidth="0.8"
+        android:strokeColor="#FFB31412" />
+    <path
+        android:fillColor="#FFB31412"
+        android:pathData="M12,9m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
+</vector>

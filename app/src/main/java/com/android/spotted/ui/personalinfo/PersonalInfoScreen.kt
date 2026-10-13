@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -52,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
+import com.android.spotted.model.Location
+import com.android.spotted.ui.components.MapPicker
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedAvatarBackground
 import com.android.spotted.ui.theme.SpottedBlue
@@ -60,7 +61,6 @@ import com.android.spotted.ui.theme.SpottedError
 import com.android.spotted.ui.theme.SpottedInk
 import com.android.spotted.ui.theme.SpottedInkSoft
 import com.android.spotted.ui.theme.SpottedInputBackground
-import com.android.spotted.ui.theme.SpottedMapBackground
 import com.android.spotted.ui.theme.SpottedScreenBackground
 import com.android.spotted.ui.theme.SpottedTextLabel
 import com.android.spotted.ui.theme.SpottedTextSecondary
@@ -76,8 +76,6 @@ object PersonalInfoScreenTestTags {
   const val LAST_NAME_INPUT = "personalInfo_lastNameInput"
   const val HOME_AREA_INPUT = "personalInfo_homeAreaInput"
   const val USE_MY_LOCATION = "personalInfo_useMyLocation"
-  const val MAP_PREVIEW = "personalInfo_mapPreview"
-  const val RADIUS_TAG = "personalInfo_radiusTag"
   const val ERROR_MESSAGE = "personalInfo_errorMessage"
   const val CREATE_PROFILE_BUTTON = "personalInfo_createProfileButton"
   const val LOADER = "personalInfo_loader"
@@ -108,6 +106,9 @@ private val labelStyle = jakarta(11, 15, Bold, SpottedTextLabel)
 private val inputStyle = jakarta(14, 18, FontWeight.SemiBold, SpottedInk)
 private val placeholderStyle = jakarta(14, 18, FontWeight.Medium, SpottedTextLabel)
 
+// Height of the home map, from the Figma design.
+private val MapPickerHeight = 118.dp
+
 /**
  * Stateless "Create your profile" screen.
  *
@@ -124,6 +125,7 @@ fun PersonalInfoContent(
     onLastNameChange: (String) -> Unit,
     onHomeAreaChange: (String) -> Unit,
     onUseMyLocationClick: () -> Unit,
+    onHomeLocationChange: (Location) -> Unit,
     onAlertRadiusSelect: (Int) -> Unit,
     onCreateProfileClick: () -> Unit,
 ) {
@@ -150,7 +152,13 @@ fun PersonalInfoContent(
         Header(onBackClick)
         Avatar(onChangePhotoClick)
         IdentityCard(state, onUsernameChange, onFirstNameChange, onLastNameChange)
-        HomeLocationCard(state, onHomeAreaChange, onUseMyLocationClick, onAlertRadiusSelect)
+        HomeLocationCard(
+            state,
+            onHomeAreaChange,
+            onUseMyLocationClick,
+            onHomeLocationChange,
+            onAlertRadiusSelect,
+        )
         state.errorMessage?.let { message ->
           Text(
               message,
@@ -284,6 +292,7 @@ private fun HomeLocationCard(
     state: PersonalInfoUiState,
     onHomeAreaChange: (String) -> Unit,
     onUseMyLocationClick: () -> Unit,
+    onHomeLocationChange: (Location) -> Unit,
     onAlertRadiusSelect: (Int) -> Unit,
 ) {
   Card {
@@ -309,7 +318,14 @@ private fun HomeLocationCard(
         "Used to alert you about pets missing near your home.",
         style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
     )
-    MapPreview(state.alertRadiusKm)
+    MapPicker(
+        location = state.homeLocation,
+        radiusKm = state.alertRadiusKm,
+        onLocationChange = onHomeLocationChange,
+        modifier = Modifier.fillMaxWidth().height(MapPickerHeight),
+        hint = "Tap the map to place your home",
+        radiusLabel = { "Alerts within $it km" },
+    )
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth().selectableGroup(),
@@ -318,58 +334,6 @@ private fun HomeLocationCard(
         RadiusChip(radiusKm, selected = radiusKm == state.alertRadiusKm, onAlertRadiusSelect)
       }
     }
-  }
-}
-
-// Map preview layout, from the Figma design. Vertical offsets are measured from the top of the
-// preview; the map, the radius circles and the pin are centred horizontally.
-private val MapPreviewHeight = 118.dp
-private val MapImageSize = 330.dp
-private val MapImageOffsetY = (-106).dp
-private val AlertRadiusOffsetY = 7.dp
-private val HomePinOffsetY = 50.dp
-private val RadiusTagOffsetX = 10.dp
-private val RadiusTagOffsetY = 86.dp
-
-/** Static preview of the alert area. The circles stay centred whatever the card width. */
-@Composable
-private fun MapPreview(alertRadiusKm: Int) {
-  Box(
-      Modifier.fillMaxWidth()
-          .height(MapPreviewHeight)
-          .clip(RoundedCornerShape(16.dp))
-          .background(SpottedMapBackground)
-          .testTag(PersonalInfoScreenTestTags.MAP_PREVIEW)
-  ) {
-    Image(
-        painterResource(R.drawable.personal_info_map),
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier =
-            Modifier.wrapContentSize(Alignment.TopCenter, unbounded = true)
-                .offset(y = MapImageOffsetY)
-                .size(MapImageSize),
-    )
-    Image(
-        painterResource(R.drawable.personal_info_alert_radius),
-        contentDescription = null,
-        modifier = Modifier.align(Alignment.TopCenter).offset(y = AlertRadiusOffsetY),
-    )
-    Image(
-        painterResource(R.drawable.personal_info_home_pin),
-        contentDescription = null,
-        modifier = Modifier.align(Alignment.TopCenter).offset(y = HomePinOffsetY),
-    )
-    Text(
-        "Alerts within $alertRadiusKm km",
-        style = jakarta(11, 14, Bold, SpottedInk),
-        modifier =
-            Modifier.offset(RadiusTagOffsetX, RadiusTagOffsetY)
-                .clip(RoundedCornerShape(100.dp))
-                .background(Color.White.copy(alpha = 0.95f))
-                .padding(horizontal = 10.dp, vertical = 5.dp)
-                .testTag(PersonalInfoScreenTestTags.RADIUS_TAG),
-    )
   }
 }
 
@@ -510,6 +474,7 @@ fun PersonalInfoScreen(
       onLastNameChange = viewModel::onLastNameChanged,
       onHomeAreaChange = viewModel::onHomeAreaChanged,
       onUseMyLocationClick = onUseMyLocationClick,
+      onHomeLocationChange = viewModel::onHomeLocationChanged,
       onAlertRadiusSelect = viewModel::onAlertRadiusChanged,
       onCreateProfileClick = viewModel::saveProfile,
   )
