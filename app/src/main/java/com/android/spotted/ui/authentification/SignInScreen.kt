@@ -31,9 +31,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -43,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
+import com.android.spotted.ui.theme.jakarta
 
 /** Test tags used by UI tests to find the elements of the Sign-In screen. */
 object SignInScreenTestTags {
@@ -51,29 +49,6 @@ object SignInScreenTestTags {
   const val LOADER = "signInLoader"
   const val ERROR_MESSAGE = "signInErrorMessage"
 }
-
-private val Jakarta =
-    FontFamily(
-        Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
-        Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
-        Font(R.font.plus_jakarta_sans_extrabold, FontWeight.ExtraBold),
-    )
-
-private fun jakarta(
-    size: Int,
-    line: Float,
-    weight: Int,
-    color: Long,
-    align: TextAlign = TextAlign.Start,
-) =
-    TextStyle(
-        fontSize = size.sp,
-        lineHeight = line.sp,
-        fontFamily = Jakarta,
-        fontWeight = FontWeight(weight),
-        color = Color(color),
-        textAlign = align,
-    )
 
 /**
  * Stateless Sign-In screen: shows a loader while [SignInUiState.isLoading] and the error message on

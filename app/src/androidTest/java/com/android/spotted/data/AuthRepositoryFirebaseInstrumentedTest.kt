@@ -70,7 +70,7 @@ class AuthRepositoryFirebaseInstrumentedTest {
 
     // Wait for the auth state listener to update the StateFlow
     var flowUser: User? = null
-    for (i in 1..20) {
+    for (i in 1..30) {
       flowUser = authRepository.currentUser.value
       if (flowUser != null) break
       kotlinx.coroutines.delay(100)
@@ -84,7 +84,14 @@ class AuthRepositoryFirebaseInstrumentedTest {
   @Test
   fun signOut_clearsCurrentUserState() = runTest {
     val fakeToken = FakeJwtGenerator.createFakeGoogleIdToken(email = "logout_test@epfl.ch")
-    authRepository.signInWithGoogle(fakeToken)
+    val signInResult = authRepository.signInWithGoogle(fakeToken)
+    assertTrue("Sign-in should be successful", signInResult.isSuccess)
+
+    // Wait until the auth state listener has emitted the signed-in user
+    for (i in 1..30) {
+      if (authRepository.currentUser.value != null) break
+      kotlinx.coroutines.delay(100L)
+    }
     assertNotNull("User should be signed in initially", authRepository.currentUser.value)
 
     val result = authRepository.signOut()
@@ -94,7 +101,7 @@ class AuthRepositoryFirebaseInstrumentedTest {
     // Wait for the auth state listener to update the StateFlow
     // Firebase auth state changes are asynchronous, so we wait for the value to become null
     var isNull = false
-    for (i in 1..20) {
+    for (i in 1..30) {
       if (authRepository.currentUser.value == null) {
         isNull = true
         break
