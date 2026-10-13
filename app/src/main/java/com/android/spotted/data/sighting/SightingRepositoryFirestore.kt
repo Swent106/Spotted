@@ -5,7 +5,9 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,9 +31,16 @@ class SightingRepositoryFirestore(
   override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
       firestoreResult {
         withContext(Dispatchers.IO) {
-          // The rules only allow listing sightings with a limit of at most MAX_RESULTS
-          val snapshots =
-              Tasks.await(sightings.whereEqualTo("alertId", alertId).limit(MAX_RESULTS).get())
+          // Firestore sorts before the limit, so the MAX_RESULTS most recent sightings are kept.
+          // The rules only allow listing with a limit of at most MAX_RESULTS, and this query
+          // needs the composite index in firebase/firestore.indexes.json
+          val query =
+              sightings
+                  .whereEqualTo("alertId", alertId)
+                  .orderBy("seenAtMillis", Query.Direction.DESCENDING)
+                  .orderBy(FieldPath.documentId())
+                  .limit(MAX_RESULTS)
+          val snapshots = Tasks.await(query.get())
           // Invalid documents are skipped instead of being shown with default values
           snapshots.documents
               .mapNotNull { snapshot ->

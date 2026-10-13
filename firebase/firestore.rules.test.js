@@ -730,6 +730,7 @@ describe("Firestore sighting access rules", () => {
       sighting("sighting-1", "user-1", { location: "Lausanne" }),
       sighting("sighting-1", "user-1", { seenAtMillis: "yesterday" }),
       sighting("sighting-1", "user-1", { species: "" }),
+      sighting("sighting-1", "user-1", { species: "PARROT" }),
       sighting("sighting-1", "user-1", { photoUrl: 42 }),
       sighting("sighting-1", "user-1", { alertId: "" }),
     ];
@@ -738,4 +739,57 @@ describe("Firestore sighting access rules", () => {
       await assertFails(setDoc(ref, invalidSighting));
     }
   });
+
+  it("sighting update: reporter cannot make the sighting invalid", async () => {
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+    const invalidChanges = [
+      { id: "other-id" },
+      { extraData: "not allowed" },
+      { location: { latitude: 46.5, longitude: 181 } },
+      { seenAtMillis: "yesterday" },
+      { species: "PARROT" },
+      { photoUrl: "x".repeat(2049) },
+      { alertId: "" },
+      { species: deleteField() },
+    ];
+
+    for (const invalidChange of invalidChanges) {
+      await assertFails(updateDoc(ref, invalidChange));
+    }
+  });
+
+  const boundaryCases = [
+    { field: "species", value: "DOG", allowed: true },
+    { field: "species", value: "CAT", allowed: true },
+    { field: "species", value: "OTHER", allowed: true },
+    { field: "species", value: "dog", allowed: false },
+    { field: "photoUrl", value: "x".repeat(2048), allowed: true },
+    { field: "photoUrl", value: "x".repeat(2049), allowed: false },
+    { field: "alertId", value: "a", allowed: true },
+    { field: "alertId", value: "a".repeat(128), allowed: true },
+    { field: "alertId", value: "a".repeat(129), allowed: false },
+    { field: "location", value: { latitude: -90, longitude: -180 }, allowed: true },
+    { field: "location", value: { latitude: 90, longitude: 180 }, allowed: true },
+    { field: "location", value: { latitude: -90.1, longitude: 0 }, allowed: false },
+    { field: "location", value: { latitude: 0, longitude: 180.1 }, allowed: false },
+  ];
+
+  for (const testCase of boundaryCases) {
+    const shown = JSON.stringify(testCase.value);
+    const label = shown.length > 40 ? `${shown.length - 2} characters` : shown;
+    it(`sighting create: ${testCase.field} ${label} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      const db = firestoreForUser("user-1");
+      const operation = setDoc(
+        doc(db, "sightings", "sighting-1"),
+        sighting("sighting-1", "user-1", { [testCase.field]: testCase.value }),
+      );
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
 });
