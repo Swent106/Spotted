@@ -8,6 +8,8 @@ service cloud.firestore {
     // The document ID and uid field identify the authenticated profile owner.
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
     // behaviors, and note; existing pet authorization rules are unchanged.
+    // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
+    // and optional photoUrl and alertId; only the reporter may change them.
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -118,6 +120,48 @@ service cloud.firestore {
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /sightings/{sightingId} {
+
+      function validSightingLocation(l) {
+        return l is map
+          && l.keys().hasOnly(['latitude', 'longitude'])
+          && l.latitude is number && l.latitude >= -90 && l.latitude <= 90
+          && l.longitude is number && l.longitude >= -180 && l.longitude <= 180;
+      }
+
+      // Full schema of a sighting document (matches SightingRepositoryFirestore)
+      function validSighting(d) {
+        return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
+          && d.keys().hasOnly([
+                'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId'])
+          && d.id == sightingId
+          && d.reporterId is string
+          && validSightingLocation(d.location)
+          && d.seenAtMillis is int
+          && d.species is string && d.species.size() > 0 && d.species.size() <= 50
+          && (!('photoUrl' in d) || d.photoUrl == null
+              || (d.photoUrl is string && d.photoUrl.size() <= 2048))
+          && (!('alertId' in d) || d.alertId == null
+              || (d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128));
+      }
+
+      allow get: if request.auth != null;
+      allow list: if request.auth != null && request.query.limit <= 100;
+
+      allow create: if request.auth != null
+          && validSighting(request.resource.data)
+          && request.resource.data.reporterId == request.auth.uid;
+
+      // Only the author may change their sighting, and it stays theirs.
+      allow update: if request.auth != null
+          && resource.data.reporterId == request.auth.uid
+          && validSighting(request.resource.data)
+          && request.resource.data.reporterId == resource.data.reporterId;
+
+      allow delete: if request.auth != null
+          && resource.data.reporterId == request.auth.uid;
     }
 
     match /{document=**} {
