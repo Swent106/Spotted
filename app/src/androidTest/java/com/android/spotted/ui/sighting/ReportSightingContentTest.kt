@@ -68,6 +68,7 @@ class ReportSightingContentTest {
   fun submitButton_enabledWhenOptionAndLocationSelected() {
     val state =
         ReportSightingUiState(
+            selectedSpecies = Species.CAT,
             isNoMatchingAlertSelected = true,
             location = Location(46.5, 6.6),
             detectedSpecies = Species.CAT,
@@ -138,6 +139,7 @@ class ReportSightingContentTest {
 
     val state =
         ReportSightingUiState(
+            selectedSpecies = Species.DOG,
             location = Location(46.5, 6.6),
             isNoMatchingAlertSelected = true,
             nearbyAlerts =

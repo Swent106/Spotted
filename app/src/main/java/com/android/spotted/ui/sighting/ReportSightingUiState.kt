@@ -8,13 +8,15 @@ data class NearbyAlertOption(
     val petName: String,
     val description: String,
     val photoUrl: String? = null,
+    val species: Species? = null,
 )
 
 data class ReportSightingUiState(
+    val selectedSpecies: Species? = null,
     val selectedAlertId: String? = null,
     val isNoMatchingAlertSelected: Boolean = false,
     val location: Location? = null,
-    val locationAddress: String = "Location on map",
+    val locationAddress: String = "Tap to set location",
     val photoUri: String? = null,
     val detectedSpecies: Species? = null,
     val nearbyAlerts: List<NearbyAlertOption> = emptyList(),
@@ -25,8 +27,9 @@ data class ReportSightingUiState(
 ) {
   val canSubmit: Boolean
     get() =
-        (selectedAlertId != null || isNoMatchingAlertSelected) &&
+        selectedSpecies != null &&
             location != null &&
+            (selectedAlertId != null || isNoMatchingAlertSelected) &&
             !isSubmitting &&
             !submitted
 }
