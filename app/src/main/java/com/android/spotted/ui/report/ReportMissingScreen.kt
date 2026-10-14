@@ -31,12 +31,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.ui.components.MapPicker
@@ -77,6 +80,10 @@ fun ReportMissingContent(
       modifier =
           Modifier.fillMaxSize()
               .background(SpottedScreenBackground)
+              .paint(
+                  painterResource(R.drawable.background_textures),
+                  contentScale = ContentScale.Crop,
+              )
               .verticalScroll(rememberScrollState())
               .padding(16.dp)
               .testTag(ReportMissingScreenTestTags.SCREEN),
