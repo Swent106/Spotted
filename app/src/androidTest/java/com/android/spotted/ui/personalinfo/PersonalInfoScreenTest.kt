@@ -17,6 +17,8 @@ import androidx.compose.ui.test.performTextInput
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.user.FakeUserRepository
+import com.android.spotted.ui.components.DefaultMapCenter
+import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -54,6 +56,7 @@ class PersonalInfoScreenTest {
           onLastNameChange = {},
           onHomeAreaChange = {},
           onUseMyLocationClick = {},
+          onHomeLocationChange = {},
           onAlertRadiusSelect = onAlertRadiusSelect,
           onCreateProfileClick = onCreateProfileClick,
       )
@@ -74,7 +77,7 @@ class PersonalInfoScreenTest {
             PersonalInfoScreenTestTags.FIRST_NAME_INPUT,
             PersonalInfoScreenTestTags.LAST_NAME_INPUT,
             PersonalInfoScreenTestTags.HOME_AREA_INPUT,
-            PersonalInfoScreenTestTags.MAP_PREVIEW,
+            MapPickerTestTags.MAP,
         )
         .forEach { composeTestRule.onNodeWithTag(it).performScrollTo().assertIsDisplayed() }
     button().assertIsDisplayed().assertIsNotEnabled()
@@ -128,7 +131,10 @@ class PersonalInfoScreenTest {
   @Test
   fun radiusChips_showSelection_andReportClicks() {
     var selected = 0
-    setContent(PersonalInfoUiState(), onAlertRadiusSelect = { selected = it })
+    setContent(
+        PersonalInfoUiState(homeLocation = DefaultMapCenter),
+        onAlertRadiusSelect = { selected = it },
+    )
 
     composeTestRule
         .onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(3))
@@ -138,7 +144,7 @@ class PersonalInfoScreenTest {
       composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.radiusChip(it)).assertIsNotSelected()
     }
     composeTestRule
-        .onNodeWithTag(PersonalInfoScreenTestTags.RADIUS_TAG, useUnmergedTree = true)
+        .onNodeWithTag(MapPickerTestTags.RADIUS_LABEL, useUnmergedTree = true)
         .performScrollTo()
         .assertTextEquals("Alerts within 3 km")
 
@@ -163,6 +169,7 @@ class PersonalInfoScreenTest {
           onLastNameChange = { state = state.copy(lastName = it) },
           onHomeAreaChange = { state = state.copy(homeArea = it) },
           onUseMyLocationClick = {},
+          onHomeLocationChange = {},
           onAlertRadiusSelect = {},
           onCreateProfileClick = {},
       )

@@ -14,6 +14,7 @@ const {
   deleteField,
   getDoc,
   getDocs,
+  limit,
   query,
   setDoc,
   updateDoc,
@@ -527,4 +528,268 @@ describe("Firestore alert access rules", () => {
     const db = firestoreForUser("owner-2");
     await assertFails(deleteDoc(doc(db, "alerts", "alert-1")));
   });
+});
+
+describe("Firestore sighting access rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function sighting(id, reporterId, overrides = {}) {
+    return {
+      id,
+      reporterId,
+      location: { latitude: 46.5, longitude: 6.6 },
+      seenAtMillis: 1000000,
+      species: "DOG",
+      photoUrl: null,
+      alertId: "alert-1",
+      ...overrides,
+    };
+  }
+
+  async function seedSighting(id, reporterId, overrides = {}) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "sightings", id), sighting(id, reporterId, overrides));
+    });
+  }
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  const createCases = [
+    { who: "reporter", userId: "user-1", reporterId: "user-1", allowed: true },
+    {
+      who: "user reporting for another user",
+      userId: "user-1",
+      reporterId: "user-2",
+      allowed: false,
+    },
+    { who: "anonymous user", userId: null, reporterId: "user-1", allowed: false },
+  ];
+
+  for (const testCase of createCases) {
+    it(`sighting create: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      const db = firestoreForUser(testCase.userId);
+      const operation = setDoc(
+        doc(db, "sightings", "sighting-1"),
+        sighting("sighting-1", testCase.reporterId),
+      );
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  const readCases = [
+    { who: "reporter", userId: "user-1", allowed: true },
+    { who: "another user", userId: "user-2", allowed: true },
+    { who: "anonymous user", userId: null, allowed: false },
+  ];
+
+  for (const testCase of readCases) {
+    it(`sighting read: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedSighting("sighting-1", "user-1");
+      const db = firestoreForUser(testCase.userId);
+      const operation = getDoc(doc(db, "sightings", "sighting-1"));
+
+      if (testCase.allowed) {
+        const snapshot = await assertSucceeds(operation);
+        assert.deepEqual(snapshot.data(), sighting("sighting-1", "user-1"));
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  it("sighting list: signed-in users can query an alert's sightings with a limit", async () => {
+    await seedSighting("sighting-1", "user-1");
+    await seedSighting("sighting-2", "user-1", { alertId: "alert-2" });
+    const db = firestoreForUser("user-2");
+    const alertSightings = query(
+      collection(db, "sightings"),
+      where("alertId", "==", "alert-1"),
+      limit(100),
+    );
+
+    const results = await assertSucceeds(getDocs(alertSightings));
+    assert.deepEqual(results.docs.map((snapshot) => snapshot.id), ["sighting-1"]);
+  });
+
+  it("sighting list: queries without a limit or with a too large one are denied", async () => {
+    const db = firestoreForUser("user-1");
+    const sightings = collection(db, "sightings");
+
+    await assertFails(getDocs(query(sightings, where("alertId", "==", "alert-1"))));
+    await assertFails(getDocs(query(sightings, where("alertId", "==", "alert-1"), limit(101))));
+  });
+
+  it("sighting list: anonymous users are denied", async () => {
+    const db = firestoreForUser(null);
+
+    await assertFails(
+      getDocs(query(collection(db, "sightings"), where("alertId", "==", "alert-1"), limit(100))),
+    );
+  });
+
+  const updateCases = [
+    { who: "reporter", userId: "user-1", allowed: true },
+    { who: "another user", userId: "user-2", allowed: false },
+    { who: "anonymous user", userId: null, allowed: false },
+  ];
+
+  for (const testCase of updateCases) {
+    it(`sighting update: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedSighting("sighting-1", "user-1");
+      const db = firestoreForUser(testCase.userId);
+      const operation = updateDoc(doc(db, "sightings", "sighting-1"), { species: "CAT" });
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  it("sighting update: reporting the same id again replaces the reporter's sighting", async () => {
+    await seedSighting("sighting-1", "user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { species: "CAT" })),
+    );
+  });
+
+  it("sighting update: reporter cannot give the sighting to another user", async () => {
+    await seedSighting("sighting-1", "user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertFails(updateDoc(doc(db, "sightings", "sighting-1"), { reporterId: "user-2" }));
+  });
+
+  const deleteCases = [
+    { who: "reporter", userId: "user-1", allowed: true },
+    { who: "another user", userId: "user-2", allowed: false },
+    { who: "anonymous user", userId: null, allowed: false },
+  ];
+
+  for (const testCase of deleteCases) {
+    it(`sighting delete: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedSighting("sighting-1", "user-1");
+      const db = firestoreForUser(testCase.userId);
+      const operation = deleteDoc(doc(db, "sightings", "sighting-1"));
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  it("sighting create: optional photo and alert can be left out", async () => {
+    const db = firestoreForUser("user-1");
+    const { photoUrl, alertId, ...required } = sighting("sighting-1", "user-1");
+
+    await assertSucceeds(setDoc(doc(db, "sightings", "sighting-1"), required));
+  });
+
+  it("sighting create: invalid documents are denied", async () => {
+    const db = firestoreForUser("user-1");
+    const ref = doc(db, "sightings", "sighting-1");
+    const invalidSightings = [
+      sighting("other-id", "user-1"),
+      sighting("sighting-1", "user-1", { extraData: "not allowed" }),
+      sighting("sighting-1", "user-1", { location: { latitude: 91, longitude: 6.6 } }),
+      sighting("sighting-1", "user-1", { location: "Lausanne" }),
+      sighting("sighting-1", "user-1", { seenAtMillis: "yesterday" }),
+      sighting("sighting-1", "user-1", { species: "" }),
+      sighting("sighting-1", "user-1", { species: "PARROT" }),
+      sighting("sighting-1", "user-1", { photoUrl: 42 }),
+      sighting("sighting-1", "user-1", { alertId: "" }),
+    ];
+
+    for (const invalidSighting of invalidSightings) {
+      await assertFails(setDoc(ref, invalidSighting));
+    }
+  });
+
+  it("sighting update: reporter cannot make the sighting invalid", async () => {
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+    const invalidChanges = [
+      { id: "other-id" },
+      { extraData: "not allowed" },
+      { location: { latitude: 46.5, longitude: 181 } },
+      { seenAtMillis: "yesterday" },
+      { species: "PARROT" },
+      { photoUrl: "x".repeat(2049) },
+      { alertId: "" },
+      { species: deleteField() },
+    ];
+
+    for (const invalidChange of invalidChanges) {
+      await assertFails(updateDoc(ref, invalidChange));
+    }
+  });
+
+  const boundaryCases = [
+    { field: "species", value: "DOG", allowed: true },
+    { field: "species", value: "CAT", allowed: true },
+    { field: "species", value: "OTHER", allowed: true },
+    { field: "species", value: "dog", allowed: false },
+    { field: "photoUrl", value: "x".repeat(2048), allowed: true },
+    { field: "photoUrl", value: "x".repeat(2049), allowed: false },
+    { field: "alertId", value: "a", allowed: true },
+    { field: "alertId", value: "a".repeat(128), allowed: true },
+    { field: "alertId", value: "a".repeat(129), allowed: false },
+    { field: "location", value: { latitude: -90, longitude: -180 }, allowed: true },
+    { field: "location", value: { latitude: 90, longitude: 180 }, allowed: true },
+    { field: "location", value: { latitude: -90.1, longitude: 0 }, allowed: false },
+    { field: "location", value: { latitude: 0, longitude: 180.1 }, allowed: false },
+  ];
+
+  for (const testCase of boundaryCases) {
+    const shown = JSON.stringify(testCase.value);
+    const label = shown.length > 40 ? `${shown.length - 2} characters` : shown;
+    it(`sighting create: ${testCase.field} ${label} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      const db = firestoreForUser("user-1");
+      const operation = setDoc(
+        doc(db, "sightings", "sighting-1"),
+        sighting("sighting-1", "user-1", { [testCase.field]: testCase.value }),
+      );
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
 });
