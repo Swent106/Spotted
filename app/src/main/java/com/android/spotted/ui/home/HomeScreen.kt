@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -44,8 +45,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedAvatarBackground
 import com.android.spotted.ui.theme.SpottedHomeBackground
@@ -67,15 +70,24 @@ object HomeScreenTestTags {
   const val PETS_LOADER = "home_petsLoader"
   const val PETS_ERROR = "home_petsError"
   const val PETS_EMPTY = "home_petsEmpty"
+  const val ALERTS_TITLE = "home_alertsTitle"
+  const val ALERTS_LOADER = "home_alertsLoader"
+  const val ALERTS_ERROR = "home_alertsError"
+  const val ALERTS_EMPTY = "home_alertsEmpty"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val TAB_BAR = "home_tabBar"
 
   fun petCard(petId: String) = "home_pet_$petId"
+
+  fun alertCard(alertId: String) = "home_alert_$alertId"
+
+  fun seenButton(alertId: String) = "home_seenButton_$alertId"
 }
 
 /** Texts shown when a section has nothing to show. */
 object HomeScreenTexts {
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
+  const val NO_LOST_PETS = "No missing pets near you"
 }
 
 /** Text style of the Figma designs. Figma's Bold (700) uses SemiBold, the bundled weight. */
@@ -102,11 +114,15 @@ internal fun jakarta(
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
     onReportMissingClick: () -> Unit = {},
+    onAlertClick: (alertId: String) -> Unit = {},
+    onSeenPetClick: (alertId: String) -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,
+      onAlertClick = onAlertClick,
+      onSeenPetClick = onSeenPetClick,
   )
 }
 
@@ -115,6 +131,8 @@ fun HomeScreen(
 fun HomeScreenContent(
     state: HomeUiState,
     onReportMissingClick: () -> Unit = {},
+    onAlertClick: (alertId: String) -> Unit = {},
+    onSeenPetClick: (alertId: String) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -148,6 +166,8 @@ fun HomeScreenContent(
       }
 
       PetsSection(state.pets)
+
+      LostPetsSection(state, onAlertClick, onSeenPetClick)
 
       // Report a pet missing
       Spacer(Modifier.height(9.dp))
@@ -350,11 +370,22 @@ private fun TabButton(
   }
 }
 
-/** Photo loaded from its URL with Coil. Null shows only the background. */
+/**
+ * Photo loaded from its URL with Coil. Null shows only the background. Coil loads nothing in
+ * Android Studio previews, so the fake "preview://" URLs use local drawables there.
+ */
 @Composable
 internal fun PetPhoto(url: String?, modifier: Modifier) {
   Box(modifier) {
-    if (url != null) {
+    val previewRes = if (LocalInspectionMode.current) PREVIEW_PHOTOS[url] else null
+    if (previewRes != null) {
+      Image(
+          painterResource(previewRes),
+          contentDescription = null,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.matchParentSize(),
+      )
+    } else if (url != null) {
       AsyncImage(
           model = url,
           contentDescription = null,
@@ -367,17 +398,81 @@ internal fun PetPhoto(url: String?, modifier: Modifier) {
 
 // ------------------------------------------ Preview ------------------------------------------
 
+private val PREVIEW_PHOTOS =
+    mapOf(
+        "preview://luna" to R.drawable.hero_helper_4,
+        "preview://milo" to R.drawable.hero_pet_lost,
+        "preview://nala" to R.drawable.hero_helper_2,
+    )
+
+private const val PREVIEW_NOW = 1_000_000_000_000L
+private const val HOUR = 3_600_000L
+
+private val previewState =
+    HomeUiState(
+        userName = "Rayen",
+        homeArea = "Geneva",
+        pets =
+            HomeSection(
+                listOf(
+                    Pet(
+                        id = "luna",
+                        ownerId = "me",
+                        name = "Luna",
+                        species = Species.DOG,
+                        photoUrl = "preview://luna",
+                    )
+                )
+            ),
+        lostPetsNearby =
+            HomeSection(
+                listOf(
+                    Alert(
+                        id = "milo",
+                        petId = "milo",
+                        ownerId = "someone",
+                        lastKnownLocation = Location(latitude = 46.2, longitude = 6.14),
+                        lostAtMillis = PREVIEW_NOW - 2 * HOUR,
+                        petName = "Milo",
+                        petSpecies = Species.CAT,
+                        petPhotoUrl = "preview://milo",
+                    ),
+                    Alert(
+                        id = "nala",
+                        petId = "nala",
+                        ownerId = "someone-else",
+                        lastKnownLocation = Location(latitude = 46.19, longitude = 6.14),
+                        lostAtMillis = PREVIEW_NOW - 30 * HOUR,
+                        petName = "Nala",
+                        petSpecies = Species.DOG,
+                        petPhotoUrl = "preview://nala",
+                    ),
+                )
+            ),
+        nowMillis = PREVIEW_NOW,
+    )
+
 @Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun HomeScreenContentPreview() {
+  HomeScreenContent(state = previewState)
+}
+
+@Preview(name = "Empty", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun HomeScreenContentEmptyPreview() {
+  HomeScreenContent(state = HomeUiState(userName = "Rayen", homeArea = "Geneva"))
+}
+
+@Preview(name = "Loading", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun HomeScreenContentLoadingPreview() {
   HomeScreenContent(
       state =
           HomeUiState(
               userName = "Rayen",
-              pets =
-                  HomeSection(
-                      listOf(Pet(id = "luna", ownerId = "me", name = "Luna", species = Species.DOG))
-                  ),
+              pets = HomeSection(isLoading = true),
+              lostPetsNearby = HomeSection(isLoading = true),
           )
   )
 }
