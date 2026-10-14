@@ -4,11 +4,13 @@ Durable rules for any AI agent working in this repository. Read this before acti
 
 ## The app
 
-A Kotlin/Android app (`<package>`) built with an **MVVM** architecture.
+A Kotlin/Android app (`com.android.spotted`) built with an **MVVM** architecture.
 
-- `model/` holds data classes and repositories (Firestore, Location, ...).
+- `model/` holds data classes and repository **interfaces**.
+- `data/` holds repository implementations (Firestore, Storage, Auth, Location, ...).
 - `ui/` holds screens and their **ViewModels**.
-- Repository implementations are wired into ViewModels in `<where DI/factories live>`.
+- Repository implementations are wired into ViewModels by each ViewModel's
+  `companion object { val Factory }` (see [ViewModel](#viewmodel)).
 
 ## Plan before you change anything
 
@@ -117,6 +119,11 @@ Reporting:
 - Commit with an imperative, capitalized subject of at most 50 characters
   (e.g. `Add user authentication`), and a body wrapped at 72 characters when
   needed. End the message with a `Co-authored-by:` trailer crediting the AI agent.
+- **Acknowledge AI in every source file** you create or substantially edit, with a
+  comment at the top of the file, e.g.
+  `// Portions of this code were generated with the help of Claude (Anthropic).`
+  The course collaboration policy requires this in addition to the commit trailer;
+  without it, the code counts as plagiarism. Keep existing acknowledgments and add yours.
 
 ## Responsibility
 
