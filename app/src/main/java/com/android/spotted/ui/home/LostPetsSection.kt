@@ -35,6 +35,7 @@ import com.android.spotted.ui.theme.SpottedFeaturedPhotoBackground
 import com.android.spotted.ui.theme.SpottedInk
 import com.android.spotted.ui.theme.SpottedLostRed
 import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.theme.jakarta
 
 /** "12 min ago", "2 h ago", "yesterday", "3 days ago". A time in the future counts as now. */
 internal fun timeAgo(pastMillis: Long, nowMillis: Long): String {
