@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
@@ -75,6 +77,11 @@ class HomeNavigationTest {
 
   @Test
   fun reportMissingButton_opensReportMissing() {
+    // The button is the last item: scrolling to the end puts it above the tab bar, which would
+    // otherwise receive the click when the button is just scrolled into view at the bottom
+    repeat(3) {
+      composeTestRule.onNodeWithTag(HomeScreenTestTags.BODY).performTouchInput { swipeUp() }
+    }
     scrollTo(HomeScreenTestTags.REPORT_MISSING_BUTTON).performClick()
 
     node(REPORT_MISSING_SCREEN).assertIsDisplayed()
