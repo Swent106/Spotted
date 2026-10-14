@@ -137,6 +137,7 @@ dependencies {
 
   // ------------- Images ------------------
   implementation(libs.coil.compose)
+  implementation(libs.osmdroid.android)
 
   // ------------- Jetpack Compose ------------------
   val composeBom = platform(libs.compose.bom)
