@@ -1,0 +1,455 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
+package com.android.spotted.ui.addpets
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.spotted.R
+import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Species
+import com.android.spotted.ui.theme.SpottedBlue
+import com.android.spotted.ui.theme.SpottedBlueTint
+import com.android.spotted.ui.theme.SpottedInk
+import com.android.spotted.ui.theme.SpottedInputBackground
+import com.android.spotted.ui.theme.SpottedScreenBackground
+import com.android.spotted.ui.theme.jakarta
+
+object AddPetsScreenTestTags {
+  const val SCREEN = "addPets_screen"
+  const val BACK_BUTTON = "addPets_backButton"
+  const val SKIP_BUTTON = "addPets_skipButton"
+  const val NAME_INPUT = "addPets_nameInput"
+  const val DESCRIPTION_INPUT = "addPets_descriptionInput"
+  const val AGE_INPUT = "addPets_ageInput"
+  const val ADDED_PETS = "addPets_addedPets"
+  const val ERROR_MESSAGE = "addPets_errorMessage"
+  const val SAVE_AND_CONTINUE_BUTTON = "addPets_saveAndContinueButton"
+  const val ADD_ANOTHER_BUTTON = "addPets_addAnotherButton"
+  const val LOADER = "addPets_loader"
+
+  fun speciesChip(species: Species) = "addPets_speciesChip_${species.name}"
+
+  fun behaviorChip(behavior: Behavior) = "addPets_behaviorChip_${behavior.name}"
+}
+
+/** Label shown for each [Species] chip. */
+internal fun Species.label(): String =
+    when (this) {
+      Species.DOG -> "Dog"
+      Species.CAT -> "Cat"
+      Species.OTHER -> "Other"
+    }
+
+/** Label shown for each [Behavior] chip, under "Characteristics". */
+internal fun Behavior.label(): String =
+    when (this) {
+      Behavior.STRESSED_IN_CROWDS -> "Stressed in crowds"
+      Behavior.DOESNT_LIKE_BEING_TOUCHED -> "Doesn't like being touched"
+      Behavior.REACTIVE_TO_OTHER_ANIMALS -> "Reactive to other animals"
+      Behavior.FEARFUL_OF_STRANGERS -> "Fearful of strangers"
+    }
+
+private val sectionLabelStyle = jakarta(11, 15f, 700, 0xFF6B7280)
+private val fieldTextStyle = jakarta(14, 18f, 600, 0xFF14161A)
+private val fieldPlaceholderStyle = jakarta(14, 18f, 500, 0xFF6B7280)
+
+/**
+ * Stateless "Add your pet" screen (Figma "03 · Add a pet").
+ *
+ * The form scrolls, and the footer stays pinned at the bottom: "Save & continue" saves the pet (if
+ * the form was started) and ends the step, "+" saves it and clears the form for another pet. "Skip"
+ * is always shown, so users without a pet are never blocked.
+ */
+@Composable
+fun AddPetsContent(
+    state: AddPetsUiState,
+    onBackClick: () -> Unit,
+    onSkipClick: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onSpeciesSelect: (Species) -> Unit,
+    onPhotoChange: (String?) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onAgeChange: (String) -> Unit,
+    onBehaviorToggle: (Behavior) -> Unit,
+    onSaveAndContinueClick: () -> Unit,
+    onAddAnotherClick: () -> Unit,
+) {
+  Box(
+      Modifier.fillMaxSize()
+          .background(SpottedScreenBackground)
+          .testTag(AddPetsScreenTestTags.SCREEN)
+  ) {
+    Image(
+        painterResource(R.drawable.background_textures),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        alpha = 0.4f,
+        modifier = Modifier.fillMaxSize(),
+    )
+    Column(
+        Modifier.fillMaxSize().padding(start = 20.dp, top = 52.dp, end = 20.dp, bottom = 34.dp)
+    ) {
+      Column(
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+          modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+      ) {
+        AddPetsHeader(isSaving = state.isSaving, onBackClick, onSkipClick)
+        FormCard {
+          SectionLabel("NAME")
+          FormField(
+              value = state.name,
+              onValueChange = onNameChange,
+              placeholder = "Your pet's name",
+              testTag = AddPetsScreenTestTags.NAME_INPUT,
+          )
+          SectionLabel("ANIMAL")
+          ChipFlow {
+            Species.entries.forEach { species ->
+              FormChip(
+                  text = species.label(),
+                  selected = state.species == species,
+                  role = Role.RadioButton,
+                  testTag = AddPetsScreenTestTags.speciesChip(species),
+                  onClick = { onSpeciesSelect(species) },
+              )
+            }
+          }
+        }
+        FormCard {
+          SectionLabel("PHOTO")
+          PetPhotoPicker(photoUri = state.photoUri, onPhotoSelected = onPhotoChange)
+        }
+        // The details card is tighter than the others in the Figma
+        FormCard(spacing = 8.dp) {
+          SectionLabel("DESCRIPTION")
+          FormField(
+              value = state.description,
+              onValueChange = onDescriptionChange,
+              placeholder = "Colour, size, collar…",
+              testTag = AddPetsScreenTestTags.DESCRIPTION_INPUT,
+              singleLine = false,
+              minHeight = 52.dp,
+          )
+          SectionLabel("AGE")
+          FormField(
+              value = state.age,
+              onValueChange = onAgeChange,
+              placeholder = "e.g. 4 years",
+              testTag = AddPetsScreenTestTags.AGE_INPUT,
+              width = 150.dp,
+          )
+          SectionLabel("CHARACTERISTICS")
+          ChipFlow {
+            Behavior.entries.forEach { behavior ->
+              FormChip(
+                  text = behavior.label(),
+                  selected = behavior in state.behaviors,
+                  role = Role.Checkbox,
+                  testTag = AddPetsScreenTestTags.behaviorChip(behavior),
+                  onClick = { onBehaviorToggle(behavior) },
+              )
+            }
+          }
+        }
+        if (state.addedPets.isNotEmpty()) {
+          Text(
+              "Added: " + state.addedPets.joinToString { it.name },
+              style = jakarta(13, 18f, 600, 0xFF5F6672),
+              modifier = Modifier.fillMaxWidth().testTag(AddPetsScreenTestTags.ADDED_PETS),
+          )
+        }
+        state.errorMessage?.let { message ->
+          Text(
+              message,
+              style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
+              modifier = Modifier.fillMaxWidth().testTag(AddPetsScreenTestTags.ERROR_MESSAGE),
+          )
+        }
+      }
+      Spacer(Modifier.height(12.dp))
+      AddPetsFooter(state, onSaveAndContinueClick, onAddAnotherClick)
+    }
+  }
+}
+
+@Composable
+private fun AddPetsHeader(isSaving: Boolean, onBackClick: () -> Unit, onSkipClick: () -> Unit) {
+  Row(
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier.size(40.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBackClick)
+                .testTag(AddPetsScreenTestTags.BACK_BUTTON),
+    ) {
+      Icon(
+          painterResource(R.drawable.ic_arrow_back),
+          contentDescription = "Back",
+          tint = SpottedInk,
+          modifier = Modifier.size(20.dp),
+      )
+    }
+    Column(Modifier.weight(1f)) {
+      Text("Add your pet", style = jakarta(23, 31f, 800, 0xFF14161A))
+      Text(
+          "Step 2 of 2 · you can edit it later",
+          style = jakarta(12, 16f, 500, 0xFF5F6672),
+      )
+    }
+    Text(
+        "Skip",
+        style = jakarta(14, 18f, 700, 0xFF1B5BD7),
+        modifier =
+            Modifier.clip(RoundedCornerShape(10.dp))
+                .clickable(enabled = !isSaving, role = Role.Button, onClick = onSkipClick)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .testTag(AddPetsScreenTestTags.SKIP_BUTTON),
+    )
+  }
+}
+
+@Composable
+private fun FormCard(spacing: Dp = 10.dp, content: @Composable () -> Unit) {
+  Column(
+      verticalArrangement = Arrangement.spacedBy(spacing),
+      modifier =
+          Modifier.fillMaxWidth()
+              .clip(RoundedCornerShape(22.dp))
+              .background(Color.White)
+              .padding(16.dp),
+  ) {
+    content()
+  }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+  Text(text, style = sectionLabelStyle)
+}
+
+@Composable
+private fun ChipFlow(content: @Composable () -> Unit) {
+  FlowRow(
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    content()
+  }
+}
+
+@Composable
+private fun FormChip(
+    text: String,
+    selected: Boolean,
+    role: Role,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+  val shape = RoundedCornerShape(100.dp)
+  val selection =
+      if (role == Role.Checkbox) {
+        Modifier.toggleable(value = selected, role = role, onValueChange = { onClick() })
+      } else {
+        Modifier.selectable(selected = selected, role = role, onClick = onClick)
+      }
+  Text(
+      text,
+      style =
+          if (selected) jakarta(13, 16f, 700, 0xFF1B5BD7) else jakarta(13, 16f, 600, 0xFF2C3340),
+      modifier =
+          Modifier.clip(shape)
+              .background(if (selected) SpottedBlueTint else SpottedInputBackground)
+              .then(if (selected) Modifier.border(1.5.dp, SpottedBlue, shape) else Modifier)
+              .then(selection)
+              .padding(horizontal = 12.dp, vertical = 7.dp)
+              .testTag(testTag),
+  )
+}
+
+@Composable
+private fun FormField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    testTag: String,
+    singleLine: Boolean = true,
+    minHeight: Dp = 42.dp,
+    width: Dp? = null,
+) {
+  BasicTextField(
+      value = value,
+      onValueChange = onValueChange,
+      singleLine = singleLine,
+      textStyle = fieldTextStyle,
+      keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+      modifier =
+          (if (width == null) Modifier.fillMaxWidth() else Modifier.width(width)).testTag(testTag),
+      decorationBox = { innerTextField ->
+        Box(
+            contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart,
+            modifier =
+                Modifier.fillMaxWidth()
+                    .heightIn(min = minHeight)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(SpottedInputBackground)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+          if (value.isEmpty()) Text(placeholder, style = fieldPlaceholderStyle)
+          innerTextField()
+        }
+      },
+  )
+}
+
+@Composable
+private fun AddPetsFooter(
+    state: AddPetsUiState,
+    onSaveAndContinueClick: () -> Unit,
+    onAddAnotherClick: () -> Unit,
+) {
+  Row(
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    Button(
+        onClick = onSaveAndContinueClick,
+        enabled = state.canFinish,
+        shape = RoundedCornerShape(14.dp),
+        colors =
+            ButtonDefaults.buttonColors(
+                containerColor = SpottedBlue,
+                contentColor = Color.White,
+                disabledContainerColor = SpottedBlue.copy(alpha = 0.4f),
+                disabledContentColor = Color.White,
+            ),
+        modifier =
+            Modifier.weight(1f)
+                .height(52.dp)
+                .testTag(AddPetsScreenTestTags.SAVE_AND_CONTINUE_BUTTON),
+    ) {
+      if (state.isSaving) {
+        CircularProgressIndicator(
+            color = Color.White,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(20.dp).testTag(AddPetsScreenTestTags.LOADER),
+        )
+      } else {
+        Text("Save & continue", style = jakarta(15, 20f, 700, 0xFFFFFFFF))
+      }
+    }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier.size(52.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .border(
+                    2.dp,
+                    SpottedBlue.copy(alpha = if (state.canSave) 1f else 0.4f),
+                    CircleShape,
+                )
+                .clickable(
+                    enabled = state.canSave,
+                    onClickLabel = "Add another pet",
+                    role = Role.Button,
+                    onClick = onAddAnotherClick,
+                )
+                .testTag(AddPetsScreenTestTags.ADD_ANOTHER_BUTTON),
+    ) {
+      Text(
+          "+",
+          style = jakarta(26, 28f, 800, if (state.canSave) 0xFF1B5BD7 else 0x661B5BD7),
+      )
+    }
+  }
+}
+
+/**
+ * Stateful entry point of the Add pets screen.
+ *
+ * Collects the [AddPetsViewModel] state, forwards user input to it, and calls [onDone] once the
+ * step ends (after "Save & continue" or "Skip").
+ */
+@Composable
+fun AddPetsScreen(
+    viewModel: AddPetsViewModel = viewModel(factory = AddPetsViewModel.Factory),
+    onBack: () -> Unit = {},
+    onDone: () -> Unit = {},
+) {
+  val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+  val currentOnDone by rememberUpdatedState(onDone)
+  LaunchedEffect(state.isDone) {
+    if (state.isDone) {
+      viewModel.onDoneHandled()
+      currentOnDone()
+    }
+  }
+
+  AddPetsContent(
+      state = state,
+      onBackClick = onBack,
+      onSkipClick = viewModel::skip,
+      onNameChange = viewModel::onNameChanged,
+      onSpeciesSelect = viewModel::onSpeciesChanged,
+      onPhotoChange = viewModel::onPhotoChanged,
+      onDescriptionChange = viewModel::onDescriptionChanged,
+      onAgeChange = viewModel::onAgeChanged,
+      onBehaviorToggle = viewModel::onBehaviorToggled,
+      onSaveAndContinueClick = viewModel::finish,
+      onAddAnotherClick = viewModel::savePet,
+  )
+}

@@ -21,18 +21,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
+import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.theme.SampleAppTheme
 
 object Route {
   const val SIGNIN = "signin"
   const val PERSONAL_INFO = "personal_info"
+  const val ADD_PETS = "add_pets"
   const val HOME = "home"
 }
 
@@ -91,13 +95,36 @@ fun SpottedApp(
       )
     }
     composable(Route.PERSONAL_INFO) {
-      PersonalInfoScreenPlaceholder(
-          onProfileSaved = {
-            navController.navigate(Route.HOME) { popUpTo(Route.PERSONAL_INFO) { inclusive = true } }
-          }
-      )
+      // Personal info stays below Add pets, so Back from Add pets returns to it
+      PersonalInfoScreenPlaceholder(onProfileSaved = { navController.navigate(Route.ADD_PETS) })
     }
+    addPetsDestination(navController)
     composable(Route.HOME) { HomeScreenPlaceholder() }
+  }
+}
+
+/**
+ * The Add pets onboarding step. [addPetsContent] draws the screen; tests replace it to avoid the
+ * real ViewModel and Firebase.
+ */
+fun NavGraphBuilder.addPetsDestination(
+    navController: NavController,
+    addPetsContent: @Composable (onBack: () -> Unit, onDone: () -> Unit) -> Unit =
+        { onBack, onDone ->
+          AddPetsScreen(onBack = onBack, onDone = onDone)
+        },
+) {
+  composable(Route.ADD_PETS) {
+    addPetsContent(
+        { navController.popBackStack() },
+        {
+          // Onboarding is over: Back from Home must not return to it
+          navController.navigate(Route.HOME) {
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
+          }
+        },
+    )
   }
 }
 
@@ -116,7 +143,7 @@ fun PersonalInfoScreenPlaceholder(onProfileSaved: () -> Unit = {}) {
         onClick = onProfileSaved,
         modifier = Modifier.padding(top = 16.dp),
     ) {
-      Text("Continue to Home")
+      Text("Continue")
     }
   }
 }
