@@ -1,5 +1,7 @@
 package com.android.spotted.ui.personalinfo
 
+import com.android.spotted.model.Location
+
 data class PersonalInfoUiState(
     val username: String = "",
     val firstName: String = "",
@@ -8,6 +10,8 @@ data class PersonalInfoUiState(
     val email: String = "",
     val phone: String = "",
     val homeArea: String = "",
+    /** Home pin placed on the map picker; kept on screen only for now, not saved. */
+    val homeLocation: Location? = null,
     val alertRadiusKm: Int = DEFAULT_ALERT_RADIUS_KM,
     val petsBroughtHome: List<String> = emptyList(),
     val achievements: List<String> = emptyList(),

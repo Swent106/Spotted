@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
@@ -6,6 +7,9 @@ interface AlertRepository {
   fun getNewId(): String
 
   suspend fun publishAlert(alert: Alert): Result<Unit>
+
+  /** Returns the alert with [id], or null when no such alert exists. */
+  suspend fun getAlertById(id: String): Result<Alert?>
 
   /**
    * Returns open alerts within the inclusive [radiusKm] of [center], filtered by exact distance and
