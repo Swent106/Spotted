@@ -6,8 +6,10 @@ import com.android.spotted.model.location.LocationException
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.tasks.CancellationToken
 import com.google.android.gms.tasks.Tasks
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -90,5 +92,22 @@ class LocationRepositoryFusedTest {
 
     assertTrue(failure is LocationException.Unavailable)
     assertSame(error, failure?.cause)
+  }
+
+  @Test
+  fun getCurrentLocation_whenTheRequestIsCancelled_rethrowsCancellation() = runTest {
+    whenever(client.getCurrentLocation(any<Int>(), any<CancellationToken>()))
+        .thenReturn(Tasks.forCanceled())
+
+    // A cancelled request must stop the caller, not become a LocationException failure
+    val thrown =
+        try {
+          repository.getCurrentLocation()
+          null
+        } catch (exception: CancellationException) {
+          exception
+        }
+
+    assertNotNull(thrown)
   }
 }
