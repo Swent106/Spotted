@@ -6,6 +6,8 @@ class FakeUserRepository : UserRepository {
   private val users = ConcurrentHashMap<String, UserProfile>()
 
   var failure: Throwable? = null
+  var saveCalls: Int = 0
+    private set
 
   override suspend fun getUser(uid: String): Result<UserProfile> {
     failure?.let {
@@ -20,6 +22,7 @@ class FakeUserRepository : UserRepository {
   }
 
   override suspend fun saveUser(user: UserProfile): Result<Unit> {
+    saveCalls += 1
     failure?.let {
       return Result.failure(it)
     }
