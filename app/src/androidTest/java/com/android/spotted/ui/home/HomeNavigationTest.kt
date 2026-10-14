@@ -1,11 +1,13 @@
 package com.android.spotted.ui.home
 
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
@@ -48,9 +50,15 @@ class HomeNavigationTest {
 
   private fun node(tag: String) = composeTestRule.onNodeWithTag(tag, useUnmergedTree = true)
 
+  /** Scrolls the lazy Home list until the node tagged [tag] is composed, then returns it. */
+  private fun scrollTo(tag: String): SemanticsNodeInteraction {
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(tag))
+    return node(tag)
+  }
+
   @Test
   fun tappingAnAlert_opensItsDetail() {
-    node(HomeScreenTestTags.alertCard(NALA.id)).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
 
     node(ALERT_DETAIL_SCREEN).assertIsDisplayed().assertTextEquals("Alert ${NALA.id}")
     assertEquals(Route.ALERT_DETAIL, navController.currentDestination?.route)
@@ -58,7 +66,7 @@ class HomeNavigationTest {
 
   @Test
   fun seenButton_opensReportSightingForThatAlert() {
-    node(HomeScreenTestTags.seenButton(MILO.id)).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).performClick()
 
     node(REPORT_SIGHTING_SCREEN)
         .assertIsDisplayed()
@@ -67,14 +75,14 @@ class HomeNavigationTest {
 
   @Test
   fun reportMissingButton_opensReportMissing() {
-    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.REPORT_MISSING_BUTTON).performClick()
 
     node(REPORT_MISSING_SCREEN).assertIsDisplayed()
   }
 
   @Test
   fun back_fromAlertDetail_returnsHome() {
-    node(HomeScreenTestTags.alertCard(MILO.id)).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).performClick()
     composeTestRule.runOnIdle { navController.popBackStack() }
 
     node(HomeScreenTestTags.SCREEN).assertIsDisplayed()
