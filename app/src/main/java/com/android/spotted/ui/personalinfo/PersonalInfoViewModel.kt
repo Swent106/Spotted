@@ -17,12 +17,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PersonalInfoViewModel(
-    private val user: User,
+    private val user: User?,
     private val userRepository: UserRepository,
     private val authRepository: AuthRepository,
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow(PersonalInfoUiState(email = user.email))
+  private val _uiState =
+      MutableStateFlow(
+          PersonalInfoUiState(email = user?.email.orEmpty(), isSignedOut = user == null)
+      )
   val uiState: StateFlow<PersonalInfoUiState> = _uiState.asStateFlow()
 
   fun onNameChanged(name: String) {
@@ -83,13 +86,14 @@ class PersonalInfoViewModel(
   fun saveProfile() {
     val currentState = _uiState.value
     if (!currentState.canSave) return
+    val signedInUser = user ?: return
 
     val profile =
         UserProfile(
-            uid = user.uid,
+            uid = signedInUser.uid,
             name = currentState.name.trim(),
             phone = currentState.phone,
-            email = user.email,
+            email = signedInUser.email,
             homeArea = currentState.homeArea.trim(),
         )
 
@@ -150,20 +154,19 @@ class PersonalInfoViewModel(
   companion object {
     val Factory: ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
-          @Suppress("UNCHECKED_CAST")
           override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(PersonalInfoViewModel::class.java))
             val authRepository = AuthRepositoryProvider.authRepository
-            val user =
-                authRepository.currentUser.value
-                    ?: error("A signed-in user is required for Personal Info")
 
-            return PersonalInfoViewModel(
-                user = user,
-                userRepository = UserRepositoryFirestore(),
-                authRepository = authRepository,
+            return requireNotNull(
+                modelClass.cast(
+                    PersonalInfoViewModel(
+                        user = authRepository.currentUser.value,
+                        userRepository = UserRepositoryFirestore(),
+                        authRepository = authRepository,
+                    )
+                )
             )
-                as T
           }
         }
   }
