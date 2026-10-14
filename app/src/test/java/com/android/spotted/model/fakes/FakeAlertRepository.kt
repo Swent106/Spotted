@@ -25,6 +25,13 @@ class FakeAlertRepository : AlertRepository {
     return Result.success(Unit)
   }
 
+  override suspend fun getAlertById(id: String): Result<Alert?> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    return Result.success(alerts[id])
+  }
+
   override suspend fun getOpenAlertsNear(
       center: Location,
       radiusKm: Double,

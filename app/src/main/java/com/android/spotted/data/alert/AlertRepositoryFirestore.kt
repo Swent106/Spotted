@@ -32,6 +32,25 @@ class AlertRepositoryFirestore(
     }
   }
 
+  override suspend fun getAlertById(id: String): Result<Alert?> {
+    return try {
+      val snapshot = db.collection(collectionPath).document(id).get().await()
+      if (!snapshot.exists()) {
+        Result.success(null)
+      } else {
+        val alert =
+            snapshot.toObject(AlertDto::class.java)?.toDomain()
+                ?: throw IllegalStateException("Alert $id contains invalid data")
+        Result.success(alert)
+      }
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
   override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double): Result<List<Alert>> {
     return try {
       val snapshot =

@@ -1,12 +1,20 @@
 package com.android.spotted.ui.home
 
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import org.junit.Assert.assertEquals
@@ -18,29 +26,59 @@ class HomeScreenContentTest {
 
   @get:Rule val composeTestRule = createComposeRule()
 
-  private fun setContent(state: HomeUiState, onReportMissingClick: () -> Unit = {}) {
+  /** Number of times each callback was called, by name. */
+  private val clicks = mutableMapOf<String, Int>()
+
+  private fun click(name: String): () -> Unit = { clicks[name] = (clicks[name] ?: 0) + 1 }
+
+  private fun setContent(state: HomeUiState) {
     composeTestRule.setContent {
-      HomeScreenContent(state = state, onReportMissingClick = onReportMissingClick)
+      HomeScreenContent(
+          state = state,
+          onReportMissingClick = click("report"),
+          onRetryClick = click("retry"),
+          onSettingsClick = click("settings"),
+          onNotificationsClick = click("notifications"),
+          onMapClick = click("map"),
+          onCameraClick = click("camera"),
+          onProfileClick = click("profile"),
+      )
     }
   }
 
   private fun node(tag: String) = composeTestRule.onNodeWithTag(tag, useUnmergedTree = true)
 
+  /** Scrolls the lazy Home list until the node tagged [tag] is composed, then returns it. */
+  private fun scrollTo(tag: String): SemanticsNodeInteraction {
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(tag))
+    return node(tag)
+  }
+
+  /** The text [name] inside the card of [pet]. */
+  private fun nameInCard(name: String, pet: Pet) =
+      composeTestRule.onNode(
+          hasText(name) and hasAnyAncestor(hasTestTag(HomeScreenTestTags.petCard(pet.id))),
+          useUnmergedTree = true,
+      )
+
   @Test
-  fun allPetsAreListed() {
+  fun allPetsAreListed_eachInItsOwnCard_underOneTitle() {
     setContent(HomeUiState(pets = HomeSection(listOf(LUNA, REX))))
 
-    node(HomeScreenTestTags.petCard(LUNA.id)).performScrollTo().assertIsDisplayed()
-    node(HomeScreenTestTags.petCard(REX.id)).performScrollTo().assertIsDisplayed()
-    composeTestRule.onNodeWithText("Rex").assertExists()
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.petCard(REX.id)).assertIsDisplayed()
+    nameInCard("Luna", LUNA).assertExists()
+    nameInCard("Rex", REX).assertExists()
+    composeTestRule.onAllNodesWithText(HomeScreenTexts.PETS_TITLE).assertCountEquals(1)
     node(HomeScreenTestTags.PETS_EMPTY).assertDoesNotExist()
   }
 
   @Test
-  fun noPets_showsTheEmptyState() {
+  fun noPets_showsTheTitleAndTheEmptyState() {
     setContent(HomeUiState(pets = HomeSection()))
 
-    node(HomeScreenTestTags.PETS_EMPTY).performScrollTo().assertTextEquals(HomeScreenTexts.NO_PETS)
+    node(HomeScreenTestTags.PETS_TITLE).assertTextEquals(HomeScreenTexts.PETS_TITLE)
+    scrollTo(HomeScreenTestTags.PETS_EMPTY).assertTextEquals(HomeScreenTexts.NO_PETS)
   }
 
   @Test
@@ -52,34 +90,97 @@ class HomeScreenContentTest {
   }
 
   @Test
+  fun refreshWithPetsShown_keepsThePets_andShowsNoLoader() {
+    setContent(HomeUiState(pets = HomeSection(listOf(LUNA), isLoading = true)))
+
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
+    node(HomeScreenTestTags.PETS_LOADER).assertDoesNotExist()
+  }
+
+  @Test
   fun petsError_showsTheError_andNoEmptyState() {
     setContent(HomeUiState(pets = HomeSection(errorMessage = PETS_ERROR)))
 
-    node(HomeScreenTestTags.PETS_ERROR).performScrollTo().assertTextEquals(PETS_ERROR)
+    scrollTo(HomeScreenTestTags.PETS_ERROR).assertTextEquals(PETS_ERROR)
     node(HomeScreenTestTags.PETS_EMPTY).assertDoesNotExist()
   }
 
   @Test
-  fun header_greetsTheUser_andScreenErrorIsShown() {
-    setContent(HomeUiState(userName = "Rayen", errorMessage = HomeViewModel.NOT_SIGNED_IN))
+  fun failedRefresh_keepsThePets_andShowsTheErrorUnderThem() {
+    setContent(HomeUiState(pets = HomeSection(listOf(LUNA), errorMessage = PETS_ERROR)))
+
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.PETS_ERROR).assertTextEquals(PETS_ERROR)
+  }
+
+  @Test
+  fun retry_callsItsCallback() {
+    setContent(HomeUiState(pets = HomeSection(errorMessage = PETS_ERROR)))
+
+    scrollTo(HomeScreenTestTags.PETS_RETRY).performClick()
+
+    assertEquals(1, clicks["retry"])
+  }
+
+  @Test
+  fun header_greetsTheUserByName() {
+    setContent(HomeUiState(userName = "Rayen"))
 
     composeTestRule.onNodeWithText("Hey Rayen").assertIsDisplayed()
-    node(HomeScreenTestTags.ERROR_MESSAGE).assertTextEquals(HomeViewModel.NOT_SIGNED_IN)
+  }
+
+  @Test
+  fun header_withoutAName_saysHey() {
+    setContent(HomeUiState(userName = ""))
+
+    composeTestRule.onNodeWithText("Hey").assertIsDisplayed()
+  }
+
+  @Test
+  fun screenError_isShown() {
+    setContent(HomeUiState(errorMessage = NOT_SIGNED_IN))
+
+    node(HomeScreenTestTags.ERROR_MESSAGE).assertTextEquals(NOT_SIGNED_IN)
+  }
+
+  @Test
+  fun headerButtons_callTheirCallbacks() {
+    setContent(HomeUiState())
+
+    node(HomeScreenTestTags.SETTINGS_BUTTON).performClick()
+    node(HomeScreenTestTags.NOTIFICATIONS_BUTTON).performClick()
+
+    assertEquals(1, clicks["settings"])
+    assertEquals(1, clicks["notifications"])
+  }
+
+  @Test
+  fun tabs_callTheirCallbacks_andHomeIsSelected() {
+    setContent(HomeUiState())
+
     node(HomeScreenTestTags.TAB_BAR).assertIsDisplayed()
+    node(HomeScreenTestTags.TAB_HOME).assertIsSelected()
+    node(HomeScreenTestTags.TAB_MAP).assertIsNotSelected().performClick()
+    node(HomeScreenTestTags.TAB_CAMERA).performClick()
+    node(HomeScreenTestTags.TAB_PROFILE).performClick()
+
+    assertEquals(1, clicks["map"])
+    assertEquals(1, clicks["camera"])
+    assertEquals(1, clicks["profile"])
   }
 
   @Test
   fun reportMissingButton_callsItsCallback() {
-    var clicks = 0
-    setContent(HomeUiState(), onReportMissingClick = { clicks++ })
+    setContent(HomeUiState())
 
-    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.REPORT_MISSING_BUTTON).performClick()
 
-    assertEquals(1, clicks)
+    assertEquals(1, clicks["report"])
   }
 
   private companion object {
     const val PETS_ERROR = "Couldn't load your pets. Please try again."
+    const val NOT_SIGNED_IN = "You need to be signed in to see your pets."
     val LUNA = Pet(id = "luna", ownerId = "me", name = "Luna", species = Species.DOG)
     val REX = Pet(id = "rex", ownerId = "me", name = "Rex", species = Species.DOG)
   }
