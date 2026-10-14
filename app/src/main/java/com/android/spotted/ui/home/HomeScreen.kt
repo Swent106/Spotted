@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,10 +22,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -82,6 +84,7 @@ object HomeScreenTestTags {
   const val ALERTS_TITLE = "home_alertsTitle"
   const val ALERTS_LOADER = "home_alertsLoader"
   const val ALERTS_ERROR = "home_alertsError"
+  const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val TAB_BAR = "home_tabBar"
@@ -151,41 +154,48 @@ fun HomeScreenContent(
         modifier = Modifier.matchParentSize().alpha(0.4f),
     )
 
-    Column(
-        Modifier.fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .safeDrawingPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = TAB_BAR_SPACE)
-            .testTag(HomeScreenTestTags.BODY)
+    // Lazy, so that a long list of lost pets only composes what is on screen
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().safeDrawingPadding().testTag(HomeScreenTestTags.BODY),
+        contentPadding =
+            PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = TAB_BAR_SPACE),
     ) {
-      Header(state.userName, onSettingsClick, onNotificationsClick)
-
-      state.errorMessage?.let { message ->
-        Spacer(Modifier.height(8.dp))
-        Text(
-            message,
-            style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
-            modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
-        )
+      item(key = "header") {
+        Column {
+          Header(state.userName, onSettingsClick, onNotificationsClick)
+          state.errorMessage?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
+                modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
+            )
+          }
+        }
       }
 
-      PetsSection(state.pets, onRetryClick)
+      petsSection(state.pets, onRetryClick)
 
-      LostPetsSection(state, onAlertClick, onSeenPetClick)
+      lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
       // Report a pet missing: at the end of the scroll, as in Figma
-      Spacer(Modifier.height(9.dp))
-      OutlinedButton(
-          onClick = onReportMissingClick,
-          shape = RoundedCornerShape(14.dp),
-          border = BorderStroke(1.dp, SpottedReportBorder),
-          colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
-          modifier =
-              Modifier.fillMaxWidth()
-                  .height(52.dp)
-                  .testTag(HomeScreenTestTags.REPORT_MISSING_BUTTON),
-      ) {
-        Text("Report a pet missing", style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed))
+      item(key = "reportMissing") {
+        OutlinedButton(
+            onClick = onReportMissingClick,
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, SpottedReportBorder),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
+            modifier =
+                Modifier.padding(top = 9.dp)
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag(HomeScreenTestTags.REPORT_MISSING_BUTTON),
+        ) {
+          Text(
+              "Report a pet missing",
+              style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed),
+          )
+        }
       }
     }
 
@@ -258,35 +268,54 @@ private fun HeaderButton(
 }
 
 /** "Your pets": one title, then one card per pet, with its own loading, error and empty state. */
-@Composable
-private fun PetsSection(pets: HomeSection<Pet>, onRetryClick: () -> Unit) {
-  Spacer(Modifier.height(18.dp))
-  Text(
-      HomeScreenTexts.PETS_TITLE,
-      style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
-      modifier = Modifier.testTag(HomeScreenTestTags.PETS_TITLE),
-  )
+private fun LazyListScope.petsSection(pets: HomeSection<Pet>, onRetryClick: () -> Unit) {
+  item(key = "petsTitle") {
+    Text(
+        HomeScreenTexts.PETS_TITLE,
+        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
+        modifier = Modifier.padding(top = 18.dp).testTag(HomeScreenTestTags.PETS_TITLE),
+    )
+  }
+  val error = pets.errorMessage
   when {
-    pets.isLoading && pets.items.isEmpty() -> SectionLoader(HomeScreenTestTags.PETS_LOADER)
-    pets.errorMessage != null && pets.items.isEmpty() -> PetsError(pets.errorMessage, onRetryClick)
+    pets.isLoading && pets.items.isEmpty() ->
+        item(key = "petsLoader") { SectionLoader(HomeScreenTestTags.PETS_LOADER) }
+    error != null && pets.items.isEmpty() ->
+        item(key = "petsError") { PetsError(error, onRetryClick) }
     pets.isEmpty ->
-        SectionMessage(HomeScreenTexts.NO_PETS, SpottedTextSecondary, HomeScreenTestTags.PETS_EMPTY)
+        item(key = "petsEmpty") {
+          SectionMessage(
+              HomeScreenTexts.NO_PETS,
+              SpottedTextSecondary,
+              HomeScreenTestTags.PETS_EMPTY,
+          )
+        }
   }
-  pets.items.forEach { pet ->
-    Spacer(Modifier.height(12.dp))
-    PetCard(pet)
-  }
+  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) }
   // A refresh that failed keeps the pets and shows the error under them
-  if (pets.errorMessage != null && pets.items.isNotEmpty()) {
-    PetsError(pets.errorMessage, onRetryClick)
+  if (error != null && pets.items.isNotEmpty()) {
+    item(key = "petsError") { PetsError(error, onRetryClick) }
   }
 }
 
 @Composable
 private fun PetsError(message: String, onRetryClick: () -> Unit) {
-  SectionMessage(message, SpottedError, HomeScreenTestTags.PETS_ERROR)
-  TextButton(onClick = onRetryClick, modifier = Modifier.testTag(HomeScreenTestTags.PETS_RETRY)) {
-    Text(HomeScreenTexts.RETRY, style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected))
+  SectionError(message, HomeScreenTestTags.PETS_ERROR, HomeScreenTestTags.PETS_RETRY, onRetryClick)
+}
+
+/** An error message, with a button to try loading again. */
+@Composable
+internal fun SectionError(
+    message: String,
+    tag: String,
+    retryTag: String,
+    onRetryClick: () -> Unit,
+) {
+  Column {
+    SectionMessage(message, SpottedError, tag)
+    TextButton(onClick = onRetryClick, modifier = Modifier.testTag(retryTag)) {
+      Text(HomeScreenTexts.RETRY, style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected))
+    }
   }
 }
 
@@ -294,7 +323,8 @@ private fun PetsError(message: String, onRetryClick: () -> Unit) {
 @Composable
 private fun PetCard(pet: Pet) {
   Row(
-      Modifier.fillMaxWidth()
+      Modifier.padding(top = 12.dp)
+          .fillMaxWidth()
           .heightIn(min = 131.dp)
           .height(IntrinsicSize.Min)
           .clip(RoundedCornerShape(22.dp))
@@ -331,20 +361,19 @@ private fun PetCard(pet: Pet) {
 
 @Composable
 internal fun SectionLoader(tag: String) {
-  Spacer(Modifier.height(16.dp))
-  Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+  Box(Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
     CircularProgressIndicator(Modifier.testTag(tag))
   }
 }
 
 @Composable
 internal fun SectionMessage(message: String, color: Color, tag: String) {
-  Spacer(Modifier.height(12.dp))
   Text(
       message,
       style = jakarta(14, 18f, FontWeight.SemiBold, color),
       modifier =
-          Modifier.fillMaxWidth()
+          Modifier.padding(top = 12.dp)
+              .fillMaxWidth()
               .clip(RoundedCornerShape(16.dp))
               .background(Color.White)
               .padding(16.dp)

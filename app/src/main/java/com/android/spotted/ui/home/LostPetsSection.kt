@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.spotted.R
 import com.android.spotted.model.alert.Alert
@@ -55,23 +58,73 @@ internal fun areaLabel(homeArea: String): String {
 }
 
 /** "Lost near you": title with the count, then the alerts, newest first. */
-@Composable
-internal fun LostPetsSection(
+internal fun LazyListScope.lostPetsSection(
     state: HomeUiState,
     onAlertClick: (String) -> Unit,
     onSeenPetClick: (String) -> Unit,
+    onRetryClick: () -> Unit,
 ) {
   val lostPets = state.lostPetsNearby
-  val count = lostPets.items.size
+  val error = lostPets.errorMessage
 
-  Spacer(Modifier.height(16.dp))
+  item(key = "alertsTitle") { LostPetsTitle(state.homeArea, lostPets.items.size) }
+  when {
+    lostPets.isLoading && lostPets.items.isEmpty() ->
+        item(key = "alertsLoader") { SectionLoader(HomeScreenTestTags.ALERTS_LOADER) }
+    error != null && lostPets.items.isEmpty() ->
+        item(key = "alertsError") { AlertsError(error, onRetryClick) }
+    lostPets.isEmpty ->
+        item(key = "alertsEmpty") {
+          SectionMessage(
+              HomeScreenTexts.NO_LOST_PETS,
+              SpottedTextSecondary,
+              HomeScreenTestTags.ALERTS_EMPTY,
+          )
+        }
+  }
+
+  // The newest alert is highlighted, like Milo in Figma
+  itemsIndexed(lostPets.items, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
+    AlertCard(
+        alert,
+        featured = index == 0,
+        state.nowMillis,
+        onAlertClick,
+        onSeenPetClick,
+        Modifier.padding(top = if (index == 0) 10.dp else 16.dp),
+    )
+  }
+  if (error != null && lostPets.items.isNotEmpty()) {
+    item(key = "alertsError") { AlertsError(error, onRetryClick) }
+  }
+}
+
+@Composable
+private fun AlertsError(message: String, onRetryClick: () -> Unit) {
+  SectionError(
+      message,
+      HomeScreenTestTags.ALERTS_ERROR,
+      HomeScreenTestTags.ALERTS_RETRY,
+      onRetryClick,
+  )
+}
+
+/** "GENEVA · 3 KM AROUND YOU" and "⚠ 2 pets missing near you". */
+@Composable
+private fun LostPetsTitle(homeArea: String, count: Int) {
   Box(
-      Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(16.dp)).background(Color.White)
+      Modifier.padding(top = 16.dp)
+          .fillMaxWidth()
+          .height(58.dp)
+          .clip(RoundedCornerShape(16.dp))
+          .background(Color.White)
   ) {
     Text(
-        areaLabel(state.homeArea),
+        areaLabel(homeArea),
         style = jakarta(11, 14f, FontWeight.SemiBold, SpottedTextSecondary, spacing = 0.66f),
-        modifier = Modifier.offset(9.dp, 4.dp),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.offset(9.dp, 4.dp).padding(end = 18.dp),
     )
     Image(
         painterResource(R.drawable.ic_warning),
@@ -84,28 +137,6 @@ internal fun LostPetsSection(
         modifier = Modifier.offset(47.dp, 16.dp).testTag(HomeScreenTestTags.ALERTS_TITLE),
     )
   }
-
-  when {
-    lostPets.isLoading && lostPets.items.isEmpty() ->
-        SectionLoader(HomeScreenTestTags.ALERTS_LOADER)
-    lostPets.errorMessage != null && lostPets.items.isEmpty() ->
-        SectionMessage(lostPets.errorMessage, SpottedLostRed, HomeScreenTestTags.ALERTS_ERROR)
-    lostPets.isEmpty ->
-        SectionMessage(
-            HomeScreenTexts.NO_LOST_PETS,
-            SpottedTextSecondary,
-            HomeScreenTestTags.ALERTS_EMPTY,
-        )
-  }
-
-  // The newest alert is highlighted, like Milo in Figma
-  lostPets.items.forEachIndexed { index, alert ->
-    Spacer(Modifier.height(if (index == 0) 10.dp else 16.dp))
-    AlertCard(alert, featured = index == 0, state.nowMillis, onAlertClick, onSeenPetClick)
-  }
-  if (lostPets.errorMessage != null && lostPets.items.isNotEmpty()) {
-    SectionMessage(lostPets.errorMessage, SpottedLostRed, HomeScreenTestTags.ALERTS_ERROR)
-  }
 }
 
 /** One lost pet: photo, name, species, time lost; the featured one has "I have seen this pet". */
@@ -116,11 +147,13 @@ private fun AlertCard(
     nowMillis: Long,
     onAlertClick: (String) -> Unit,
     onSeenPetClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
   Column(
       verticalArrangement = Arrangement.spacedBy(14.dp),
       modifier =
-          Modifier.fillMaxWidth()
+          modifier
+              .fillMaxWidth()
               .clip(RoundedCornerShape(22.dp))
               .background(Color.White)
               .clickable { onAlertClick(alert.id) }

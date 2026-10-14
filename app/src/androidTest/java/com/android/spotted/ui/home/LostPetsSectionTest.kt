@@ -1,12 +1,14 @@
 package com.android.spotted.ui.home
 
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
@@ -24,20 +26,32 @@ class LostPetsSectionTest {
       state: HomeUiState,
       onAlertClick: (String) -> Unit = {},
       onSeenPetClick: (String) -> Unit = {},
+      onRetryClick: () -> Unit = {},
   ) {
     composeTestRule.setContent {
-      HomeScreenContent(state = state, onAlertClick = onAlertClick, onSeenPetClick = onSeenPetClick)
+      HomeScreenContent(
+          state = state,
+          onAlertClick = onAlertClick,
+          onSeenPetClick = onSeenPetClick,
+          onRetryClick = onRetryClick,
+      )
     }
   }
 
   private fun node(tag: String) = composeTestRule.onNodeWithTag(tag, useUnmergedTree = true)
 
+  /** Scrolls the lazy Home list until the node tagged [tag] is composed, then returns it. */
+  private fun scrollTo(tag: String): SemanticsNodeInteraction {
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(tag))
+    return node(tag)
+  }
+
   @Test
   fun lostPetsAreListed_withNameSpeciesAndTimeLost() {
     setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO, NALA)), nowMillis = NOW))
 
-    node(HomeScreenTestTags.alertCard(MILO.id)).performScrollTo().assertIsDisplayed()
-    node(HomeScreenTestTags.alertCard(NALA.id)).performScrollTo().assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
     composeTestRule.onNodeWithText("Cat").assertExists()
     composeTestRule.onNodeWithText("Lost 2 h ago").assertExists()
     composeTestRule.onNodeWithText("Lost yesterday").assertExists()
@@ -57,9 +71,7 @@ class LostPetsSectionTest {
   fun noLostPets_showsTheirEmptyState() {
     setContent(HomeUiState(lostPetsNearby = HomeSection()))
 
-    node(HomeScreenTestTags.ALERTS_EMPTY)
-        .performScrollTo()
-        .assertTextEquals(HomeScreenTexts.NO_LOST_PETS)
+    scrollTo(HomeScreenTestTags.ALERTS_EMPTY).assertTextEquals(HomeScreenTexts.NO_LOST_PETS)
     node(HomeScreenTestTags.ALERTS_TITLE).assertTextEquals("0 pets missing near you")
   }
 
@@ -67,8 +79,21 @@ class LostPetsSectionTest {
   fun lostPetsError_showsTheirError_andNoEmptyState() {
     setContent(HomeUiState(lostPetsNearby = HomeSection(errorMessage = ALERTS_ERROR)))
 
-    node(HomeScreenTestTags.ALERTS_ERROR).performScrollTo().assertTextEquals(ALERTS_ERROR)
+    scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertTextEquals(ALERTS_ERROR)
     node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
+  }
+
+  @Test
+  fun lostPetsRetry_callsItsCallback() {
+    var retries = 0
+    setContent(
+        HomeUiState(lostPetsNearby = HomeSection(errorMessage = ALERTS_ERROR)),
+        onRetryClick = { retries++ },
+    )
+
+    scrollTo(HomeScreenTestTags.ALERTS_RETRY).performClick()
+
+    assertEquals(1, retries)
   }
 
   @Test
@@ -82,8 +107,8 @@ class LostPetsSectionTest {
   fun bothSections_showTheirOwnEmptyState() {
     setContent(HomeUiState(pets = HomeSection(), lostPetsNearby = HomeSection()))
 
-    node(HomeScreenTestTags.PETS_EMPTY).performScrollTo().assertIsDisplayed()
-    node(HomeScreenTestTags.ALERTS_EMPTY).performScrollTo().assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.PETS_EMPTY).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.ALERTS_EMPTY).assertIsDisplayed()
   }
 
   @Test
@@ -95,8 +120,8 @@ class LostPetsSectionTest {
         )
     )
 
-    node(HomeScreenTestTags.petCard(LUNA.id)).performScrollTo().assertIsDisplayed()
-    node(HomeScreenTestTags.ALERTS_ERROR).performScrollTo().assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertIsDisplayed()
     node(HomeScreenTestTags.PETS_ERROR).assertDoesNotExist()
   }
 
@@ -110,8 +135,8 @@ class LostPetsSectionTest {
         onSeenPetClick = { seen += it },
     )
 
-    node(HomeScreenTestTags.alertCard(NALA.id)).performScrollTo().performClick()
-    node(HomeScreenTestTags.seenButton(MILO.id)).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
+    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).performClick()
 
     assertEquals(listOf(NALA.id), clicked)
     assertEquals(listOf(MILO.id), seen)
