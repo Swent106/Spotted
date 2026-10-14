@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
 import androidx.lifecycle.ViewModel
@@ -73,6 +74,19 @@ class HomeViewModel(
     load(authRepository.currentUser.value)
   }
 
+  /**
+   * Signs the user out. On success the signed-in user becomes null, so this state is cleared and
+   * MainViewModel sends the app back to Sign in. On failure the screen stays as it is, with an
+   * error.
+   */
+  fun signOut() {
+    viewModelScope.launch {
+      authRepository.signOut().onFailure {
+        _uiState.update { state -> state.copy(errorMessage = SIGN_OUT_FAILED) }
+      }
+    }
+  }
+
   private fun load(user: User?) {
     loadJob?.cancel()
     if (user == null) {
@@ -140,6 +154,7 @@ class HomeViewModel(
     const val NOT_SIGNED_IN = "You need to be signed in to see your pets."
     const val PETS_LOAD_FAILED = "Couldn't load your pets. Please try again."
     const val LOST_PETS_LOAD_FAILED = "Couldn't load the lost pets near you. Please try again."
+    const val SIGN_OUT_FAILED = "Couldn't sign out. Please try again."
 
     /** Geneva city centre: used until the home area is saved with coordinates. */
     val DEFAULT_SEARCH_CENTER = Location(latitude = 46.2044, longitude = 6.1432)
