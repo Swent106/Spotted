@@ -18,6 +18,10 @@ import kotlinx.coroutines.tasks.await
 /**
  * [LocationRepository] backed by Google Play services' fused location provider.
  *
+ * Failures are returned as [Result.failure] with a [LocationException], never thrown: a missing
+ * permission gives [LocationException.PermissionDenied], and no position (location turned off, no
+ * fix, or any other error from the provider) gives [LocationException.Unavailable].
+ *
  * @property client asks the device for its position.
  * @property hasPermission true when the app may read the location (precise or approximate).
  */
@@ -51,6 +55,8 @@ class LocationRepositoryFused(
         Result.success(Location(latitude = position.latitude, longitude = position.longitude))
       }
     } catch (exception: CancellationException) {
+      // Rethrown, not turned into a failure: the caller was cancelled (e.g. the screen was closed),
+      // so the coroutine must stop instead of going on with a result nobody waits for
       throw exception
     } catch (exception: SecurityException) {
       // The permission was revoked between the check and the request
