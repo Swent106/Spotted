@@ -13,6 +13,9 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -20,7 +23,8 @@ import kotlinx.coroutines.tasks.await
  *
  * Failures are returned as [Result.failure] with a [LocationException], never thrown: a missing
  * permission gives [LocationException.PermissionDenied], and no position (location turned off, no
- * fix, or any other error from the provider) gives [LocationException.Unavailable].
+ * fix, request cancelled by Play services, or any other error from the provider) gives
+ * [LocationException.Unavailable]. Only the caller's own cancellation is rethrown.
  *
  * @property client asks the device for its position.
  * @property hasPermission true when the app may read the location (precise or approximate).
@@ -34,10 +38,12 @@ class LocationRepositoryFused(
   constructor(
       context: Context
   ) : this(
-      client = LocationServices.getFusedLocationProviderClient(context),
-      hasPermission = { hasLocationPermission(context) },
+      client = LocationServices.getFusedLocationProviderClient(context.applicationContext),
+      hasPermission = { hasLocationPermission(context.applicationContext) },
   )
 
+  // await(CancellationTokenSource) is marked experimental in kotlinx-coroutines-play-services
+  @OptIn(ExperimentalCoroutinesApi::class)
   override suspend fun getCurrentLocation(): Result<Location> {
     if (!hasPermission()) return Result.failure(LocationException.PermissionDenied())
     // Cancels the request if the caller is cancelled (e.g. the screen is closed)
@@ -55,9 +61,11 @@ class LocationRepositoryFused(
         Result.success(Location(latitude = position.latitude, longitude = position.longitude))
       }
     } catch (exception: CancellationException) {
-      // Rethrown, not turned into a failure: the caller was cancelled (e.g. the screen was closed),
-      // so the coroutine must stop instead of going on with a result nobody waits for
-      throw exception
+      // If the caller was cancelled (e.g. the screen was closed), this rethrows: the coroutine must
+      // stop instead of going on with a result nobody waits for
+      currentCoroutineContext().ensureActive()
+      // Otherwise Play services cancelled the request itself, so no position was found
+      Result.failure(LocationException.Unavailable(exception))
     } catch (exception: SecurityException) {
       // The permission was revoked between the check and the request
       Result.failure(LocationException.PermissionDenied(exception))

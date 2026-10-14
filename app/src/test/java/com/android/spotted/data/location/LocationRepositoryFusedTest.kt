@@ -5,16 +5,19 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.location.LocationException
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.tasks.CancellationToken
+import com.google.android.gms.tasks.TaskCompletionSource
 import com.google.android.gms.tasks.Tasks
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -95,19 +98,30 @@ class LocationRepositoryFusedTest {
   }
 
   @Test
-  fun getCurrentLocation_whenTheRequestIsCancelled_rethrowsCancellation() = runTest {
+  fun getCurrentLocation_whenPlayServicesCancelsTheRequest_failsAsUnavailable() = runTest {
     whenever(client.getCurrentLocation(any<Int>(), any<CancellationToken>()))
         .thenReturn(Tasks.forCanceled())
 
-    // A cancelled request must stop the caller, not become a LocationException failure
-    val thrown =
-        try {
-          repository.getCurrentLocation()
-          null
-        } catch (exception: CancellationException) {
-          exception
-        }
+    // The caller is still active, so it gets a failure instead of being stopped
+    assertTrue(repository.getCurrentLocation().exceptionOrNull() is LocationException.Unavailable)
+  }
 
-    assertNotNull(thrown)
+  @Test
+  fun getCurrentLocation_whenTheCallerIsCancelled_stopsAndCancelsTheRequest() = runTest {
+    // A request that never ends, like a GPS fix that takes too long
+    val token = argumentCaptor<CancellationToken>()
+    whenever(client.getCurrentLocation(any<Int>(), token.capture()))
+        .thenReturn(TaskCompletionSource<android.location.Location>().task)
+    var result: Result<Location>? = null
+
+    val caller = launch { result = repository.getCurrentLocation() }
+    runCurrent()
+    caller.cancel()
+    runCurrent()
+
+    // The caller stops without a result, and the device request is cancelled too
+    assertTrue(caller.isCancelled)
+    assertNull(result)
+    assertTrue(token.firstValue.isCancellationRequested)
   }
 }
