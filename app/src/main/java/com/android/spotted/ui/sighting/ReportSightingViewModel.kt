@@ -3,10 +3,12 @@ package com.android.spotted.ui.sighting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.spotted.data.photo.PhotoRepositoryFirebaseStorage
+import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
-import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
@@ -20,10 +22,8 @@ import kotlinx.coroutines.launch
 class ReportSightingViewModel(
     private val sightingRepository: SightingRepository,
     private val photoRepository: PhotoRepository,
+    private val authRepository: AuthRepository = AuthRepositoryProvider.authRepository,
     private val now: () -> Long = { System.currentTimeMillis() },
-    private val reporterIdProvider: () -> String = {
-      AuthRepositoryProvider.authRepository.currentUser.value?.uid ?: "anonymous_reporter"
-    },
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(ReportSightingUiState())
@@ -42,11 +42,27 @@ class ReportSightingViewModel(
   }
 
   fun selectAlert(alertId: String) {
-    _uiState.update { it.copy(selectedAlertId = alertId, isNoMatchingAlertSelected = false) }
+    _uiState.update { currentState ->
+      val alert = currentState.nearbyAlerts.firstOrNull { it.alertId == alertId }
+      val autoSpecies =
+          alert?.species ?: currentState.detectedSpecies ?: currentState.selectedSpecies
+      currentState.copy(
+          selectedAlertId = alertId,
+          isNoMatchingAlertSelected = false,
+          selectedSpecies = autoSpecies,
+      )
+    }
   }
 
   fun selectNoMatchingAlert() {
-    _uiState.update { it.copy(selectedAlertId = null, isNoMatchingAlertSelected = true) }
+    _uiState.update { currentState ->
+      val autoSpecies = currentState.detectedSpecies ?: currentState.selectedSpecies ?: Species.DOG
+      currentState.copy(
+          selectedAlertId = null,
+          isNoMatchingAlertSelected = true,
+          selectedSpecies = autoSpecies,
+      )
+    }
   }
 
   fun clearErrorMessage() {
@@ -54,6 +70,12 @@ class ReportSightingViewModel(
   }
 
   fun submitSighting() {
+    val currentUser = authRepository.currentUser.value
+    if (currentUser == null) {
+      _uiState.update { it.copy(errorMessage = "You must be signed in to submit a sighting") }
+      return
+    }
+
     val currentState = _uiState.value
     if (!currentState.canSubmit) {
       _uiState.update { it.copy(errorMessage = "Species and position are required") }
@@ -68,7 +90,7 @@ class ReportSightingViewModel(
     viewModelScope.launch {
       try {
         val sightingId = sightingRepository.getNewId()
-        val reporterId = reporterIdProvider()
+        val reporterId = currentUser.uid
 
         var uploadedPhotoUrl: String? = null
         val photoUri = currentState.photoUri
@@ -133,18 +155,9 @@ class ReportSightingViewModel(
           @Suppress("UNCHECKED_CAST")
           override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return ReportSightingViewModel(
-                sightingRepository =
-                    object : SightingRepository {
-                      override fun getNewId(): String = "sighting_id"
-
-                      override suspend fun reportSighting(sighting: Sighting): Result<Unit> =
-                          Result.success(Unit)
-
-                      override suspend fun getSightingsForAlert(
-                          alertId: String
-                      ): Result<List<Sighting>> = Result.success(emptyList())
-                    },
-                photoRepository = FakePhotoRepository(),
+                sightingRepository = SightingRepositoryFirestore(),
+                photoRepository = PhotoRepositoryFirebaseStorage(),
+                authRepository = AuthRepositoryProvider.authRepository,
             )
                 as T
           }

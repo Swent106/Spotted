@@ -8,14 +8,15 @@ data class NearbyAlertOption(
     val petName: String,
     val description: String,
     val photoUrl: String? = null,
+    val species: Species? = null,
 )
 
 data class ReportSightingUiState(
     val selectedSpecies: Species? = null,
     val selectedAlertId: String? = null,
     val isNoMatchingAlertSelected: Boolean = false,
-    val location: Location? = Location(46.5197, 6.6323), // Default placeholder location (Lausanne)
-    val locationAddress: String = "Lausanne, Switzerland",
+    val location: Location? = null,
+    val locationAddress: String = "Tap to set location",
     val photoUri: String? = null,
     val detectedSpecies: Species? = null,
     val nearbyAlerts: List<NearbyAlertOption> = emptyList(),

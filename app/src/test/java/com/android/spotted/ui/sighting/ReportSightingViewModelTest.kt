@@ -2,6 +2,7 @@ package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.sighting.Sighting
@@ -27,22 +28,27 @@ class ReportSightingViewModelTest {
   private val testDispatcher = UnconfinedTestDispatcher()
   private lateinit var sightingRepository: FakeSightingRepository
   private lateinit var photoRepository: FakePhotoRepository
+  private lateinit var authRepository: FakeAuthRepository
   private lateinit var viewModel: ReportSightingViewModel
 
   private val fixedTimestamp = 123456789L
-  private val fixedReporterId = "test_reporter_123"
 
   @Before
-  fun setUp() {
+  fun setUp() = runTest {
     Dispatchers.setMain(testDispatcher)
     sightingRepository = FakeSightingRepository()
     photoRepository = FakePhotoRepository()
+    authRepository = FakeAuthRepository()
+
+    // Sign in user by default for tests
+    authRepository.signInWithGoogle("valid_token")
+
     viewModel =
         ReportSightingViewModel(
             sightingRepository = sightingRepository,
             photoRepository = photoRepository,
+            authRepository = authRepository,
             now = { fixedTimestamp },
-            reporterIdProvider = { fixedReporterId },
         )
   }
 
@@ -53,19 +59,20 @@ class ReportSightingViewModelTest {
 
   @Test
   fun nearbyAlertOption_propertiesAndEquals() {
-    val option1 = NearbyAlertOption("1", "Milo", "Orange cat", "http://photo.jpg")
-    val option2 = NearbyAlertOption("1", "Milo", "Orange cat", "http://photo.jpg")
+    val option1 = NearbyAlertOption("1", "Milo", "Orange cat", "http://photo.jpg", Species.CAT)
+    val option2 = NearbyAlertOption("1", "Milo", "Orange cat", "http://photo.jpg", Species.CAT)
 
     assertEquals("1", option1.alertId)
     assertEquals("Milo", option1.petName)
     assertEquals("Orange cat", option1.description)
     assertEquals("http://photo.jpg", option1.photoUrl)
+    assertEquals(Species.CAT, option1.species)
     assertEquals(option1, option2)
   }
 
   @Test
   fun defaultConstructorParameters_workCorrectly() {
-    val vm = ReportSightingViewModel(sightingRepository, photoRepository)
+    val vm = ReportSightingViewModel(sightingRepository, photoRepository, authRepository)
     assertNotNull(vm)
   }
 
@@ -96,6 +103,32 @@ class ReportSightingViewModelTest {
             .isSuccess,
     )
     assertTrue(innerRepo.getSightingsForAlert("alert-1").getOrNull()?.isEmpty() == true)
+  }
+
+  @Test
+  fun selectAlert_and_selectNoMatchingAlert_autoPrefillSpecies() {
+    viewModel.selectNoMatchingAlert()
+    assertEquals(Species.DOG, viewModel.uiState.value.selectedSpecies)
+
+    viewModel.setSpecies(Species.CAT)
+    viewModel.selectAlert("alert_1")
+    assertEquals("alert_1", viewModel.uiState.value.selectedAlertId)
+  }
+
+  @Test
+  fun submitSighting_unauthenticated_blocksSubmission() = runTest {
+    authRepository.signOut()
+
+    viewModel.setSpecies(Species.DOG)
+    viewModel.setLocation(Location(46.5197, 6.6323))
+    viewModel.selectNoMatchingAlert()
+
+    viewModel.submitSighting()
+
+    val state = viewModel.uiState.value
+    assertFalse(state.submitted)
+    assertEquals("You must be signed in to submit a sighting", state.errorMessage)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
   }
 
   @Test
@@ -141,7 +174,7 @@ class ReportSightingViewModelTest {
 
     assertEquals(1, sightingRepository.reportedSightings.size)
     val saved = sightingRepository.reportedSightings.first()
-    assertEquals(fixedReporterId, saved.reporterId)
+    assertEquals("fake_uid_from_token", saved.reporterId)
     assertEquals(fixedTimestamp, saved.seenAtMillis)
     assertEquals(Species.DOG, saved.species)
     assertNull(saved.alertId)
@@ -149,8 +182,9 @@ class ReportSightingViewModelTest {
   }
 
   @Test
-  fun submitSighting_validationError_whenSpeciesMissing() = runTest {
-    viewModel.setLocation(Location(46.5, 6.6))
+  fun submitSighting_validationError_whenLocationMissing() = runTest {
+    // Species set, but location is null
+    viewModel.setSpecies(Species.DOG)
     viewModel.selectNoMatchingAlert()
 
     assertFalse(viewModel.uiState.value.canSubmit)
@@ -218,6 +252,7 @@ class ReportSightingViewModelTest {
         ReportSightingViewModel(
             sightingRepository = throwingRepo,
             photoRepository = photoRepository,
+            authRepository = authRepository,
         )
 
     vm.setSpecies(Species.DOG)
