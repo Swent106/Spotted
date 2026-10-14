@@ -1,9 +1,12 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.alert
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.runBlocking
@@ -59,7 +62,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
       petId: String,
       ownerId: String,
       name: String = "Pet",
-      species: Species = Species.DOG
+      species: Species = Species.DOG,
   ) {
     firestore
         .collection("pets")
@@ -74,7 +77,9 @@ class AlertRepositoryFirestoreInstrumentedTest {
                 "photoUrl" to null,
                 "allergies" to emptyList<String>(),
                 "behaviors" to emptyList<String>(), // Set -> List, Firestore can't store Sets
-                "note" to ""))
+                "note" to "",
+            )
+        )
         .await()
     createdPetIds.add(petId)
   }
@@ -104,12 +109,15 @@ class AlertRepositoryFirestoreInstrumentedTest {
             lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
             lostAtMillis = 1000000L,
             petName = "Rex",
-            petSpecies = Species.DOG)
+            petSpecies = Species.DOG,
+        )
 
     val result = repository.publishAlert(alert)
     createdAlertIds.add(alertId)
     assertTrue(
-        "publishAlert should be successful: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        "publishAlert should be successful: ${result.exceptionOrNull()?.message}",
+        result.isSuccess,
+    )
 
     // Verify it was actually written to the emulator
     val snapshot = firestore.collection("alerts").document(alertId).get().await()
@@ -117,6 +125,49 @@ class AlertRepositoryFirestoreInstrumentedTest {
     assertEquals("Rex", snapshot.getString("petName"))
     assertEquals(alertId, snapshot.getString("id"))
     assertEquals(ownerId, snapshot.getString("ownerId"))
+  }
+
+  @Test
+  fun getAlertById_returnsAlertWithCopiedPetDetails() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Luna", Species.CAT)
+
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            status = AlertStatus.OPEN,
+            petName = "Luna",
+            petSpecies = Species.CAT,
+            petPhotoUrl = "https://example.com/luna.jpg",
+            petAllergies = listOf("chicken"),
+            petBehaviors = setOf(Behavior.FEARFUL_OF_STRANGERS),
+        )
+    val publishResult = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue(
+        "Alert should be published: ${publishResult.exceptionOrNull()?.message}",
+        publishResult.isSuccess,
+    )
+
+    val result = repository.getAlertById(alert.id)
+
+    assertTrue("Lookup should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    assertEquals(alert, result.getOrNull())
+  }
+
+  @Test
+  fun getAlertById_returnsNullWhenDocumentDoesNotExist() = runBlocking {
+    val missingAlertId = "missing-${java.util.UUID.randomUUID()}"
+
+    val result = repository.getAlertById(missingAlertId)
+
+    assertTrue("Lookup should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    assertEquals(null, result.getOrNull())
   }
 
   @Test
@@ -138,7 +189,8 @@ class AlertRepositoryFirestoreInstrumentedTest {
             lastKnownLocation = Location(latitude = 46.001, longitude = 6.001),
             lostAtMillis = 2000L,
             petName = "Close",
-            petSpecies = Species.DOG)
+            petSpecies = Species.DOG,
+        )
     // 2. Open but far away
     val alert2 =
         Alert(
@@ -148,7 +200,8 @@ class AlertRepositoryFirestoreInstrumentedTest {
             lastKnownLocation = Location(latitude = 47.0, longitude = 7.0),
             lostAtMillis = 3000L,
             petName = "Far",
-            petSpecies = Species.CAT)
+            petSpecies = Species.CAT,
+        )
 
     val publish1 = repository.publishAlert(alert1)
     createdAlertIds.add(alert1.id)
@@ -156,9 +209,13 @@ class AlertRepositoryFirestoreInstrumentedTest {
     createdAlertIds.add(alert2.id)
 
     assertTrue(
-        "alert1 should be published: ${publish1.exceptionOrNull()?.message}", publish1.isSuccess)
+        "alert1 should be published: ${publish1.exceptionOrNull()?.message}",
+        publish1.isSuccess,
+    )
     assertTrue(
-        "alert2 should be published: ${publish2.exceptionOrNull()?.message}", publish2.isSuccess)
+        "alert2 should be published: ${publish2.exceptionOrNull()?.message}",
+        publish2.isSuccess,
+    )
 
     // Act: search within a 5 km radius
     val result = repository.getOpenAlertsNear(center, radiusKm = 5.0)
