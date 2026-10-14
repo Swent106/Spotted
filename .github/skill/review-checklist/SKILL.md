@@ -1,14 +1,17 @@
----
-name: code-review
-description: Review code changes in the Spotted Kotlin/Android app against the team checklist (scope, MVVM architecture, Kotlin and coroutines, Compose UI, Firebase, tests, security, style). Use this skill whenever the user asks to review a diff, a branch, a PR, staged changes, or "my changes", or asks whether something is ready to merge or submit, even if they don't say "code review".
----
-
 # Code review
 
 Review the changes; do not fix them. This skill produces a report only.
 Never edit files during a review. Proposed fixes go in the report, and are
 applied only after the user approves them (see "Plan before you change
 anything" in AGENTS.md).
+
+This skill has two modes:
+
+- **Review mode** (default): sections 1 to 4, ending with a written report.
+- **Coach mode**: section 5. Use it when the user asks to be quizzed,
+  grilled, or prepared for the Friday meeting ("coach mode", "grill me",
+  "ask me questions about my code", "prepare me for the coaches"). At the
+  end of a review, also offer it in one line.
 
 ## 1. Establish what is being reviewed
 
@@ -118,4 +121,104 @@ paste large diffs. Reference code as `path/File.kt:line`.
 6. **Questions**: anything that depends on intent you cannot infer.
 
 Skip any empty section rather than writing "none". End by asking which fixes,
-if any, the user wants applied.
+if any, the user wants applied, and offer coach mode in one line
+("Want me to quiz you on this code like the Friday coaches?").
+
+## 5. Coach mode: the Friday meeting rehearsal
+
+Play the two SwEnt coaches at the Friday Scrum meeting. Their goal is to check
+that the programmer understands and owns the code they merged or approved,
+including code written with AI help. This mode is a conversation, not a report.
+Still never edit files.
+
+### Setup
+
+1. Establish the scope exactly as in section 1 (default: current branch vs
+   `main`; or the PR, issue, or files the user names). Read the diff, the PR
+   description, the linked issue and its acceptance criteria, and the tests.
+2. Silently prepare 6 to 8 questions grounded in **this specific code**: name
+   the file, function, or line. Never ask generic textbook questions that
+   could apply to any project.
+3. Introduce the two coaches in one line each, then start. Example:
+   "**Coach A** (architecture and code) and **Coach B** (tests and process).
+   Let's look at your PR #42, *Add sighting repository*."
+
+### Rules of the conversation
+
+- Ask **one question at a time**, prefixed by the coach asking it
+  (**Coach A:** / **Coach B:**). Alternate between the coaches. Then stop
+  and wait for the answer.
+- Never answer your own question, and never give hints in the question.
+- After each answer, react the way a coach would:
+  - **Good, complete answer:** acknowledge it briefly, move on.
+  - **Vague or partial answer:** ask one follow-up that digs deeper
+    ("What exactly happens if…?", "Can you show me the line?").
+  - **Wrong answer or "I don't know":** say so plainly and kindly, give the
+    correct explanation in two or three sentences, pointing to
+    `path/File.kt:line`, and note it for the debrief.
+- Ask at most one follow-up per question, then move on.
+- Be direct but friendly: the aim is preparation, not humiliation.
+- If the user says "stop", "skip", or "debrief", jump to the debrief.
+
+### Question bank
+
+Pick from these categories, adapted to the actual change. Cover at least
+four categories, and ask the harder questions about the most important part
+of the change.
+
+**Understanding the code (Coach A)**
+- "Walk me through what happens, step by step, when the user taps *X*."
+- "Why is this a `StateFlow` and not a `MutableStateFlow` here?"
+- "What does this line do?" (pick a dense or AI-looking line, e.g. a Flow
+  operator, a `LaunchedEffect` key, a `Result` chain)
+- "Why did you put this logic in the ViewModel and not in the composable,
+  or the repository?"
+
+**Design choices and alternatives (Coach A)**
+- "What other approach did you consider, and why did you pick this one?"
+- "Why an interface for this repository? What does it buy you?"
+- "How would this change if we later needed *Y*?" (a plausible next story
+  from the backlog)
+
+**Failure cases (Coach A)**
+- "What happens if Firestore fails or the phone is offline here?"
+- "What does the user see while this is loading, and on error?"
+- "What happens on rotation, or if the user presses back in the middle?"
+- "Can this coroutine be cancelled? What happens to `CancellationException`?"
+
+**Tests (Coach B)**
+- "Which test would fail if I deleted this line?"
+- "Why is this test in `test` and not in `androidTest`, or the opposite?"
+- "How do you make the failure case happen in your tests?" (fakes, failure
+  switches)
+- "Is this test deterministic? What controls time and the dispatcher?"
+- "What is not covered yet, and why?"
+
+**Process and Scrum (Coach B)**
+- "Which user story and acceptance criteria does this PR close? Show me
+  where each criterion is met."
+- "What was your estimate for this task, and how long did it really take?
+  Why the difference?"
+- "Who reviewed it, and what did the review change?"
+- "Is it Done according to the team's Definition of Done?"
+
+**AI use (Coach B)**
+- "Which parts did an AI help with? How did you check them?"
+- "Explain this part in your own words, without reading the code."
+
+### Debrief
+
+After the last question (or when the user asks), switch out of character and
+give a short debrief:
+
+1. **Verdict**: one line, e.g. "You'd be comfortable on Friday" or
+   "Review these two points before Friday".
+2. **Strong answers**: one or two things the programmer explained well.
+3. **To review before Friday**: each weak or wrong answer, with the short
+   correct explanation and the file and line to reread.
+4. **Code issues found along the way**: anything the questions revealed that
+   should be fixed, worded as review findings (do not fix them; offer the
+   normal review flow).
+
+Keep the debrief under 15 lines. Offer one more round focused on the weak
+areas.
