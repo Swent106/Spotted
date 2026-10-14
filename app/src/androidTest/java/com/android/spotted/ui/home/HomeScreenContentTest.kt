@@ -1,5 +1,6 @@
 package com.android.spotted.ui.home
 
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
@@ -13,7 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import org.junit.Assert.assertEquals
@@ -47,6 +48,12 @@ class HomeScreenContentTest {
 
   private fun node(tag: String) = composeTestRule.onNodeWithTag(tag, useUnmergedTree = true)
 
+  /** Scrolls the lazy Home list until the node tagged [tag] is composed, then returns it. */
+  private fun scrollTo(tag: String): SemanticsNodeInteraction {
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(tag))
+    return node(tag)
+  }
+
   /** The text [name] inside the card of [pet]. */
   private fun nameInCard(name: String, pet: Pet) =
       composeTestRule.onNode(
@@ -58,8 +65,8 @@ class HomeScreenContentTest {
   fun allPetsAreListed_eachInItsOwnCard_underOneTitle() {
     setContent(HomeUiState(pets = HomeSection(listOf(LUNA, REX))))
 
-    node(HomeScreenTestTags.petCard(LUNA.id)).performScrollTo().assertIsDisplayed()
-    node(HomeScreenTestTags.petCard(REX.id)).performScrollTo().assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.petCard(REX.id)).assertIsDisplayed()
     nameInCard("Luna", LUNA).assertExists()
     nameInCard("Rex", REX).assertExists()
     composeTestRule.onAllNodesWithText(HomeScreenTexts.PETS_TITLE).assertCountEquals(1)
@@ -71,7 +78,7 @@ class HomeScreenContentTest {
     setContent(HomeUiState(pets = HomeSection()))
 
     node(HomeScreenTestTags.PETS_TITLE).assertTextEquals(HomeScreenTexts.PETS_TITLE)
-    node(HomeScreenTestTags.PETS_EMPTY).performScrollTo().assertTextEquals(HomeScreenTexts.NO_PETS)
+    scrollTo(HomeScreenTestTags.PETS_EMPTY).assertTextEquals(HomeScreenTexts.NO_PETS)
   }
 
   @Test
@@ -86,7 +93,7 @@ class HomeScreenContentTest {
   fun refreshWithPetsShown_keepsThePets_andShowsNoLoader() {
     setContent(HomeUiState(pets = HomeSection(listOf(LUNA), isLoading = true)))
 
-    node(HomeScreenTestTags.petCard(LUNA.id)).performScrollTo().assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
     node(HomeScreenTestTags.PETS_LOADER).assertDoesNotExist()
   }
 
@@ -94,7 +101,7 @@ class HomeScreenContentTest {
   fun petsError_showsTheError_andNoEmptyState() {
     setContent(HomeUiState(pets = HomeSection(errorMessage = PETS_ERROR)))
 
-    node(HomeScreenTestTags.PETS_ERROR).performScrollTo().assertTextEquals(PETS_ERROR)
+    scrollTo(HomeScreenTestTags.PETS_ERROR).assertTextEquals(PETS_ERROR)
     node(HomeScreenTestTags.PETS_EMPTY).assertDoesNotExist()
   }
 
@@ -102,15 +109,15 @@ class HomeScreenContentTest {
   fun failedRefresh_keepsThePets_andShowsTheErrorUnderThem() {
     setContent(HomeUiState(pets = HomeSection(listOf(LUNA), errorMessage = PETS_ERROR)))
 
-    node(HomeScreenTestTags.petCard(LUNA.id)).performScrollTo().assertIsDisplayed()
-    node(HomeScreenTestTags.PETS_ERROR).performScrollTo().assertTextEquals(PETS_ERROR)
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.PETS_ERROR).assertTextEquals(PETS_ERROR)
   }
 
   @Test
   fun retry_callsItsCallback() {
     setContent(HomeUiState(pets = HomeSection(errorMessage = PETS_ERROR)))
 
-    node(HomeScreenTestTags.PETS_RETRY).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.PETS_RETRY).performClick()
 
     assertEquals(1, clicks["retry"])
   }
@@ -166,7 +173,7 @@ class HomeScreenContentTest {
   fun reportMissingButton_callsItsCallback() {
     setContent(HomeUiState())
 
-    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).performScrollTo().performClick()
+    scrollTo(HomeScreenTestTags.REPORT_MISSING_BUTTON).performClick()
 
     assertEquals(1, clicks["report"])
   }

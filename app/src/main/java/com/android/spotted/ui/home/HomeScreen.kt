@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,10 +22,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +40,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -50,8 +53,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.theme.SpottedAvatarBackground
 import com.android.spotted.ui.theme.SpottedError
 import com.android.spotted.ui.theme.SpottedHomeBackground
@@ -76,6 +81,11 @@ object HomeScreenTestTags {
   const val PETS_ERROR = "home_petsError"
   const val PETS_RETRY = "home_petsRetry"
   const val PETS_EMPTY = "home_petsEmpty"
+  const val ALERTS_TITLE = "home_alertsTitle"
+  const val ALERTS_LOADER = "home_alertsLoader"
+  const val ALERTS_ERROR = "home_alertsError"
+  const val ALERTS_RETRY = "home_alertsRetry"
+  const val ALERTS_EMPTY = "home_alertsEmpty"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val TAB_BAR = "home_tabBar"
   const val TAB_HOME = "home_tabHome"
@@ -84,12 +94,17 @@ object HomeScreenTestTags {
   const val TAB_PROFILE = "home_tabProfile"
 
   fun petCard(petId: String) = "home_pet_$petId"
+
+  fun alertCard(alertId: String) = "home_alert_$alertId"
+
+  fun seenButton(alertId: String) = "home_seenButton_$alertId"
 }
 
 /** Texts of the Home screen that tests check. */
 object HomeScreenTexts {
   const val PETS_TITLE = "Your pets"
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
+  const val NO_LOST_PETS = "No missing pets near you"
   const val RETRY = "Retry"
 }
 
@@ -103,11 +118,15 @@ private val TAB_BAR_SPACE = 91.dp
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
     onReportMissingClick: () -> Unit = {},
+    onAlertClick: (alertId: String) -> Unit = {},
+    onSeenPetClick: (alertId: String) -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,
+      onAlertClick = onAlertClick,
+      onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,
   )
 }
@@ -117,6 +136,8 @@ fun HomeScreen(
 fun HomeScreenContent(
     state: HomeUiState,
     onReportMissingClick: () -> Unit = {},
+    onAlertClick: (alertId: String) -> Unit = {},
+    onSeenPetClick: (alertId: String) -> Unit = {},
     onRetryClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
@@ -133,39 +154,48 @@ fun HomeScreenContent(
         modifier = Modifier.matchParentSize().alpha(0.4f),
     )
 
-    Column(
-        Modifier.fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .safeDrawingPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = TAB_BAR_SPACE)
-            .testTag(HomeScreenTestTags.BODY)
+    // Lazy, so that a long list of lost pets only composes what is on screen
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().safeDrawingPadding().testTag(HomeScreenTestTags.BODY),
+        contentPadding =
+            PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = TAB_BAR_SPACE),
     ) {
-      Header(state.userName, onSettingsClick, onNotificationsClick)
-
-      state.errorMessage?.let { message ->
-        Spacer(Modifier.height(8.dp))
-        Text(
-            message,
-            style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
-            modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
-        )
+      item(key = "header") {
+        Column {
+          Header(state.userName, onSettingsClick, onNotificationsClick)
+          state.errorMessage?.let { message ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
+                modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
+            )
+          }
+        }
       }
 
-      PetsSection(state.pets, onRetryClick)
+      petsSection(state.pets, onRetryClick)
+
+      lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
       // Report a pet missing: at the end of the scroll, as in Figma
-      Spacer(Modifier.height(9.dp))
-      OutlinedButton(
-          onClick = onReportMissingClick,
-          shape = RoundedCornerShape(14.dp),
-          border = BorderStroke(1.dp, SpottedReportBorder),
-          colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
-          modifier =
-              Modifier.fillMaxWidth()
-                  .height(52.dp)
-                  .testTag(HomeScreenTestTags.REPORT_MISSING_BUTTON),
-      ) {
-        Text("Report a pet missing", style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed))
+      item(key = "reportMissing") {
+        OutlinedButton(
+            onClick = onReportMissingClick,
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, SpottedReportBorder),
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
+            modifier =
+                Modifier.padding(top = 9.dp)
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag(HomeScreenTestTags.REPORT_MISSING_BUTTON),
+        ) {
+          Text(
+              "Report a pet missing",
+              style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed),
+          )
+        }
       }
     }
 
@@ -238,35 +268,54 @@ private fun HeaderButton(
 }
 
 /** "Your pets": one title, then one card per pet, with its own loading, error and empty state. */
-@Composable
-private fun PetsSection(pets: HomeSection<Pet>, onRetryClick: () -> Unit) {
-  Spacer(Modifier.height(18.dp))
-  Text(
-      HomeScreenTexts.PETS_TITLE,
-      style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
-      modifier = Modifier.testTag(HomeScreenTestTags.PETS_TITLE),
-  )
+private fun LazyListScope.petsSection(pets: HomeSection<Pet>, onRetryClick: () -> Unit) {
+  item(key = "petsTitle") {
+    Text(
+        HomeScreenTexts.PETS_TITLE,
+        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
+        modifier = Modifier.padding(top = 18.dp).testTag(HomeScreenTestTags.PETS_TITLE),
+    )
+  }
+  val error = pets.errorMessage
   when {
-    pets.isLoading && pets.items.isEmpty() -> SectionLoader(HomeScreenTestTags.PETS_LOADER)
-    pets.errorMessage != null && pets.items.isEmpty() -> PetsError(pets.errorMessage, onRetryClick)
+    pets.isLoading && pets.items.isEmpty() ->
+        item(key = "petsLoader") { SectionLoader(HomeScreenTestTags.PETS_LOADER) }
+    error != null && pets.items.isEmpty() ->
+        item(key = "petsError") { PetsError(error, onRetryClick) }
     pets.isEmpty ->
-        SectionMessage(HomeScreenTexts.NO_PETS, SpottedTextSecondary, HomeScreenTestTags.PETS_EMPTY)
+        item(key = "petsEmpty") {
+          SectionMessage(
+              HomeScreenTexts.NO_PETS,
+              SpottedTextSecondary,
+              HomeScreenTestTags.PETS_EMPTY,
+          )
+        }
   }
-  pets.items.forEach { pet ->
-    Spacer(Modifier.height(12.dp))
-    PetCard(pet)
-  }
+  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) }
   // A refresh that failed keeps the pets and shows the error under them
-  if (pets.errorMessage != null && pets.items.isNotEmpty()) {
-    PetsError(pets.errorMessage, onRetryClick)
+  if (error != null && pets.items.isNotEmpty()) {
+    item(key = "petsError") { PetsError(error, onRetryClick) }
   }
 }
 
 @Composable
 private fun PetsError(message: String, onRetryClick: () -> Unit) {
-  SectionMessage(message, SpottedError, HomeScreenTestTags.PETS_ERROR)
-  TextButton(onClick = onRetryClick, modifier = Modifier.testTag(HomeScreenTestTags.PETS_RETRY)) {
-    Text(HomeScreenTexts.RETRY, style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected))
+  SectionError(message, HomeScreenTestTags.PETS_ERROR, HomeScreenTestTags.PETS_RETRY, onRetryClick)
+}
+
+/** An error message, with a button to try loading again. */
+@Composable
+internal fun SectionError(
+    message: String,
+    tag: String,
+    retryTag: String,
+    onRetryClick: () -> Unit,
+) {
+  Column {
+    SectionMessage(message, SpottedError, tag)
+    TextButton(onClick = onRetryClick, modifier = Modifier.testTag(retryTag)) {
+      Text(HomeScreenTexts.RETRY, style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected))
+    }
   }
 }
 
@@ -274,7 +323,8 @@ private fun PetsError(message: String, onRetryClick: () -> Unit) {
 @Composable
 private fun PetCard(pet: Pet) {
   Row(
-      Modifier.fillMaxWidth()
+      Modifier.padding(top = 12.dp)
+          .fillMaxWidth()
           .heightIn(min = 131.dp)
           .height(IntrinsicSize.Min)
           .clip(RoundedCornerShape(22.dp))
@@ -311,20 +361,19 @@ private fun PetCard(pet: Pet) {
 
 @Composable
 internal fun SectionLoader(tag: String) {
-  Spacer(Modifier.height(16.dp))
-  Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+  Box(Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
     CircularProgressIndicator(Modifier.testTag(tag))
   }
 }
 
 @Composable
 internal fun SectionMessage(message: String, color: Color, tag: String) {
-  Spacer(Modifier.height(12.dp))
   Text(
       message,
       style = jakarta(14, 18f, FontWeight.SemiBold, color),
       modifier =
-          Modifier.fillMaxWidth()
+          Modifier.padding(top = 12.dp)
+              .fillMaxWidth()
               .clip(RoundedCornerShape(16.dp))
               .background(Color.White)
               .padding(16.dp)
@@ -388,11 +437,22 @@ private fun TabBar(onClicks: List<() -> Unit>, modifier: Modifier = Modifier) {
   }
 }
 
-/** Photo loaded from its URL with Coil. Null shows only the background. */
+/**
+ * Photo loaded from its URL with Coil. Null shows only the background. Coil loads nothing in
+ * Android Studio previews, so the fake "preview://" URLs use local drawables there.
+ */
 @Composable
 internal fun PetPhoto(url: String?, modifier: Modifier) {
   Box(modifier) {
-    if (url != null) {
+    val previewRes = if (LocalInspectionMode.current) PREVIEW_PHOTOS[url] else null
+    if (previewRes != null) {
+      Image(
+          painterResource(previewRes),
+          contentDescription = null,
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.matchParentSize(),
+      )
+    } else if (url != null) {
       AsyncImage(
           model = url,
           contentDescription = null,
@@ -405,17 +465,81 @@ internal fun PetPhoto(url: String?, modifier: Modifier) {
 
 // ------------------------------------------ Preview ------------------------------------------
 
+private val PREVIEW_PHOTOS =
+    mapOf(
+        "preview://luna" to R.drawable.hero_helper_4,
+        "preview://milo" to R.drawable.hero_pet_lost,
+        "preview://nala" to R.drawable.hero_helper_2,
+    )
+
+private const val PREVIEW_NOW = 1_000_000_000_000L
+private const val HOUR = 3_600_000L
+
+private val previewState =
+    HomeUiState(
+        userName = "Rayen",
+        homeArea = "Geneva",
+        pets =
+            HomeSection(
+                listOf(
+                    Pet(
+                        id = "luna",
+                        ownerId = "me",
+                        name = "Luna",
+                        species = Species.DOG,
+                        photoUrl = "preview://luna",
+                    )
+                )
+            ),
+        lostPetsNearby =
+            HomeSection(
+                listOf(
+                    Alert(
+                        id = "milo",
+                        petId = "milo",
+                        ownerId = "someone",
+                        lastKnownLocation = Location(latitude = 46.2, longitude = 6.14),
+                        lostAtMillis = PREVIEW_NOW - 2 * HOUR,
+                        petName = "Milo",
+                        petSpecies = Species.CAT,
+                        petPhotoUrl = "preview://milo",
+                    ),
+                    Alert(
+                        id = "nala",
+                        petId = "nala",
+                        ownerId = "someone-else",
+                        lastKnownLocation = Location(latitude = 46.19, longitude = 6.14),
+                        lostAtMillis = PREVIEW_NOW - 30 * HOUR,
+                        petName = "Nala",
+                        petSpecies = Species.DOG,
+                        petPhotoUrl = "preview://nala",
+                    ),
+                )
+            ),
+        nowMillis = PREVIEW_NOW,
+    )
+
 @Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable
 private fun HomeScreenContentPreview() {
+  HomeScreenContent(state = previewState)
+}
+
+@Preview(name = "Empty", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun HomeScreenContentEmptyPreview() {
+  HomeScreenContent(state = HomeUiState(userName = "Rayen", homeArea = "Geneva"))
+}
+
+@Preview(name = "Loading", showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun HomeScreenContentLoadingPreview() {
   HomeScreenContent(
       state =
           HomeUiState(
               userName = "Rayen",
-              pets =
-                  HomeSection(
-                      listOf(Pet(id = "luna", ownerId = "me", name = "Luna", species = Species.DOG))
-                  ),
+              pets = HomeSection(isLoading = true),
+              lostPetsNearby = HomeSection(isLoading = true),
           )
   )
 }
