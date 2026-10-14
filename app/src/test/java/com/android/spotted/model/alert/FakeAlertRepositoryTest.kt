@@ -30,6 +30,29 @@ class FakeAlertRepositoryTest {
   }
 
   @Test
+  fun getAlertById_returnsMatchingAlert() = runTest {
+    val alert = alert(id = "alert-1", latitude = 0.0, longitude = 0.0)
+    repository.publishAlert(alert)
+
+    assertEquals(alert, repository.getAlertById(alert.id).getOrThrow())
+  }
+
+  @Test
+  fun getAlertById_returnsNullWhenMissing() = runTest {
+    assertEquals(null, repository.getAlertById("missing").getOrThrow())
+  }
+
+  @Test
+  fun getAlertById_returnsConfiguredFailure() = runTest {
+    val expectedFailure = IllegalStateException("lookup failed")
+    repository.failure = expectedFailure
+
+    val result = repository.getAlertById("alert-1")
+
+    assertSame(expectedFailure, result.exceptionOrNull())
+  }
+
+  @Test
   fun getOpenAlertsNear_filtersClosedAndOutOfRadiusAlerts_andSortsNewestFirst() = runTest {
     val olderNearby =
         alert(id = "alert-older", lostAtMillis = 1L, latitude = 0.0, longitude = 0.001)
