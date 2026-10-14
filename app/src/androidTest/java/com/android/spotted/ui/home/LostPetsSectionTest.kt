@@ -63,7 +63,18 @@ class LostPetsSectionTest {
   fun onlyTheNewestLostPet_hasTheSeenButton() {
     setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO, NALA))))
 
-    node(HomeScreenTestTags.seenButton(MILO.id)).assertExists()
+    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).assertExists()
+    // Nala's card is composed before checking that it has no button
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertExists()
+    node(HomeScreenTestTags.seenButton(NALA.id)).assertDoesNotExist()
+  }
+
+  @Test
+  fun newestLostPet_isFeatured_whateverTheOrderReceived() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(NALA, MILO))))
+
+    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).assertExists()
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertExists()
     node(HomeScreenTestTags.seenButton(NALA.id)).assertDoesNotExist()
   }
 
