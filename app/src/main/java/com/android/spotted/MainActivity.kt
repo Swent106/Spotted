@@ -28,12 +28,14 @@ import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.theme.SampleAppTheme
 
 object Route {
   const val SIGNIN = "signin"
   const val PERSONAL_INFO = "personal_info"
   const val HOME = "home"
+  const val REPORT_MISSING = "report_missing"
 }
 
 class MainActivity : ComponentActivity() {
@@ -97,7 +99,10 @@ fun SpottedApp(
           }
       )
     }
-    composable(Route.HOME) { HomeScreenPlaceholder() }
+    composable(Route.HOME) {
+      HomeScreen(onReportMissingClick = { navController.navigate(Route.REPORT_MISSING) })
+    }
+    composable(Route.REPORT_MISSING) { ReportMissingScreenPlaceholder() }
   }
 }
 
@@ -121,16 +126,17 @@ fun PersonalInfoScreenPlaceholder(onProfileSaved: () -> Unit = {}) {
   }
 }
 
+/** Shown until the Report missing screen exists (its ViewModel is ReportMissingViewModel). */
 @Composable
-fun HomeScreenPlaceholder() {
+fun ReportMissingScreenPlaceholder() {
   Column(
       modifier = Modifier.fillMaxSize().padding(16.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,
   ) {
     Text(
-        text = "Home Screen",
-        modifier = Modifier.semantics { testTag = "home_screen" },
+        text = "Report a pet missing",
+        modifier = Modifier.semantics { testTag = "report_missing_screen" },
     )
   }
 }
