@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.android.spotted.data.user.UserRepositoryFirestore
+import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
@@ -72,6 +73,14 @@ class PersonalInfoViewModel(
 
   fun onHomeAreaChanged(homeArea: String) {
     _uiState.update { it.copy(homeArea = homeArea, isSaved = false, errorMessage = null) }
+  }
+
+  /**
+   * Places the home pin at [location], as tapped on the map picker. Kept in the screen state only
+   * for now: it is not part of the saved profile yet.
+   */
+  fun onHomeLocationChanged(location: Location) {
+    _uiState.update { it.copy(homeLocation = location, isSaved = false) }
   }
 
   fun saveProfile() {

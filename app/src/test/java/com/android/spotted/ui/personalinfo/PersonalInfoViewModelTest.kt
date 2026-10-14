@@ -1,5 +1,6 @@
 package com.android.spotted.ui.personalinfo
 
+import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
@@ -225,6 +226,15 @@ class PersonalInfoViewModelTest {
         assertEquals("Unable to save profile", viewModel.uiState.value.errorMessage)
         assertFalse(viewModel.uiState.value.isSaved)
       }
+
+  @Test
+  fun homeLocation_isEmptyAtFirst_andFollowsThePlacedPin() {
+    assertNull(viewModel.uiState.value.homeLocation)
+
+    viewModel.onHomeLocationChanged(Location(46.52, 6.63))
+
+    assertEquals(Location(46.52, 6.63), viewModel.uiState.value.homeLocation)
+  }
 
   @Test
   fun onSavedHandled_resetsSavedFlag() =
