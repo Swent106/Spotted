@@ -28,12 +28,14 @@ import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.theme.SampleAppTheme
 
 object Route {
   const val SIGNIN = "signin"
   const val PERSONAL_INFO = "personal_info"
   const val HOME = "home"
+  const val REPORT_MISSING = "report_missing"
 }
 
 class MainActivity : ComponentActivity() {
@@ -98,6 +100,12 @@ fun SpottedApp(
       )
     }
     composable(Route.HOME) { HomeScreenPlaceholder() }
+    composable(Route.REPORT_MISSING) {
+      ReportMissingScreen(
+          onBack = { navController.popBackStack() },
+          onPublished = { navController.popBackStack() },
+      )
+    }
   }
 }
 
