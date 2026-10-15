@@ -14,6 +14,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -180,16 +181,22 @@ class AddPetsScreenTest {
     val milo = Pet(id = "2", ownerId = "owner-1", name = "Milo", species = Species.CAT)
     setContent(AddPetsUiState(addedPets = listOf(rex, milo)))
 
-    node(AddPetsScreenTestTags.ADDED_PETS).performScrollTo().assertTextEquals("Added: Rex, Milo")
+    node(AddPetsScreenTestTags.ADDED_PETS).assertTextEquals("Added: Rex, Milo")
   }
 
   @Test
   fun errorMessage_isShown() {
     setContent(completeForm.copy(errorMessage = "Unable to save the pet"))
 
-    node(AddPetsScreenTestTags.ERROR_MESSAGE)
-        .performScrollTo()
-        .assertTextEquals("Unable to save the pet")
+    node(AddPetsScreenTestTags.ERROR_MESSAGE).assertTextEquals("Unable to save the pet")
+  }
+
+  @Test
+  fun startedPetWithoutAnimal_explainsWhyItCannotBeSaved() {
+    setContent(AddPetsUiState(name = "Rex"))
+
+    node(AddPetsScreenTestTags.ERROR_MESSAGE).assertTextEquals("Choose an animal to save Rex")
+    addAnother().assertIsNotEnabled()
   }
 
   @Test
@@ -220,7 +227,7 @@ class AddPetsScreenTest {
     composeTestRule.waitUntil { viewModel.savedNames() == listOf("Rex") }
 
     // The form is cleared for the next pet, and the saved one is listed
-    node(AddPetsScreenTestTags.ADDED_PETS).performScrollTo().assertTextEquals("Added: Rex")
+    node(AddPetsScreenTestTags.ADDED_PETS).assertTextEquals("Added: Rex")
     addAnother().assertIsNotEnabled()
 
     node(AddPetsScreenTestTags.NAME_INPUT).performScrollTo().performTextInput("Milo")
@@ -248,5 +255,28 @@ class AddPetsScreenTest {
     composeTestRule.waitForIdle()
 
     assertEquals(1, doneCalls)
+  }
+
+  @Test
+  fun openedFromHome_hidesTheOnboardingStepAndSkip() {
+    composeTestRule.setContent {
+      AddPetsContent(
+          state = AddPetsUiState(),
+          onBackClick = {},
+          onSkipClick = {},
+          onNameChange = {},
+          onSpeciesSelect = {},
+          onPhotoChange = {},
+          onDescriptionChange = {},
+          onAgeChange = {},
+          onBehaviorToggle = {},
+          onSaveAndContinueClick = {},
+          onAddAnotherClick = {},
+          isOnboarding = false,
+      )
+    }
+
+    node(AddPetsScreenTestTags.SKIP_BUTTON).assertDoesNotExist()
+    composeTestRule.onNodeWithText("Step 2 of 2 · you can edit it later").assertDoesNotExist()
   }
 }

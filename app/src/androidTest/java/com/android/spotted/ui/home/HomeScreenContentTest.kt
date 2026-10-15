@@ -37,6 +37,7 @@ class HomeScreenContentTest {
           state = state,
           onReportMissingClick = click("report"),
           onRetryClick = click("retry"),
+          onAddPetClick = click("addPet"),
           onSettingsClick = click("settings"),
           onNotificationsClick = click("notifications"),
           onMapClick = click("map"),
@@ -79,6 +80,15 @@ class HomeScreenContentTest {
 
     node(HomeScreenTestTags.PETS_TITLE).assertTextEquals(HomeScreenTexts.PETS_TITLE)
     scrollTo(HomeScreenTestTags.PETS_EMPTY).assertTextEquals(HomeScreenTexts.NO_PETS)
+  }
+
+  @Test
+  fun addPetButton_isShownWithOrWithoutPets_andCallsBack() {
+    setContent(HomeUiState(pets = HomeSection(listOf(LUNA))))
+
+    scrollTo(HomeScreenTestTags.ADD_PET_BUTTON).performClick()
+
+    assertEquals(1, clicks["addPet"])
   }
 
   @Test

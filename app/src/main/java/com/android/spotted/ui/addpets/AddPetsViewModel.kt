@@ -110,6 +110,15 @@ class AddPetsViewModel(
     val state = _uiState.value
     if (!state.canSave) return
     val species = state.species ?: return
+    // Already added with "+": saving it again would create the same pet twice
+    if (
+        state.addedPets.any {
+          it.name.equals(state.name.trim(), ignoreCase = true) && it.species == species
+        }
+    ) {
+      _uiState.update { AddPetsUiState(addedPets = it.addedPets, isDone = finishAfterSaving) }
+      return
+    }
     val ownerId = user?.uid
     if (ownerId == null) {
       _uiState.update { it.copy(needsSignIn = true, errorMessage = NOT_SIGNED_IN_MESSAGE) }

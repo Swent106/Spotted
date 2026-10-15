@@ -91,6 +91,7 @@ object HomeScreenTestTags {
   const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
+  const val ADD_PET_BUTTON = "home_addPetButton"
   const val TAB_BAR = "home_tabBar"
   const val TAB_HOME = "home_tabHome"
   const val TAB_MAP = "home_tabMap"
@@ -110,6 +111,7 @@ object HomeScreenTexts {
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
   const val NO_LOST_PETS = "No missing pets near you"
   const val RETRY = "Retry"
+  const val ADD_PET = "Add a pet"
 }
 
 /**
@@ -121,6 +123,7 @@ fun HomeScreen(
     onReportMissingClick: () -> Unit = {},
     onAlertClick: (alertId: String) -> Unit = {},
     onSeenPetClick: (alertId: String) -> Unit = {},
+    onAddPetClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   // Home stays in the back stack: reload it when coming back, so a pet just reported missing or
@@ -130,6 +133,7 @@ fun HomeScreen(
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,
+      onAddPetClick = onAddPetClick,
       onAlertClick = onAlertClick,
       onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,
@@ -144,6 +148,7 @@ fun HomeScreenContent(
     onAlertClick: (alertId: String) -> Unit = {},
     onSeenPetClick: (alertId: String) -> Unit = {},
     onRetryClick: () -> Unit = {},
+    onAddPetClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -175,6 +180,7 @@ fun HomeScreenContent(
           onAlertClick = onAlertClick,
           onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
+          onAddPetClick = onAddPetClick,
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),
@@ -191,6 +197,7 @@ private fun HomeList(
     onAlertClick: (alertId: String) -> Unit,
     onSeenPetClick: (alertId: String) -> Unit,
     onRetryClick: () -> Unit,
+    onAddPetClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -214,7 +221,7 @@ private fun HomeList(
       }
     }
 
-    petsSection(state.pets, onRetryClick)
+    petsSection(state.pets, onRetryClick, onAddPetClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
@@ -301,8 +308,15 @@ private fun HeaderButton(
   }
 }
 
-/** "Your pets": one title, then one card per pet, with its own loading, error and empty state. */
-private fun LazyListScope.petsSection(pets: HomeSection<Pet>, onRetryClick: () -> Unit) {
+/**
+ * "Your pets": one title, then one card per pet, with its own loading, error and empty state, and
+ * an "Add a pet" button so pets can still be added after skipping that onboarding step.
+ */
+private fun LazyListScope.petsSection(
+    pets: HomeSection<Pet>,
+    onRetryClick: () -> Unit,
+    onAddPetClick: () -> Unit,
+) {
   item(key = "petsTitle") {
     Text(
         HomeScreenTexts.PETS_TITLE,
@@ -329,6 +343,17 @@ private fun LazyListScope.petsSection(pets: HomeSection<Pet>, onRetryClick: () -
   // A refresh that failed keeps the pets and shows the error under them
   if (error != null && pets.items.isNotEmpty()) {
     item(key = "petsError") { PetsError(error, onRetryClick) }
+  }
+  item(key = "addPet") {
+    TextButton(
+        onClick = onAddPetClick,
+        modifier = Modifier.testTag(HomeScreenTestTags.ADD_PET_BUTTON),
+    ) {
+      Text(
+          HomeScreenTexts.ADD_PET,
+          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected),
+      )
+    }
   }
 }
 

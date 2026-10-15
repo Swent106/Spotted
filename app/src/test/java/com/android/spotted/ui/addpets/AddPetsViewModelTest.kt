@@ -370,4 +370,37 @@ class AddPetsViewModelTest {
       PetRepository by PetRepositoryLocal() {
     override suspend fun addPet(pet: Pet): Result<Unit> = Result.failure(error)
   }
+
+  @Test
+  fun samePetAddedWithPlusThenSavedAgain_isNotSavedTwice() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    fillForm(name = "rex", species = Species.DOG)
+    viewModel.finish()
+    advanceUntilIdle()
+
+    assertEquals(1, savedPets().size)
+    assertTrue(viewModel.uiState.value.isDone)
+  }
+
+  @Test
+  fun missingField_asksForTheNameWhenOnlyTheAnimalIsChosen() {
+    assertEquals(null, viewModel.uiState.value.missingField)
+
+    viewModel.onSpeciesChanged(Species.CAT)
+
+    assertEquals("Add your pet's name to save it", viewModel.uiState.value.missingField)
+  }
+
+  @Test
+  fun missingField_asksForTheAnimalOnceTheNameIsTyped() {
+    viewModel.onNameChanged("Milo")
+    assertEquals("Choose an animal to save Milo", viewModel.uiState.value.missingField)
+
+    viewModel.onSpeciesChanged(Species.CAT)
+
+    assertEquals(null, viewModel.uiState.value.missingField)
+  }
 }
