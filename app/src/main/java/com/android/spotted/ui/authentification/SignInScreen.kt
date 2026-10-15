@@ -338,7 +338,7 @@ fun SignInScreen(
     onSignedIn: () -> Unit = {},
 ) {
   val context = LocalContext.current
-  val manager = credentialManager ?: remember { CredentialManager.create(context) }
+  val manager = credentialManager ?: remember { CredentialManagerProvider.create(context) }
   val state by viewModel.uiState.collectAsState()
 
   val currentOnSignedIn by rememberUpdatedState(onSignedIn)
