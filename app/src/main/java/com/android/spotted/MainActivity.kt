@@ -26,6 +26,9 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.Coil
+import coil.ImageLoader
+import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
@@ -70,6 +73,12 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // Photos are kept in Firestore: teach Coil to load their firestore:// references
+    Coil.setImageLoader(
+        ImageLoader.Builder(applicationContext)
+            .components { add(FirestorePhotoFetcher.Factory()) }
+            .build()
+    )
     setContent {
       SampleAppTheme {
         Surface(

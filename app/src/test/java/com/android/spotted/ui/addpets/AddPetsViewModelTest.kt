@@ -219,8 +219,8 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun savePet_whenPhotoUploadFails_keepsFormAndSavesNothing() = runTest {
-    photoRepository.failure = IllegalStateException("Network down")
+  fun savePet_whenPhotoUploadFails_savesThePetWithoutPhotoAndSaysSo() = runTest {
+    photoRepository.failure = IllegalStateException("Object does not exist at location")
     fillForm(name = "Milo", species = Species.CAT)
     viewModel.onPhotoChanged("content://photos/milo")
 
@@ -228,11 +228,11 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
-    assertEquals("Network down", state.errorMessage)
-    assertEquals("Milo", state.name)
-    assertEquals("content://photos/milo", state.photoUri)
+    assertEquals(AddPetsViewModel.PHOTO_ERROR_MESSAGE, state.errorMessage)
     assertFalse(state.isSaving)
-    assertTrue(savedPets().isEmpty())
+    val saved = savedPets().single()
+    assertEquals("Milo", saved.name)
+    assertNull(saved.photoUrl)
   }
 
   @Test

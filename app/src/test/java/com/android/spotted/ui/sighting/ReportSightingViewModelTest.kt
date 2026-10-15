@@ -270,7 +270,7 @@ class ReportSightingViewModelTest {
   }
 
   @Test
-  fun submitSighting_photoUploadFailure_setsErrorMessageAndPreservesForm() = runTest {
+  fun submitSighting_photoUploadFailure_sendsTheSightingWithoutPhoto() = runTest {
     viewModel.setSpecies(Species.CAT)
     viewModel.setLocation(Location(46.5, 6.6))
     viewModel.setPhotoUri("content://media/cat.jpg")
@@ -280,14 +280,8 @@ class ReportSightingViewModelTest {
 
     viewModel.submitSighting()
 
-    val state = viewModel.uiState.value
-    assertFalse("submitted should be false", state.submitted)
-    assertFalse("isSubmitting should be false", state.isSubmitting)
-    assertEquals("Upload failed", state.errorMessage)
-
-    assertEquals(Species.CAT, state.selectedSpecies)
-    assertEquals("content://media/cat.jpg", state.photoUri)
-    assertTrue(sightingRepository.reportedSightings.isEmpty())
+    assertTrue(viewModel.uiState.value.submitted)
+    assertNull(sightingRepository.reportedSightings.single().photoUrl)
   }
 
   @Test
