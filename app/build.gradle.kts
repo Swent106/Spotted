@@ -139,6 +139,9 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.osmdroid.android)
 
+  // ------------- Location ------------------
+  implementation(libs.play.services.location)
+
   // ------------- Jetpack Compose ------------------
   val composeBom = platform(libs.compose.bom)
   implementation(composeBom)
