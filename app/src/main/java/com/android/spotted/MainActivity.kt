@@ -96,13 +96,9 @@ fun SpottedApp(
       modifier = modifier.fillMaxSize(),
   ) {
     composable(Route.SIGNIN) {
-      SignInScreen(
-          onSignedIn = {
-            navController.navigate(Route.PERSONAL_INFO) {
-              popUpTo(Route.SIGNIN) { inclusive = true }
-            }
-          }
-      )
+      // No navigation here: once signed in, MainViewModel picks Home or Personal info depending
+      // on whether the profile exists, and the LaunchedEffect above navigates there
+      SignInScreen()
     }
     composable(Route.PERSONAL_INFO) {
       // Personal info stays below Add pets, so Back from Add pets returns to it

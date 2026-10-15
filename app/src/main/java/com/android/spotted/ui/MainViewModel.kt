@@ -3,9 +3,9 @@ package com.android.spotted.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
-import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +44,7 @@ class MainViewModel(
           override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(
                 authRepository = AuthRepositoryProvider.authRepository,
-                userRepository = FakeUserRepository(),
+                userRepository = UserRepositoryFirestore(),
             )
                 as T
           }
