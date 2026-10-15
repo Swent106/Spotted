@@ -51,6 +51,30 @@ class AlertRepositoryFirestore(
     }
   }
 
+  override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> {
+    return try {
+      // Two equality filters: served by Firestore's single-field indexes, no composite index
+      val snapshot =
+          db.collection(collectionPath)
+              .whereEqualTo("ownerId", ownerId)
+              .whereEqualTo("status", "OPEN")
+              .limit(100)
+              .get()
+              .await()
+      val alerts =
+          snapshot
+              .toObjects(AlertDto::class.java)
+              .mapNotNull { it.toDomain() }
+              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+      Result.success(alerts)
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
   override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double): Result<List<Alert>> {
     return try {
       val snapshot =

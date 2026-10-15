@@ -32,6 +32,17 @@ class FakeAlertRepository : AlertRepository {
     return Result.success(alerts[id])
   }
 
+  override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    return Result.success(
+        alerts.values
+            .filter { it.ownerId == ownerId && it.status == AlertStatus.OPEN }
+            .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+    )
+  }
+
   override suspend fun getOpenAlertsNear(
       center: Location,
       radiusKm: Double,

@@ -114,6 +114,7 @@ class HomeViewModel(
 
     loadJob = viewModelScope.launch {
       launch { loadPets(uid) }
+      launch { loadOwnLostPets(uid) }
       launch {
         // The lost pets are searched around the user's home, so the profile comes first
         val profile = loadProfile(uid)
@@ -153,6 +154,7 @@ class HomeViewModel(
   }
 
   private suspend fun loadLostPetsNearby(uid: String, center: Location, radiusKm: Double) {
+    // The user's own lost pets are not "near you" for them: they are loaded apart, for the map
     val result =
         alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
           alerts.filter { it.ownerId != uid }
@@ -163,6 +165,12 @@ class HomeViewModel(
           nowMillis = if (result.isSuccess) now() else it.nowMillis,
       )
     }
+  }
+
+  /** The user's own open alerts, wherever their pet was lost, so the map always shows them. */
+  private suspend fun loadOwnLostPets(uid: String) {
+    val own = alertRepository.getOpenAlertsByOwner(uid).getOrNull() ?: return
+    updateFor(uid) { it.copy(ownLostPets = own) }
   }
 
   /** Applies [transform] only if [uid] is still the user shown, so a late result is dropped. */

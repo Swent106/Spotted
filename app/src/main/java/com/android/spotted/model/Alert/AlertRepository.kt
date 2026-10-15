@@ -20,4 +20,7 @@ interface AlertRepository {
       center: Location,
       radiusKm: Double,
   ): Result<List<Alert>>
+
+  /** Returns the open alerts published by [ownerId], wherever they are, newest first. */
+  suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>>
 }

@@ -576,4 +576,19 @@ class HomeViewModelTest {
 
         assertEquals(listOf(inGeneva), viewModel.uiState.value.lostPetsNearby.items)
       }
+
+  @Test
+  fun ownLostPets_areKeptForTheMap_evenFarAway_butNotListedAsNearYou() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val mine = alert("mine", ownerId = ALICE.uid, location = FAR_AWAY)
+        val theirs = alert("theirs")
+        publish(mine, theirs)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(theirs), viewModel.uiState.value.lostPetsNearby.items)
+        assertEquals(listOf(mine), viewModel.uiState.value.ownLostPets)
+      }
 }
