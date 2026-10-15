@@ -248,6 +248,7 @@ class ReportSightingContentTest {
         .performScrollTo()
         .performClick()
 
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { submittedCalled }
     assertTrue(submittedCalled)
   }
 
