@@ -261,7 +261,7 @@ private fun PetSummary(alert: Alert) {
 private fun PetWarnings(alert: Alert) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text(
-        "IF YOU FIND ${alert.petName.uppercase(Locale.ROOT)}",
+        "IF YOU FIND ${alert.petName.uppercase()}",
         style = jakarta(11, 14f, 600, 0xFF626975),
     )
     alert.petBehaviors
@@ -280,7 +280,7 @@ private fun PetWarnings(alert: Alert) {
     alert.petAllergies.forEachIndexed { index, allergy ->
       WarningCard(
           title = "Allergic to",
-          detail = "Please don't give this pet food containing ${allergy.lowercase(Locale.ROOT)}.",
+          detail = "Please don't give this pet food containing ${allergy.lowercase()}.",
           warning = false,
           emphasis = allergy.replaceFirstChar(Char::titlecase),
           valueTag = "${AlertDetailTestTags.ALLERGY_PREFIX}$index",

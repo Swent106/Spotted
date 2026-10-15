@@ -9,6 +9,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
@@ -22,12 +23,31 @@ import kotlinx.coroutines.launch
 class ReportSightingViewModel(
     private val sightingRepository: SightingRepository,
     private val photoRepository: PhotoRepository,
+    private val locationRepository: LocationRepository? = null,
     private val authRepository: AuthRepository = AuthRepositoryProvider.authRepository,
     private val now: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(ReportSightingUiState())
   val uiState: StateFlow<ReportSightingUiState> = _uiState.asStateFlow()
+
+  fun loadCurrentLocation() {
+    val repo = locationRepository ?: return
+    viewModelScope.launch {
+      val result = repo.getCurrentLocation()
+      result.fold(
+          onSuccess = { loc -> setLocation(loc, "Taken from your GPS") },
+          onFailure = { error ->
+            _uiState.update {
+              it.copy(
+                  errorMessage =
+                      error.localizedMessage ?: "Location unavailable. Tap to set location on map.",
+              )
+            }
+          },
+      )
+    }
+  }
 
   fun setSpecies(species: Species) {
     _uiState.update { it.copy(selectedSpecies = species) }

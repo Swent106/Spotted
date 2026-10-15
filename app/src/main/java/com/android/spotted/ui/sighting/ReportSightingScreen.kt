@@ -29,6 +29,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +46,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.theme.jakarta
@@ -429,37 +433,35 @@ private fun CheckIcon(modifier: Modifier = Modifier) {
 /** Stateful wrapper for [ReportSightingContent] handling location permission. */
 @Composable
 fun ReportSightingScreen(
-    state: ReportSightingUiState = ReportSightingUiState(),
-    onPhotoSelected: (Uri?) -> Unit = {},
-    onLocationClick: () -> Unit = {},
-    onAlertSelected: (String) -> Unit = {},
-    onNoMatchSelected: () -> Unit = {},
-    onSubmitClick: () -> Unit = {},
+    viewModel: ReportSightingViewModel = viewModel(factory = ReportSightingViewModel.Factory),
+    onSubmitted: () -> Unit = {},
 ) {
-  // ONCE THE VIEWMODEL IS COMPLETE ADD THE STATE IN HERE AS A collectAsState()
-  // + replace all the up methods by the viewModel directly : methods will be taken from the
-  // viewModel
+  val state by viewModel.uiState.collectAsState()
+
+  LaunchedEffect(state.submitted) {
+    if (state.submitted) {
+      onSubmitted()
+    }
+  }
 
   val permissionLauncher =
       rememberLauncherForActivityResult(
           contract = ActivityResultContracts.RequestPermission(),
           onResult = { isGranted ->
             if (isGranted) {
-              // Permission granted -> location prefilled
-              // we still don't have the LocationRepo so hardcoded uptohere
+              viewModel.loadCurrentLocation()
             }
           },
       )
 
   ReportSightingContent(
       state = state,
-      onPhotoSelected = onPhotoSelected,
+      onPhotoSelected = { uri -> viewModel.setPhotoUri(uri?.toString()) },
       onLocationClick = {
         permissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-        onLocationClick()
       },
-      onAlertSelected = onAlertSelected,
-      onNoMatchSelected = onNoMatchSelected,
-      onSubmitClick = onSubmitClick,
+      onAlertSelected = viewModel::selectAlert,
+      onNoMatchSelected = viewModel::selectNoMatchingAlert,
+      onSubmitClick = viewModel::submitSighting,
   )
 }

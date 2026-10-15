@@ -3,6 +3,7 @@ package com.android.spotted.ui.sighting
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.sighting.Sighting
@@ -72,7 +73,12 @@ class ReportSightingViewModelTest {
 
   @Test
   fun defaultConstructorParameters_workCorrectly() {
-    val vm = ReportSightingViewModel(sightingRepository, photoRepository, authRepository)
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository,
+            photoRepository,
+            authRepository = authRepository,
+        )
     assertNotNull(vm)
   }
 
@@ -103,6 +109,70 @@ class ReportSightingViewModelTest {
             .isSuccess,
     )
     assertTrue(innerRepo.getSightingsForAlert("alert-1").getOrNull()?.isEmpty() == true)
+  }
+
+  @Test
+  fun loadCurrentLocation_success_updatesState() = runTest {
+    val fakeLocationRepo = FakeLocationRepository(location = Location(46.52, 6.63))
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals(Location(46.52, 6.63), vm.uiState.value.location)
+    assertEquals("Taken from your GPS", vm.uiState.value.locationAddress)
+  }
+
+  @Test
+  fun loadCurrentLocation_failure_setsErrorMessage() = runTest {
+    val fakeLocationRepo = FakeLocationRepository()
+    fakeLocationRepo.failure = Exception("GPS disabled")
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals("GPS disabled", vm.uiState.value.errorMessage)
+  }
+
+  @Test
+  fun loadCurrentLocation_failureWithoutMessage_setsDefaultErrorMessage() = runTest {
+    val fakeLocationRepo = FakeLocationRepository()
+    fakeLocationRepo.failure = Exception()
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals(
+        "Location unavailable. Tap to set location on map.",
+        vm.uiState.value.errorMessage,
+    )
+  }
+
+  @Test
+  fun loadCurrentLocation_withoutLocationRepository_leavesStateUnchanged() {
+    viewModel.loadCurrentLocation()
+
+    assertEquals(ReportSightingUiState(), viewModel.uiState.value)
   }
 
   @Test
