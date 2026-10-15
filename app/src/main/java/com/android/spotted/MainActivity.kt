@@ -31,6 +31,7 @@ import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
+import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.theme.SampleAppTheme
@@ -46,6 +47,7 @@ object Route {
   const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
   /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
   const val ADD_PET = "add_pet"
+  const val MAP = "map"
 
   fun alertDetail(alertId: String) = "alert/$alertId"
 
@@ -138,8 +140,8 @@ fun NavGraphBuilder.addPetsDestination(
 
 /**
  * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
- * missing screen and [addPetContent] Add pets opened from Home; tests replace them to use
- * hand-built states instead of the real ViewModels.
+ * missing screen, [addPetContent] Add pets opened from Home and [mapContent] the Map tab; tests
+ * replace them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -149,6 +151,7 @@ fun NavGraphBuilder.homeDestinations(
           onAlertClick = navigation.onAlertClick,
           onSeenPetClick = navigation.onSeenPetClick,
           onAddPetClick = navigation.onAddPetClick,
+          onMapClick = navigation.onMapClick,
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -157,6 +160,10 @@ fun NavGraphBuilder.homeDestinations(
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       AddPetsScreen(onBack = onDone, onDone = onDone, isOnboarding = false)
     },
+    mapContent: @Composable (onBack: () -> Unit, onAlertClick: (String) -> Unit) -> Unit =
+        { onBack, onAlertClick ->
+          AlertsMapScreen(onBack = onBack, onAlertClick = onAlertClick)
+        },
 ) {
   composable(Route.HOME) {
     homeContent(
@@ -165,8 +172,14 @@ fun NavGraphBuilder.homeDestinations(
             onAlertClick = { alertId -> navController.navigate(Route.alertDetail(alertId)) },
             onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
             onAddPetClick = { navController.navigate(Route.ADD_PET) },
+            onMapClick = { navController.navigate(Route.MAP) },
         )
     )
+  }
+  composable(Route.MAP) {
+    mapContent({ navController.popBackStack() }) { alertId ->
+      navController.navigate(Route.alertDetail(alertId))
+    }
   }
   composable(Route.ADD_PET) { addPetContent { navController.popBackStack() } }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
@@ -184,6 +197,7 @@ data class HomeNavigation(
     val onAlertClick: (alertId: String) -> Unit,
     val onSeenPetClick: (alertId: String) -> Unit,
     val onAddPetClick: () -> Unit = {},
+    val onMapClick: () -> Unit = {},
 )
 
 /** Shown until the Alert detail screen exists (S2-09). */
