@@ -1,5 +1,8 @@
 package com.android.spotted.ui.personalinfo
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -444,8 +447,9 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
  * Stateful entry point of the Personal Info screen.
  *
  * Collects the [PersonalInfoViewModel] state, forwards user input to it, and calls [onSaved] once
- * the profile is saved. Photo picking and device location are launched by the caller through
- * [onChangePhotoClick] and [onUseMyLocationClick].
+ * the profile is saved. "Use my location" asks for the location permission (precise or approximate)
+ * and, once granted, lets the ViewModel place the home pin and name the area. Photo picking is
+ * launched by the caller through [onChangePhotoClick].
  */
 @Composable
 fun PersonalInfoScreen(
@@ -453,9 +457,15 @@ fun PersonalInfoScreen(
     onBack: () -> Unit = {},
     onSaved: () -> Unit = {},
     onChangePhotoClick: () -> Unit = {},
-    onUseMyLocationClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+  val locationPermissionLauncher =
+      rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+          grants ->
+        if (grants.values.any { it }) viewModel.useCurrentLocation()
+        else viewModel.onLocationPermissionDenied()
+      }
 
   val currentOnSaved by rememberUpdatedState(onSaved)
   LaunchedEffect(state.isSaved) {
@@ -473,7 +483,14 @@ fun PersonalInfoScreen(
       onFirstNameChange = viewModel::onFirstNameChanged,
       onLastNameChange = viewModel::onLastNameChanged,
       onHomeAreaChange = viewModel::onHomeAreaChanged,
-      onUseMyLocationClick = onUseMyLocationClick,
+      onUseMyLocationClick = {
+        locationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+        )
+      },
       onHomeLocationChange = viewModel::onHomeLocationChanged,
       onAlertRadiusSelect = viewModel::onAlertRadiusChanged,
       onCreateProfileClick = viewModel::saveProfile,

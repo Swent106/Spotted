@@ -4,6 +4,9 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.fakes.FakeAddressRepository
+import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.user.FakeUserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -343,5 +346,100 @@ class PersonalInfoViewModelTest {
     viewModel.clearNearbyAlertsRequest()
 
     assertFalse(viewModel.uiState.value.nearbyAlertsRequested)
+  }
+
+  private fun viewModelWithLocation(
+      locationRepository: FakeLocationRepository,
+      addressRepository: FakeAddressRepository? = null,
+  ) =
+      PersonalInfoViewModel(
+          user = User(uid = "user-1", email = "jamie@example.com"),
+          userRepository = userRepository,
+          authRepository = authRepository,
+          locationRepository = locationRepository,
+          addressRepository = addressRepository,
+      )
+
+  @Test
+  fun useCurrentLocation_placesTheHomePinAtTheDevicePosition() =
+      runTest(testDispatcher) {
+        val gpsViewModel = viewModelWithLocation(FakeLocationRepository(Location(46.52, 6.63)))
+
+        gpsViewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertEquals(Location(46.52, 6.63), gpsViewModel.uiState.value.homeLocation)
+        assertNull(gpsViewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun useCurrentLocation_writesTheAreaNameInTheHomeAreaField() =
+      runTest(testDispatcher) {
+        val gpsViewModel =
+            viewModelWithLocation(
+                FakeLocationRepository(),
+                FakeAddressRepository("Ouchy, Lausanne"),
+            )
+
+        gpsViewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertEquals("Ouchy, Lausanne", gpsViewModel.uiState.value.homeArea)
+      }
+
+  @Test
+  fun useCurrentLocation_whenNoPlaceNameIsFound_placesThePinAndKeepsTheTypedArea() =
+      runTest(testDispatcher) {
+        val addressRepository =
+            FakeAddressRepository().apply { failure = NoSuchElementException("No place name") }
+        val gpsViewModel = viewModelWithLocation(FakeLocationRepository(), addressRepository)
+        gpsViewModel.onHomeAreaChanged("Flon")
+
+        gpsViewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertEquals("Flon", gpsViewModel.uiState.value.homeArea)
+        assertEquals(
+            FakeLocationRepository.DEFAULT_LOCATION,
+            gpsViewModel.uiState.value.homeLocation,
+        )
+      }
+
+  @Test
+  fun useCurrentLocation_whenNoPositionIsFound_keepsThePinAndShowsAnError() =
+      runTest(testDispatcher) {
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+        val gpsViewModel = viewModelWithLocation(locationRepository)
+
+        gpsViewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertNull(gpsViewModel.uiState.value.homeLocation)
+        assertEquals(
+            PersonalInfoViewModel.LOCATION_UNAVAILABLE,
+            gpsViewModel.uiState.value.errorMessage,
+        )
+      }
+
+  @Test
+  fun useCurrentLocation_withoutLocationRepository_doesNothing() =
+      runTest(testDispatcher) {
+        val before = viewModel.uiState.value
+
+        viewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertEquals(before, viewModel.uiState.value)
+      }
+
+  @Test
+  fun onLocationPermissionDenied_showsAnError() {
+    viewModel.onLocationPermissionDenied()
+
+    assertEquals(
+        PersonalInfoViewModel.LOCATION_PERMISSION_DENIED,
+        viewModel.uiState.value.errorMessage,
+    )
   }
 }
