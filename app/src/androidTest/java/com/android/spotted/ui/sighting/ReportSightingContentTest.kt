@@ -11,6 +11,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.model.sighting.Sighting
+import com.android.spotted.model.sighting.SightingRepository
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -205,16 +210,40 @@ class ReportSightingContentTest {
   }
 
   @Test
-  fun reportSightingScreen_wrapper_rendersContent_and_callsOnSubmitted() {
+  fun reportSightingScreen_wrapper_fullInteraction_triggersSubmittedCallback() = runBlocking {
     var submittedCalled = false
+    val sightingRepo =
+        object : SightingRepository {
+          override fun getNewId(): String = "id_1"
+
+          override suspend fun reportSighting(sighting: Sighting): Result<Unit> =
+              Result.success(Unit)
+
+          override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
+              Result.success(emptyList())
+        }
+    val photoRepo = FakePhotoRepository()
+    val authRepo = FakeAuthRepository()
+    authRepo.signInWithGoogle("token")
+
+    val viewModel = ReportSightingViewModel(sightingRepo, photoRepo, authRepository = authRepo)
+    viewModel.setSpecies(Species.CAT)
+    viewModel.setLocation(Location(46.5, 6.6))
+    viewModel.selectNoMatchingAlert()
 
     composeTestRule.setContent {
       ReportSightingScreen(
+          viewModel = viewModel,
           onSubmitted = { submittedCalled = true },
       )
     }
 
-    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SCREEN).assertIsDisplayed()
-    assertTrue(!submittedCalled)
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.LOCATION_CARD).performClick()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .performClick()
+
+    assertTrue(submittedCalled)
   }
 }
