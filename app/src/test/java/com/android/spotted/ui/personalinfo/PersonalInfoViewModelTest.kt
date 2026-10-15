@@ -57,6 +57,27 @@ class PersonalInfoViewModelTest {
   }
 
   @Test
+  fun signedOutUser_startsInSignedOutStateAndCannotSave() =
+      runTest(testDispatcher) {
+        val signedOutViewModel =
+            PersonalInfoViewModel(
+                user = null,
+                userRepository = userRepository,
+                authRepository = authRepository,
+            )
+        signedOutViewModel.onNameChanged("Jamie")
+        signedOutViewModel.onHomeAreaChanged("Lausanne")
+
+        assertTrue(signedOutViewModel.uiState.value.isSignedOut)
+        assertFalse(signedOutViewModel.uiState.value.canSave)
+
+        signedOutViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(0, userRepository.saveCalls)
+      }
+
+  @Test
   fun fieldChanges_areImmediatelyReflectedInState() {
     viewModel.onNameChanged("Jamie")
     viewModel.onPhoneChanged("+41 79 123 45 67")
@@ -164,6 +185,20 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
+  fun saveProfile_doubleTapSavesOnlyOnce() =
+      runTest(testDispatcher) {
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+
+        viewModel.saveProfile()
+        viewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(1, userRepository.saveCalls)
+        assertTrue(viewModel.uiState.value.isSaved)
+      }
+
+  @Test
   fun saveProfile_whenRepositoryFails_exposesError() =
       runTest(testDispatcher) {
         userRepository.failure = IllegalStateException("Save failed")
@@ -176,6 +211,20 @@ class PersonalInfoViewModelTest {
         assertEquals("Save failed", viewModel.uiState.value.errorMessage)
         assertFalse(viewModel.uiState.value.isSaved)
         assertFalse(viewModel.uiState.value.isSaving)
+      }
+
+  @Test
+  fun saveProfile_failureWithoutMessage_usesFallbackText() =
+      runTest(testDispatcher) {
+        userRepository.failure = IllegalStateException()
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+
+        viewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals("Unable to save profile", viewModel.uiState.value.errorMessage)
+        assertFalse(viewModel.uiState.value.isSaved)
       }
 
   @Test
@@ -198,6 +247,21 @@ class PersonalInfoViewModelTest {
 
         viewModel.onSavedHandled()
 
+        assertFalse(viewModel.uiState.value.isSaved)
+      }
+
+  @Test
+  fun editingAfterSuccessfulSave_resetsSavedFlag() =
+      runTest(testDispatcher) {
+        viewModel.onNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        viewModel.saveProfile()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isSaved)
+
+        viewModel.onHomeAreaChanged("Geneva")
+
+        assertEquals("Geneva", viewModel.uiState.value.homeArea)
         assertFalse(viewModel.uiState.value.isSaved)
       }
 

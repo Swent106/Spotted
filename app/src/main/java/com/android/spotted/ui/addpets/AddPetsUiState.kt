@@ -10,6 +10,8 @@ data class AddPetsUiState(
     val breed: String = "",
     val photoUri: String? = null,
     val description: String = "",
+    /** Age typed in the form; kept on screen only for now, not saved ([Pet] has no age yet). */
+    val age: String = "",
     val allergies: List<String> = emptyList(),
     val behaviors: Set<Behavior> = emptySet(),
     val addedPets: List<Pet> = emptyList(),
@@ -34,6 +36,7 @@ data class AddPetsUiState(
             breed.isNotBlank() ||
             photoUri != null ||
             description.isNotBlank() ||
+            age.isNotBlank() ||
             allergies.isNotEmpty() ||
             behaviors.isNotEmpty()
 }

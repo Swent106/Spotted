@@ -37,6 +37,17 @@ fun jakarta(
         textAlign = align,
     )
 
+/** Same as the [jakarta] above, with Compose types for the weight and the colour. */
+fun jakarta(size: Int, line: Float, weight: FontWeight, color: Color, spacing: Float = 0f) =
+    TextStyle(
+        fontSize = size.sp,
+        lineHeight = line.sp,
+        fontFamily = PlusJakartaSans,
+        fontWeight = weight,
+        color = color,
+        letterSpacing = spacing.sp,
+    )
+
 // Set of Material typography styles to start with
 val Typography =
     Typography(

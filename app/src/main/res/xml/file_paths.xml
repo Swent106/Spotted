@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Folders our FileProvider may share. Only the cache sub-folder used for camera photos. -->
+<paths>
+    <cache-path
+        name="camera_photos"
+        path="camera/" />
+</paths>

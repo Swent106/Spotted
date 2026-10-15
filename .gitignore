@@ -17,3 +17,4 @@ gradle/gradle-daemon-jvm.properties
 commit_message.txt
 # Kotlin compiler caches (Kotlin 2.x)
 .kotlin/
+firebase/node_modules/
