@@ -75,6 +75,37 @@ class AddPetsViewModelTest {
   }
 
   @Test
+  fun onAgeChanged_isKeptOnScreenAndClearedAfterSaving() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onAgeChanged("4 years")
+    assertEquals("4 years", viewModel.uiState.value.age)
+
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    assertEquals("", viewModel.uiState.value.age)
+    assertEquals("Rex", savedPets().single().name)
+  }
+
+  @Test
+  fun canFinish_isFalseWithOnlyAnAge() {
+    viewModel.onAgeChanged("4 years")
+
+    assertTrue(viewModel.uiState.value.hasFormInput)
+    assertFalse(viewModel.uiState.value.canFinish)
+  }
+
+  @Test
+  fun onDoneHandled_resetsIsDone() {
+    viewModel.skip()
+    assertTrue(viewModel.uiState.value.isDone)
+
+    viewModel.onDoneHandled()
+
+    assertFalse(viewModel.uiState.value.isDone)
+  }
+
+  @Test
   fun onBehaviorToggled_twice_removesBehavior() {
     viewModel.onBehaviorToggled(Behavior.STRESSED_IN_CROWDS)
     viewModel.onBehaviorToggled(Behavior.STRESSED_IN_CROWDS)
