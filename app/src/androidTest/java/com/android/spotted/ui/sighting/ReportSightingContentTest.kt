@@ -131,6 +131,30 @@ class ReportSightingContentTest {
   }
 
   @Test
+  fun nearbyAlert_withPhotoUrl_and_selectedState_rendersCorrectly() {
+    val state =
+        ReportSightingUiState(
+            selectedAlertId = "alert_1",
+            isNoMatchingAlertSelected = false,
+            nearbyAlerts =
+                listOf(
+                    NearbyAlertOption(
+                        alertId = "alert_1",
+                        petName = "Milo",
+                        description = "Orange cat",
+                        photoUrl = "https://example.com/photo.jpg",
+                    ),
+                ),
+        )
+
+    composeTestRule.setContent { ReportSightingContent(state = state) }
+
+    composeTestRule
+        .onNodeWithTag("${ReportSightingScreenTestTags.PET_OPTION_PREFIX}alert_1")
+        .assertIsDisplayed()
+  }
+
+  @Test
   fun clicks_triggerCallbacks() {
     var locationClicked = false
     var alertSelected: String? = null
@@ -181,9 +205,16 @@ class ReportSightingContentTest {
   }
 
   @Test
-  fun reportSightingScreen_wrapper_rendersContent() {
-    composeTestRule.setContent { ReportSightingScreen() }
+  fun reportSightingScreen_wrapper_rendersContent_and_callsOnSubmitted() {
+    var submittedCalled = false
+
+    composeTestRule.setContent {
+      ReportSightingScreen(
+          onSubmitted = { submittedCalled = true },
+      )
+    }
 
     composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SCREEN).assertIsDisplayed()
+    assertTrue(!submittedCalled)
   }
 }
