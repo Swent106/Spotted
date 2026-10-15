@@ -8,14 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,8 +52,11 @@ internal fun timeAgo(pastMillis: Long, nowMillis: Long): String {
 }
 
 /** Label above the lost pets, e.g. "PLAINPALAIS, GENEVA · 3 KM AROUND YOU". */
-internal fun areaLabel(homeArea: String): String {
-  val radius = "${HomeViewModel.DEFAULT_RADIUS_KM.toInt()} KM AROUND YOU"
+internal fun areaLabel(
+    homeArea: String,
+    radiusKm: Int = HomeViewModel.DEFAULT_RADIUS_KM.toInt(),
+): String {
+  val radius = "$radiusKm KM AROUND YOU"
   return if (homeArea.isBlank()) radius else "${homeArea.trim().uppercase()} · $radius"
 }
 
@@ -67,7 +70,9 @@ internal fun LazyListScope.lostPetsSection(
   val lostPets = state.lostPetsNearby
   val error = lostPets.errorMessage
 
-  item(key = "alertsTitle") { LostPetsTitle(state.homeArea, lostPets.items.size) }
+  item(key = "alertsTitle") {
+    LostPetsTitle(state.homeArea, state.alertRadiusKm, lostPets.items.size)
+  }
   when {
     lostPets.isLoading && lostPets.items.isEmpty() ->
         item(key = "alertsLoader") { SectionLoader(HomeScreenTestTags.ALERTS_LOADER) }
@@ -114,7 +119,7 @@ private fun AlertsError(message: String, onRetryClick: () -> Unit) {
 
 /** "GENEVA · 3 KM AROUND YOU" and "⚠ 2 pets missing near you". */
 @Composable
-private fun LostPetsTitle(homeArea: String, count: Int) {
+private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
   Box(
       Modifier.padding(top = 16.dp)
           .fillMaxWidth()
@@ -123,7 +128,7 @@ private fun LostPetsTitle(homeArea: String, count: Int) {
           .background(Color.White)
   ) {
     Text(
-        areaLabel(homeArea),
+        areaLabel(homeArea, alertRadiusKm),
         style = jakarta(11, 14f, FontWeight.SemiBold, SpottedTextSecondary, spacing = 0.66f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -168,7 +173,9 @@ private fun AlertCard(
           alert.petPhotoUrl,
           Modifier.size(if (featured) 78.dp else 58.dp)
               .clip(RoundedCornerShape(if (featured) 18.dp else 15.dp))
-              .background(if (featured) SpottedFeaturedPhotoBackground else SpottedAvatarBackground),
+              .background(
+                  if (featured) SpottedFeaturedPhotoBackground else SpottedAvatarBackground
+              ),
       )
       Spacer(Modifier.width(14.dp))
       Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -206,7 +213,9 @@ private fun AlertCard(
           shape = RoundedCornerShape(14.dp),
           colors = ButtonDefaults.buttonColors(containerColor = SpottedBlue),
           modifier =
-              Modifier.fillMaxWidth().height(50.dp).testTag(HomeScreenTestTags.seenButton(alert.id)),
+              Modifier.fillMaxWidth()
+                  .height(50.dp)
+                  .testTag(HomeScreenTestTags.seenButton(alert.id)),
       ) {
         Text("I have seen this pet", style = jakarta(15, 20f, FontWeight.SemiBold, Color.White))
       }

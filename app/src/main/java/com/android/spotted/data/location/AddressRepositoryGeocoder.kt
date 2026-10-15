@@ -31,6 +31,20 @@ class AddressRepositoryGeocoder(private val geocoder: Geocoder) : AddressReposit
         Result.failure(exception)
       }
 
+  override suspend fun locate(area: String): Result<Location> =
+      try {
+        withContext(Dispatchers.IO) {
+          @Suppress("DEPRECATION")
+          val address = geocoder.getFromLocationName(area, 1)?.firstOrNull()
+          if (address == null) Result.failure(NoSuchElementException("No place named $area"))
+          else Result.success(Location(address.latitude, address.longitude))
+        }
+      } catch (exception: CancellationException) {
+        throw exception
+      } catch (exception: Exception) {
+        Result.failure(exception)
+      }
+
   /** "Neighbourhood, City", falling back to the region or the country when the city is unknown. */
   private fun areaName(address: Address): String =
       listOfNotNull(

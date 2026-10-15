@@ -1,6 +1,7 @@
 package com.android.spotted.ui.personalinfo
 
 import com.android.spotted.model.Location
+import com.android.spotted.model.user.UserProfile
 
 data class PersonalInfoUiState(
     val username: String = "",
@@ -10,8 +11,10 @@ data class PersonalInfoUiState(
     val email: String = "",
     val phone: String = "",
     val homeArea: String = "",
-    /** Home pin placed on the map picker; kept on screen only for now, not saved. */
+    /** Home pin placed on the map picker; lost pets are searched around it. */
     val homeLocation: Location? = null,
+    /** True when the user already has a profile: the form then edits it instead of creating it. */
+    val isEditing: Boolean = false,
     val alertRadiusKm: Int = DEFAULT_ALERT_RADIUS_KM,
     val petsBroughtHome: List<String> = emptyList(),
     val achievements: List<String> = emptyList(),
@@ -35,6 +38,6 @@ data class PersonalInfoUiState(
 
   companion object {
     val ALERT_RADIUS_OPTIONS_KM = listOf(1, 3, 5, 10)
-    const val DEFAULT_ALERT_RADIUS_KM = 3
+    const val DEFAULT_ALERT_RADIUS_KM = UserProfile.DEFAULT_ALERT_RADIUS_KM
   }
 }

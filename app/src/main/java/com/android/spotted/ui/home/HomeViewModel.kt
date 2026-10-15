@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
+import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
@@ -15,6 +16,8 @@ import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,16 +38,18 @@ import kotlinx.coroutines.launch
  * are cancelled, so the previous user's data is never shown. [refresh] reloads everything and keeps
  * what is already shown until the new data arrives.
  *
- * The home area is still free text, so the alerts are searched around [searchCenter] until the
- * profile stores coordinates.
+ * The alerts are searched within the profile's alert radius around the home pin saved in the
+ * profile; without a pin, around the place the home area names (found by [addressRepository]), or
+ * around [searchCenter] when it can't be found.
  *
  * @property authRepository gives the signed-in user.
  * @property userRepository gives the user's profile.
  * @property petRepository gives the user's pets.
  * @property alertRepository gives the open alerts near a location.
  * @property searchCenter centre of the lost pet search.
- * @property radiusKm radius of the lost pet search, in kilometres.
+ * @property radiusKm radius of the lost pet search when the profile can't be loaded, in km.
  * @property now current time in epoch millis; injected so that tests control it.
+ * @property addressRepository finds the position of the home area; null searches [searchCenter].
  */
 class HomeViewModel(
     private val authRepository: AuthRepository,
@@ -54,6 +59,7 @@ class HomeViewModel(
     private val searchCenter: Location = DEFAULT_SEARCH_CENTER,
     private val radiusKm: Double = DEFAULT_RADIUS_KM,
     private val now: () -> Long = System::currentTimeMillis,
+    private val addressRepository: AddressRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HomeUiState())
@@ -107,16 +113,38 @@ class HomeViewModel(
         )
 
     loadJob = viewModelScope.launch {
-      launch { loadProfile(uid) }
       launch { loadPets(uid) }
-      launch { loadLostPetsNearby(uid) }
+      launch {
+        // The lost pets are searched around the user's home, so the profile comes first
+        val profile = loadProfile(uid)
+        val radius = profile?.alertRadiusKm?.toDouble() ?: radiusKm
+        loadLostPetsNearby(uid, searchCenterFor(profile), radius)
+      }
     }
   }
 
-  private suspend fun loadProfile(uid: String) {
+  /** Loads the header and returns the profile, or null if it can't be loaded. */
+  private suspend fun loadProfile(uid: String): UserProfile? {
     // The header can live without the profile, so a failure only leaves it empty
-    val profile = userRepository.getUser(uid).getOrNull() ?: return
-    updateFor(uid) { it.copy(userName = profile.name, homeArea = profile.homeArea) }
+    val profile = userRepository.getUser(uid).getOrNull() ?: return null
+    updateFor(uid) {
+      it.copy(
+          userName = profile.name,
+          homeArea = profile.homeArea,
+          alertRadiusKm = profile.alertRadiusKm,
+      )
+    }
+    return profile
+  }
+
+  /** The home pin; else the place the home area names; else [searchCenter]. */
+  private suspend fun searchCenterFor(profile: UserProfile?): Location {
+    profile?.homeLocation?.let {
+      return it
+    }
+    val homeArea = profile?.homeArea
+    if (homeArea.isNullOrBlank()) return searchCenter
+    return addressRepository?.locate(homeArea)?.getOrNull() ?: searchCenter
   }
 
   private suspend fun loadPets(uid: String) {
@@ -124,9 +152,9 @@ class HomeViewModel(
     updateFor(uid) { it.copy(pets = it.pets.after(result, PETS_LOAD_FAILED)) }
   }
 
-  private suspend fun loadLostPetsNearby(uid: String) {
+  private suspend fun loadLostPetsNearby(uid: String, center: Location, radiusKm: Double) {
     val result =
-        alertRepository.getOpenAlertsNear(searchCenter, radiusKm).map { alerts ->
+        alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
           alerts.filter { it.ownerId != uid }
         }
     updateFor(uid) {
@@ -156,17 +184,19 @@ class HomeViewModel(
     const val LOST_PETS_LOAD_FAILED = "Couldn't load the lost pets near you. Please try again."
     const val SIGN_OUT_FAILED = "Couldn't sign out. Please try again."
 
-    /** Geneva city centre: used until the home area is saved with coordinates. */
+    /** Geneva city centre: used when the home area can't be found. */
     val DEFAULT_SEARCH_CENTER = Location(latitude = 46.2044, longitude = 6.1432)
     const val DEFAULT_RADIUS_KM = 3.0
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
+        val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
         HomeViewModel(
             authRepository = AuthRepositoryProvider.authRepository,
             userRepository = UserRepositoryFirestore(),
             petRepository = PetRepositoryFirestore(),
             alertRepository = AlertRepositoryFirestore(),
+            addressRepository = application?.let { AddressRepositoryGeocoder(it) },
         )
       }
     }

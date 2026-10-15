@@ -152,7 +152,7 @@ fun PersonalInfoContent(
           verticalArrangement = Arrangement.spacedBy(12.dp),
           modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
       ) {
-        Header(onBackClick)
+        Header(state.isEditing, onBackClick)
         Avatar(onChangePhotoClick)
         IdentityCard(state, onUsernameChange, onFirstNameChange, onLastNameChange)
         HomeLocationCard(
@@ -177,7 +177,7 @@ fun PersonalInfoContent(
 }
 
 @Composable
-private fun Header(onBackClick: () -> Unit) {
+private fun Header(isEditing: Boolean, onBackClick: () -> Unit) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -200,9 +200,13 @@ private fun Header(onBackClick: () -> Unit) {
       )
     }
     Column(Modifier.weight(1f)) {
-      Text("Create your profile", style = jakarta(23, 31, FontWeight.ExtraBold, SpottedInk))
       Text(
-          "Step 1 of 2 · tell the community who you are",
+          if (isEditing) "Edit your profile" else "Create your profile",
+          style = jakarta(23, 31, FontWeight.ExtraBold, SpottedInk),
+      )
+      Text(
+          if (isEditing) "Changes are saved to your profile"
+          else "Step 1 of 2 · tell the community who you are",
           style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
       )
     }
@@ -438,7 +442,10 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
           modifier = Modifier.size(20.dp).testTag(PersonalInfoScreenTestTags.LOADER),
       )
     } else {
-      Text("Create profile", style = jakarta(15, 20, Bold, Color.White))
+      Text(
+          if (state.isEditing) "Save changes" else "Create profile",
+          style = jakarta(15, 20, Bold, Color.White),
+      )
     }
   }
 }
