@@ -75,6 +75,21 @@ class AlertRepositoryFirestore(
     }
   }
 
+  override suspend fun deleteAlertsByOwner(ownerId: String): Result<Unit> {
+    return try {
+      // The rules only allow listing up to 100 alerts at a time
+      val snapshot =
+          db.collection(collectionPath).whereEqualTo("ownerId", ownerId).limit(100).get().await()
+      snapshot.documents.forEach { it.reference.delete().await() }
+      Result.success(Unit)
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
   override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double): Result<List<Alert>> {
     return try {
       val snapshot =

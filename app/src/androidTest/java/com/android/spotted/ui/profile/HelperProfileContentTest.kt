@@ -33,6 +33,7 @@ class HelperProfileContentTest {
                   onCameraClick = click("camera"),
                   onEditProfileClick = click("edit"),
               ),
+          onAccountClick = click("account"),
       )
     }
   }
@@ -54,6 +55,7 @@ class HelperProfileContentTest {
   fun buttonsCallTheirCallbacks() {
     setContent(HelperProfileUiState(name = "Rayen"))
 
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.ACCOUNT_BUTTON).performClick()
     composeTestRule
         .onNodeWithTag(HelperProfileTestTags.EDIT_PROFILE)
         .performScrollTo()
@@ -62,7 +64,7 @@ class HelperProfileContentTest {
     composeTestRule.onNodeWithTag(HomeScreenTestTags.TAB_MAP).performClick()
     composeTestRule.onNodeWithTag(HomeScreenTestTags.TAB_CAMERA).performClick()
 
-    assertEquals(mapOf("edit" to 1, "home" to 1, "map" to 1, "camera" to 1), clicks)
+    assertEquals(mapOf("account" to 1, "edit" to 1, "home" to 1, "map" to 1, "camera" to 1), clicks)
   }
 
   @Test
@@ -70,5 +72,24 @@ class HelperProfileContentTest {
     setContent(HelperProfileUiState(errorMessage = HelperProfileViewModel.LOAD_FAILED))
 
     composeTestRule.onNodeWithTag(HelperProfileTestTags.ERROR).assertIsDisplayed()
+  }
+
+  @Test
+  fun accountOptions_offerSignOutAndDelete() {
+    var signOuts = 0
+    var deletions = 0
+    composeTestRule.setContent {
+      AccountOptionsDialog(
+          onSignOut = { signOuts++ },
+          onDeleteAccount = { deletions++ },
+          onDismiss = {},
+      )
+    }
+
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.SIGN_OUT).performClick()
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.DELETE_ACCOUNT).performClick()
+
+    assertEquals(1, signOuts)
+    assertEquals(1, deletions)
   }
 }

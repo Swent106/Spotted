@@ -43,6 +43,14 @@ class FakeAlertRepository : AlertRepository {
     )
   }
 
+  override suspend fun deleteAlertsByOwner(ownerId: String): Result<Unit> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    alerts.values.removeAll { it.ownerId == ownerId }
+    return Result.success(Unit)
+  }
+
   override suspend fun getOpenAlertsNear(
       center: Location,
       radiusKm: Double,

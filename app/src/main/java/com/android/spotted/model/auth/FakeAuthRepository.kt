@@ -22,6 +22,14 @@ class FakeAuthRepository : AuthRepository {
     }
   }
 
+  override suspend fun deleteAccount(): Result<Unit> {
+    if (shouldSimulateFailure) {
+      return Result.failure(Exception("Simulated account deletion failure in FakeAuthRepository"))
+    }
+    _currentUser.value = null
+    return Result.success(Unit)
+  }
+
   override suspend fun signOut(): Result<Unit> {
     // Clear the state flow to simulate logout
     _currentUser.value = null

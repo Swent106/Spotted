@@ -76,6 +76,11 @@ class ReportMissingContentTest {
 
     override suspend fun getOpenAlertsByOwner(ownerId: String) =
         Result.success(published.filter { it.ownerId == ownerId })
+
+    override suspend fun deleteAlertsByOwner(ownerId: String): Result<Unit> {
+      published.removeAll { it.ownerId == ownerId }
+      return Result.success(Unit)
+    }
   }
 
   @Test

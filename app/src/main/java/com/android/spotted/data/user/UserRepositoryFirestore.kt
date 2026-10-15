@@ -37,6 +37,13 @@ class UserRepositoryFirestore(
     }
   }
 
+  override suspend fun deleteUser(uid: String): Result<Unit> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      Tasks.await(users.document(uid).delete())
+      Unit
+    }
+  }
+
   private suspend fun <T> firestoreResult(action: suspend () -> T): Result<T> =
       try {
         Result.success(action())
