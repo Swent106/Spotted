@@ -38,6 +38,7 @@ class HomeScreenContentTest {
           onReportMissingClick = click("report"),
           onRetryClick = click("retry"),
           onAddPetClick = click("addPet"),
+          onPetClick = { petId -> clicks["pet:$petId"] = (clicks["pet:$petId"] ?: 0) + 1 },
           onSettingsClick = click("settings"),
           onNotificationsClick = click("notifications"),
           onMapClick = click("map"),
@@ -80,6 +81,15 @@ class HomeScreenContentTest {
 
     node(HomeScreenTestTags.PETS_TITLE).assertTextEquals(HomeScreenTexts.PETS_TITLE)
     scrollTo(HomeScreenTestTags.PETS_EMPTY).assertTextEquals(HomeScreenTexts.NO_PETS)
+  }
+
+  @Test
+  fun petCard_opensThatPet() {
+    setContent(HomeUiState(pets = HomeSection(listOf(LUNA))))
+
+    scrollTo(HomeScreenTestTags.petCard(LUNA.id)).performClick()
+
+    assertEquals(1, clicks["pet:${LUNA.id}"])
   }
 
   @Test

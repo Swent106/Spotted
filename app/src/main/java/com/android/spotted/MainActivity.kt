@@ -37,6 +37,8 @@ import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
+import com.android.spotted.ui.petprofile.PetProfileScreen
+import com.android.spotted.ui.petprofile.PetProfileViewModel
 import com.android.spotted.ui.profile.HelperProfileNavigation
 import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
@@ -61,6 +63,10 @@ object Route {
   const val PROFILE = "profile"
   /** The profile form, opened from the Helper profile to change name, area or radius. */
   const val EDIT_PROFILE = "edit_profile"
+  const val PET_ID = "petId"
+  const val PET_PROFILE = "pet/{$PET_ID}"
+
+  fun petProfile(petId: String) = "pet/$petId"
 
   fun alertDetail(alertId: String) = "alert/$alertId"
 
@@ -159,10 +165,11 @@ fun NavGraphBuilder.addPetsDestination(
 
 /**
  * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
- * missing screen, [addPetContent] Add pets opened from Home, [reportSightingContent] Report
- * sighting (for an alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent]
- * the Helper profile (Profile tab) and [editProfileContent] the profile form it opens; tests
- * replace them to use hand-built states instead of the real ViewModels.
+ * missing screen, [addPetContent] Add pets opened from Home, [petProfileContent] one of the user's
+ * pets, [reportSightingContent] Report sighting (for an alert, or none from the Camera tab),
+ * [mapContent] the Map tab, [profileContent] the Helper profile (Profile tab) and
+ * [editProfileContent] the profile form it opens; tests replace them to use hand-built states
+ * instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -172,6 +179,7 @@ fun NavGraphBuilder.homeDestinations(
           onAlertClick = navigation.onAlertClick,
           onSeenPetClick = navigation.onSeenPetClick,
           onAddPetClick = navigation.onAddPetClick,
+          onPetClick = navigation.onPetClick,
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
@@ -190,6 +198,9 @@ fun NavGraphBuilder.homeDestinations(
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
           ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone)
         },
+    petProfileContent: @Composable (petId: String) -> Unit = { petId ->
+      PetProfileScreen(viewModel = viewModel(factory = PetProfileViewModel.Factory), petId = petId)
+    },
     mapContent: @Composable (onBack: () -> Unit, onAlertClick: (String) -> Unit) -> Unit =
         { onBack, onAlertClick ->
           AlertsMapScreen(onBack = onBack, onAlertClick = onAlertClick)
@@ -208,6 +219,7 @@ fun NavGraphBuilder.homeDestinations(
             onAlertClick = { alertId -> navController.navigate(Route.alertDetail(alertId)) },
             onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
             onAddPetClick = { navController.navigate(Route.ADD_PET) },
+            onPetClick = { petId -> navController.navigate(Route.petProfile(petId)) },
             onMapClick = { navController.navigate(Route.MAP) },
             onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = { navController.navigate(Route.PROFILE) },
@@ -231,6 +243,9 @@ fun NavGraphBuilder.homeDestinations(
     }
   }
   composable(Route.ADD_PET) { addPetContent { navController.popBackStack() } }
+  composable(Route.PET_PROFILE) { entry ->
+    petProfileContent(entry.arguments?.getString(Route.PET_ID).orEmpty())
+  }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
   composable(Route.ALERT_DETAIL) { entry ->
     AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
@@ -249,6 +264,7 @@ data class HomeNavigation(
     val onAlertClick: (alertId: String) -> Unit,
     val onSeenPetClick: (alertId: String) -> Unit,
     val onAddPetClick: () -> Unit = {},
+    val onPetClick: (petId: String) -> Unit = {},
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},

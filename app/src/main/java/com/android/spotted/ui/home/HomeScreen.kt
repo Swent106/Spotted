@@ -125,6 +125,7 @@ fun HomeScreen(
     onAlertClick: (alertId: String) -> Unit = {},
     onSeenPetClick: (alertId: String) -> Unit = {},
     onAddPetClick: () -> Unit = {},
+    onPetClick: (petId: String) -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
@@ -138,6 +139,7 @@ fun HomeScreen(
       state = state,
       onReportMissingClick = onReportMissingClick,
       onAddPetClick = onAddPetClick,
+      onPetClick = onPetClick,
       onMapClick = onMapClick,
       onCameraClick = onCameraClick,
       onProfileClick = onProfileClick,
@@ -156,6 +158,7 @@ fun HomeScreenContent(
     onSeenPetClick: (alertId: String) -> Unit = {},
     onRetryClick: () -> Unit = {},
     onAddPetClick: () -> Unit = {},
+    onPetClick: (petId: String) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -188,6 +191,7 @@ fun HomeScreenContent(
           onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
           onAddPetClick = onAddPetClick,
+          onPetClick = onPetClick,
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),
@@ -205,6 +209,7 @@ private fun HomeList(
     onSeenPetClick: (alertId: String) -> Unit,
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
+    onPetClick: (petId: String) -> Unit,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -228,7 +233,7 @@ private fun HomeList(
       }
     }
 
-    petsSection(state.pets, onRetryClick, onAddPetClick)
+    petsSection(state.pets, onRetryClick, onAddPetClick, onPetClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
@@ -330,6 +335,7 @@ private fun LazyListScope.petsSection(
     pets: HomeSection<Pet>,
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
+    onPetClick: (petId: String) -> Unit,
 ) {
   item(key = "petsTitle") {
     Text(
@@ -353,7 +359,7 @@ private fun LazyListScope.petsSection(
           )
         }
   }
-  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) }
+  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) { onPetClick(pet.id) } }
   // A refresh that failed keeps the pets and shows the error under them
   if (error != null && pets.items.isNotEmpty()) {
     item(key = "petsError") { PetsError(error, onRetryClick) }
@@ -394,7 +400,7 @@ internal fun SectionError(
 
 /** The pet's name and status on the left, its photo on the right; grows with long texts. */
 @Composable
-private fun PetCard(pet: Pet) {
+private fun PetCard(pet: Pet, onClick: () -> Unit) {
   Row(
       Modifier.padding(top = 12.dp)
           .fillMaxWidth()
@@ -402,6 +408,7 @@ private fun PetCard(pet: Pet) {
           .height(IntrinsicSize.Min)
           .clip(RoundedCornerShape(22.dp))
           .background(Color.White)
+          .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
           .testTag(HomeScreenTestTags.petCard(pet.id))
   ) {
     Column(Modifier.weight(1f).padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp)) {
