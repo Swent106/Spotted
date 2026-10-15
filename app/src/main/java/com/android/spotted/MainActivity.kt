@@ -40,6 +40,13 @@ object Route {
   const val ADD_PETS = "add_pets"
   const val HOME = "home"
   const val REPORT_MISSING = "report_missing"
+  const val ALERT_ID = "alertId"
+  const val ALERT_DETAIL = "alert/{$ALERT_ID}"
+  const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
+
+  fun alertDetail(alertId: String) = "alert/$alertId"
+
+  fun reportSighting(alertId: String) = "report_sighting/$alertId"
 }
 
 class MainActivity : ComponentActivity() {
@@ -101,10 +108,7 @@ fun SpottedApp(
       PersonalInfoScreenPlaceholder(onProfileSaved = { navController.navigate(Route.ADD_PETS) })
     }
     addPetsDestination(navController)
-    composable(Route.HOME) {
-      HomeScreen(onReportMissingClick = { navController.navigate(Route.REPORT_MISSING) })
-    }
-    composable(Route.REPORT_MISSING) { ReportMissingScreenPlaceholder() }
+    homeDestinations(navController)
   }
 }
 
@@ -132,6 +136,45 @@ fun NavGraphBuilder.addPetsDestination(
     )
   }
 }
+
+/**
+ * Home and the screens it opens. [homeContent] draws Home; tests replace it to use a hand-built
+ * state instead of the real ViewModel.
+ */
+fun NavGraphBuilder.homeDestinations(
+    navController: NavController,
+    homeContent: @Composable (HomeNavigation) -> Unit = { navigation ->
+      HomeScreen(
+          onReportMissingClick = navigation.onReportMissingClick,
+          onAlertClick = navigation.onAlertClick,
+          onSeenPetClick = navigation.onSeenPetClick,
+      )
+    },
+) {
+  composable(Route.HOME) {
+    homeContent(
+        HomeNavigation(
+            onReportMissingClick = { navController.navigate(Route.REPORT_MISSING) },
+            onAlertClick = { alertId -> navController.navigate(Route.alertDetail(alertId)) },
+            onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
+        )
+    )
+  }
+  composable(Route.REPORT_MISSING) { ReportMissingScreenPlaceholder() }
+  composable(Route.ALERT_DETAIL) { entry ->
+    AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
+  }
+  composable(Route.REPORT_SIGHTING) { entry ->
+    ReportSightingScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
+  }
+}
+
+/** Where Home can send the user. */
+data class HomeNavigation(
+    val onReportMissingClick: () -> Unit,
+    val onAlertClick: (alertId: String) -> Unit,
+    val onSeenPetClick: (alertId: String) -> Unit,
+)
 
 @Composable
 fun PersonalInfoScreenPlaceholder(onProfileSaved: () -> Unit = {}) {
@@ -164,6 +207,36 @@ fun ReportMissingScreenPlaceholder() {
     Text(
         text = "Report a pet missing",
         modifier = Modifier.semantics { testTag = "report_missing_screen" },
+    )
+  }
+}
+
+/** Shown until the Alert detail screen exists (S2-09). */
+@Composable
+fun AlertDetailScreenPlaceholder(alertId: String) {
+  Column(
+      modifier = Modifier.fillMaxSize().padding(16.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center,
+  ) {
+    Text(
+        text = "Alert $alertId",
+        modifier = Modifier.semantics { testTag = "alert_detail_screen" },
+    )
+  }
+}
+
+/** Shown until the Report sighting screen is wired here. */
+@Composable
+fun ReportSightingScreenPlaceholder(alertId: String) {
+  Column(
+      modifier = Modifier.fillMaxSize().padding(16.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center,
+  ) {
+    Text(
+        text = "Report a sighting of $alertId",
+        modifier = Modifier.semantics { testTag = "report_sighting_screen" },
     )
   }
 }
