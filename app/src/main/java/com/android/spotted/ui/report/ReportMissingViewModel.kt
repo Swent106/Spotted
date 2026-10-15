@@ -2,13 +2,19 @@
 package com.android.spotted.ui.report
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.android.spotted.data.Pet.PetRepositoryFirestore
+import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
+import com.android.spotted.model.auth.AuthRepositoryProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -135,5 +141,15 @@ class ReportMissingViewModel(
     const val NOT_SIGNED_IN = "You need to be signed in to report a pet missing."
     const val LOAD_PETS_FAILED = "Couldn't load your pets. Please try again."
     const val PUBLISH_FAILED = "Couldn't publish the alert. Please try again."
+
+    val Factory: ViewModelProvider.Factory = viewModelFactory {
+      initializer {
+        ReportMissingViewModel(
+            alertRepository = AlertRepositoryFirestore(),
+            petRepository = PetRepositoryFirestore(),
+            authRepository = AuthRepositoryProvider.authRepository,
+        )
+      }
+    }
   }
 }

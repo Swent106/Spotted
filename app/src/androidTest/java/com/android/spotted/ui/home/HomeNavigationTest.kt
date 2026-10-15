@@ -1,5 +1,8 @@
 package com.android.spotted.ui.home
 
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
@@ -36,14 +39,21 @@ class HomeNavigationTest {
     composeTestRule.setContent {
       navController = rememberNavController()
       NavHost(navController = navController, startDestination = Route.HOME) {
-        homeDestinations(navController) { navigation ->
-          HomeScreenContent(
-              state = STATE,
-              onReportMissingClick = navigation.onReportMissingClick,
-              onAlertClick = navigation.onAlertClick,
-              onSeenPetClick = navigation.onSeenPetClick,
-          )
-        }
+        homeDestinations(
+            navController,
+            homeContent = { navigation ->
+              HomeScreenContent(
+                  state = STATE,
+                  onReportMissingClick = navigation.onReportMissingClick,
+                  onAlertClick = navigation.onAlertClick,
+                  onSeenPetClick = navigation.onSeenPetClick,
+              )
+            },
+            // The real screen needs Firebase: a tagged text is enough to check the navigation
+            reportMissingContent = {
+              Text("Report missing", Modifier.testTag(REPORT_MISSING_SCREEN))
+            },
+        )
       }
     }
   }

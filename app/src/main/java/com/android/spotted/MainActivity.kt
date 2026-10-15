@@ -32,6 +32,7 @@ import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
+import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.theme.SampleAppTheme
 
 object Route {
@@ -138,8 +139,8 @@ fun NavGraphBuilder.addPetsDestination(
 }
 
 /**
- * Home and the screens it opens. [homeContent] draws Home; tests replace it to use a hand-built
- * state instead of the real ViewModel.
+ * Home and the screens it opens. [homeContent] draws Home and [reportMissingContent] the Report
+ * missing screen; tests replace them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -149,6 +150,9 @@ fun NavGraphBuilder.homeDestinations(
           onAlertClick = navigation.onAlertClick,
           onSeenPetClick = navigation.onSeenPetClick,
       )
+    },
+    reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
+      ReportMissingScreen(onBack = onDone, onPublished = onDone)
     },
 ) {
   composable(Route.HOME) {
@@ -160,7 +164,7 @@ fun NavGraphBuilder.homeDestinations(
         )
     )
   }
-  composable(Route.REPORT_MISSING) { ReportMissingScreenPlaceholder() }
+  composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
   composable(Route.ALERT_DETAIL) { entry ->
     AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
   }
@@ -193,21 +197,6 @@ fun PersonalInfoScreenPlaceholder(onProfileSaved: () -> Unit = {}) {
     ) {
       Text("Continue")
     }
-  }
-}
-
-/** Shown until the Report missing screen exists (its ViewModel is ReportMissingViewModel). */
-@Composable
-fun ReportMissingScreenPlaceholder() {
-  Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-  ) {
-    Text(
-        text = "Report a pet missing",
-        modifier = Modifier.semantics { testTag = "report_missing_screen" },
-    )
   }
 }
 
