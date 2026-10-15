@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +31,7 @@ import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
+import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.theme.SampleAppTheme
 
@@ -106,7 +106,7 @@ fun SpottedApp(
     }
     composable(Route.PERSONAL_INFO) {
       // Personal info stays below Add pets, so Back from Add pets returns to it
-      PersonalInfoScreenPlaceholder(onProfileSaved = { navController.navigate(Route.ADD_PETS) })
+      PersonalInfoScreen(onSaved = { navController.navigate(Route.ADD_PETS) })
     }
     addPetsDestination(navController)
     homeDestinations(navController)
@@ -179,26 +179,6 @@ data class HomeNavigation(
     val onAlertClick: (alertId: String) -> Unit,
     val onSeenPetClick: (alertId: String) -> Unit,
 )
-
-@Composable
-fun PersonalInfoScreenPlaceholder(onProfileSaved: () -> Unit = {}) {
-  Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-  ) {
-    Text(
-        text = "Personal Info Screen",
-        modifier = Modifier.semantics { testTag = "personal_info_screen" },
-    )
-    Button(
-        onClick = onProfileSaved,
-        modifier = Modifier.padding(top = 16.dp),
-    ) {
-      Text("Continue")
-    }
-  }
-}
 
 /** Shown until the Alert detail screen exists (S2-09). */
 @Composable
