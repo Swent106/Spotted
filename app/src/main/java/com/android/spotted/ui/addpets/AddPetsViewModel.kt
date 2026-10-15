@@ -54,6 +54,10 @@ class AddPetsViewModel(
     _uiState.update { it.copy(description = description, errorMessage = null) }
   }
 
+  fun onAgeChanged(age: String) {
+    _uiState.update { it.copy(age = age, errorMessage = null) }
+  }
+
   fun onAllergiesChanged(allergies: List<String>) {
     _uiState.update { it.copy(allergies = allergies, errorMessage = null) }
   }
@@ -92,6 +96,14 @@ class AddPetsViewModel(
   fun skip() {
     if (_uiState.value.isSaving) return
     _uiState.update { it.copy(isDone = true) }
+  }
+
+  /**
+   * Called by the screen once it has navigated away, so coming back to this screen does not end the
+   * step again.
+   */
+  fun onDoneHandled() {
+    _uiState.update { it.copy(isDone = false) }
   }
 
   private fun save(finishAfterSaving: Boolean) {
