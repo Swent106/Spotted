@@ -1,0 +1,52 @@
+# Portions of this file were generated with the help of Claude (Anthropic).
+# Builds an installable debug APK on every push to main, and on demand from the Actions tab
+# ("Run workflow"). Download it from the run's Artifacts section.
+name: Build APK
+
+on:
+  push:
+    branches: [ "main" ]
+  # Also on PRs that change how the APK is built, so a broken build is caught before merging
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/apk.yml"
+      - "app/build.gradle.kts"
+      - "app/debug.keystore"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Create google-services.json
+        env:
+          GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES }}
+        run: echo "$GOOGLE_SERVICES" | base64 --decode > app/google-services.json
+
+      # Signed with app/debug.keystore (see signingConfigs in app/build.gradle.kts), whose SHA-1 is
+      # registered in Firebase, so Google sign-in works on any phone.
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotted-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
