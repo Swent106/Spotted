@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted
 
 import android.os.Bundle
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
@@ -29,6 +31,8 @@ import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
+import com.android.spotted.ui.alertdetail.AlertDetailScreen
+import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
@@ -139,8 +143,9 @@ fun NavGraphBuilder.addPetsDestination(
 }
 
 /**
- * Home and the screens it opens. [homeContent] draws Home and [reportMissingContent] the Report
- * missing screen; tests replace them to use hand-built states instead of the real ViewModels.
+ * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
+ * missing screen and [alertDetailContent] an alert's detail; tests replace them to use hand-built
+ * states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -154,6 +159,14 @@ fun NavGraphBuilder.homeDestinations(
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       ReportMissingScreen(onBack = onDone, onPublished = onDone)
     },
+    alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
+        { alertId, onReportSighting ->
+          AlertDetailScreen(
+              viewModel = viewModel(factory = AlertDetailViewModel.Factory),
+              alertId = alertId,
+              onReportSighting = onReportSighting,
+          )
+        },
 ) {
   composable(Route.HOME) {
     homeContent(
@@ -166,7 +179,8 @@ fun NavGraphBuilder.homeDestinations(
   }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
   composable(Route.ALERT_DETAIL) { entry ->
-    AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
+    val alertId = entry.arguments?.getString(Route.ALERT_ID).orEmpty()
+    alertDetailContent(alertId) { navController.navigate(Route.reportSighting(alertId)) }
   }
   composable(Route.REPORT_SIGHTING) { entry ->
     ReportSightingScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
@@ -179,21 +193,6 @@ data class HomeNavigation(
     val onAlertClick: (alertId: String) -> Unit,
     val onSeenPetClick: (alertId: String) -> Unit,
 )
-
-/** Shown until the Alert detail screen exists (S2-09). */
-@Composable
-fun AlertDetailScreenPlaceholder(alertId: String) {
-  Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-  ) {
-    Text(
-        text = "Alert $alertId",
-        modifier = Modifier.semantics { testTag = "alert_detail_screen" },
-    )
-  }
-}
 
 /** Shown until the Report sighting screen is wired here. */
 @Composable
