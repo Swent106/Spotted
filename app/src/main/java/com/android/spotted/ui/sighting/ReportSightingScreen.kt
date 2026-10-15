@@ -50,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.theme.jakarta
+import java.util.Locale
 
 object ReportSightingScreenTestTags {
   const val SCREEN = "sightingScreen"
@@ -188,7 +189,8 @@ fun ReportSightingContent(
               style = jakarta(16, 20f, 700, 0xFF14161A),
           )
           Text(
-              "Taken from your GPS · tap to adjust",
+              state.location?.let { "%.4f, %.4f".format(Locale.US, it.latitude, it.longitude) }
+                  ?: "Tap to use your GPS position",
               style = jakarta(12, 16f, 500, 0xFF5F6672),
           )
         }

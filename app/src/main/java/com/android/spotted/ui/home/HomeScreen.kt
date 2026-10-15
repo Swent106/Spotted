@@ -125,6 +125,7 @@ fun HomeScreen(
     onSeenPetClick: (alertId: String) -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   // Home stays in the back stack: reload it when coming back, so a pet just reported missing or
@@ -136,6 +137,7 @@ fun HomeScreen(
       onReportMissingClick = onReportMissingClick,
       onAddPetClick = onAddPetClick,
       onMapClick = onMapClick,
+      onCameraClick = onCameraClick,
       onAlertClick = onAlertClick,
       onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,

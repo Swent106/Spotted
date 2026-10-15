@@ -49,6 +49,7 @@ class HomeNavigationTest {
                   onSeenPetClick = navigation.onSeenPetClick,
                   onAddPetClick = navigation.onAddPetClick,
                   onMapClick = navigation.onMapClick,
+                  onCameraClick = navigation.onCameraClick,
               )
             },
             // The real screen needs Firebase: a tagged text is enough to check the navigation
@@ -56,6 +57,12 @@ class HomeNavigationTest {
               Text("Report missing", Modifier.testTag(REPORT_MISSING_SCREEN))
             },
             addPetContent = { Text("Add pets", Modifier.testTag(ADD_PETS_SCREEN)) },
+            reportSightingContent = { alertId, _ ->
+              Text(
+                  "Report a sighting of ${alertId ?: "a new pet"}",
+                  Modifier.testTag(REPORT_SIGHTING_SCREEN),
+              )
+            },
             mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },
         )
       }
@@ -92,6 +99,16 @@ class HomeNavigationTest {
     scrollTo(HomeScreenTestTags.REPORT_MISSING_BUTTON).performClick()
 
     node(REPORT_MISSING_SCREEN).assertIsDisplayed()
+  }
+
+  @Test
+  fun cameraTab_opensReportSightingWithoutAlert() {
+    node(HomeScreenTestTags.TAB_CAMERA).performClick()
+
+    node(REPORT_SIGHTING_SCREEN)
+        .assertIsDisplayed()
+        .assertTextEquals("Report a sighting of a new pet")
+    assertEquals(Route.NEW_SIGHTING, navController.currentDestination?.route)
   }
 
   @Test
