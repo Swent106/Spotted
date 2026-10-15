@@ -64,13 +64,21 @@ android {
   // The next lines transfers the src/test/* from shared to the testDebug one
   //
   // This prevent errors from occurring during unit tests
+  val sharedTestSources = "src/testShared/java"
   sourceSets.getByName("testDebug") {
     val test = sourceSets.getByName("test")
 
+    java.directories.add(sharedTestSources)
+    kotlin.directories.add(sharedTestSources)
     java.directories.addAll(test.java.directories)
     kotlin.directories.addAll(test.kotlin.directories)
     res.directories.addAll(test.res.directories)
     resources.directories.addAll(test.resources.directories)
+  }
+
+  sourceSets.getByName("androidTest") {
+    java.directories.add(sharedTestSources)
+    kotlin.directories.add(sharedTestSources)
   }
 
   sourceSets.getByName("test") {
