@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" width="140" alt="Spotted logo">
+  <img src="app/src/main/res/drawable/spotted_logo.png" width="140" alt="Spotted logo">
 </p>
 
 <h1 align="center">Spotted</h1>
@@ -8,9 +8,6 @@
 <p align="center">
   <a href="https://github.com/Swent106/Spotted/actions/workflows/ci.yml">
     <img src="https://github.com/Swent106/Spotted/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI">
-  </a>
-  <a href="https://sonarcloud.io/summary/new_code?id=Swent106_Spotted">
-    <img src="https://sonarcloud.io/api/project_badges/measure?project=Swent106_Spotted&metric=alert_status" alt="Quality Gate">
   </a>
   <a href="https://sonarcloud.io/summary/new_code?id=Swent106_Spotted">
     <img src="https://sonarcloud.io/api/project_badges/measure?project=Swent106_Spotted&metric=coverage" alt="Coverage">
@@ -92,4 +89,3 @@ firebase emulators:start                     # start Auth + Firestore emulators
 ---
 
 Coursework for CS-311 Software Enterprise (SwEnt), EPFL.
-[![CI and SonarCloud Scan](https://github.com/Swent106/Spotted/actions/workflows/ci.yml/badge.svg)](https://github.com/Swent106/Spotted/actions/workflows/ci.yml)
