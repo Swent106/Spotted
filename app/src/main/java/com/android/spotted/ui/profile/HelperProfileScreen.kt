@@ -47,6 +47,7 @@ import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.home.TabBar
 import com.android.spotted.ui.home.TabIndex
@@ -211,6 +212,15 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
           modifier = Modifier.size(56.dp).clip(CircleShape).background(SpottedProfileAvatar),
       ) {
         Text(state.initial, style = jakarta(22, 29f, FontWeight.ExtraBold, SpottedProfileInitial))
+        // Covers the initial once loaded; if there is no photo, the initial stays visible
+        state.photoUrl?.let { url ->
+          AsyncImage(
+              model = url,
+              contentDescription = "Profile photo",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.matchParentSize(),
+          )
+        }
       }
       Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.location.LocationRepositoryFused
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepository
@@ -13,6 +14,7 @@ import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.location.AddressRepository
 import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ class PersonalInfoViewModel(
     private val authRepository: AuthRepository,
     private val locationRepository: LocationRepository? = null,
     private val addressRepository: AddressRepository? = null,
+    private val photoRepository: PhotoRepository? = null,
 ) : ViewModel() {
 
   private val _uiState =
@@ -59,6 +62,8 @@ class PersonalInfoViewModel(
             homeArea = profile.homeArea,
             homeLocation = profile.homeLocation,
             alertRadiusKm = profile.alertRadiusKm,
+            // Shows the current photo; it is only uploaded again if the user picks another one
+            photoUri = photoRepository?.profilePhotoUrl(signedInUser.uid),
             isEditing = true,
         )
       }
@@ -120,6 +125,11 @@ class PersonalInfoViewModel(
     _uiState.update { it.copy(homeLocation = location, isSaved = false) }
   }
 
+  /** Shows the photo the user picked or took ([uri]), or removes it when null. */
+  fun onPhotoSelected(uri: String?) {
+    _uiState.update { it.copy(photoUri = uri, isSaved = false) }
+  }
+
   /**
    * Places the home pin at the device's current position and writes its neighbourhood and city in
    * the home area field. The View calls it once the location permission is granted; if no position
@@ -163,6 +173,19 @@ class PersonalInfoViewModel(
 
     _uiState.update { it.copy(isSaving = true, errorMessage = null) }
     viewModelScope.launch {
+      // A photo just picked or taken is a local URI: upload it before saving the profile
+      val photoUri = currentState.photoUri
+      val repository = photoRepository
+      if (
+          repository != null &&
+              photoUri != null &&
+              photoUri != repository.profilePhotoUrl(signedInUser.uid)
+      ) {
+        repository.uploadProfilePhoto(signedInUser.uid, photoUri).onFailure {
+          _uiState.update { it.copy(isSaving = false, errorMessage = PHOTO_UPLOAD_FAILED) }
+          return@launch
+        }
+      }
       userRepository
           .saveUser(profile)
           .fold(
@@ -216,6 +239,8 @@ class PersonalInfoViewModel(
   }
 
   companion object {
+    const val PHOTO_UPLOAD_FAILED =
+        "Couldn't upload your photo. Try again, or remove it to save without one."
     const val LOCATION_UNAVAILABLE =
         "Couldn't find your position. Tap the map to place your home instead."
     const val LOCATION_PERMISSION_DENIED =
@@ -236,6 +261,7 @@ class PersonalInfoViewModel(
                         authRepository = authRepository,
                         locationRepository = application?.let { LocationRepositoryFused(it) },
                         addressRepository = application?.let { AddressRepositoryGeocoder(it) },
+                        photoRepository = application?.let { PhotoRepositoryFirestore(it) },
                     )
                 )
             )

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -20,6 +21,7 @@ import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -269,5 +271,53 @@ class PersonalInfoScreenTest {
         .performTextInput("Plainpalais, Geneva")
 
     button().assertIsEnabled()
+  }
+
+  @Test
+  fun photoSelected_isShownInTheAvatar() {
+    setContent(validState.copy(photoUri = "content://photos/1"))
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO).assertExists()
+  }
+
+  @Test
+  fun personalInfoScreen_avatarOpensPhotoOptions_andCancelClosesThem() {
+    val viewModel =
+        PersonalInfoViewModel(
+            user = User(uid = "user-1", email = "rayen@example.com"),
+            userRepository = FakeUserRepository(),
+            authRepository = FakeAuthRepository(),
+        )
+    composeTestRule.setContent { PersonalInfoScreen(viewModel = viewModel) }
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).performClick()
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY).assertIsDisplayed()
+    // Nothing to remove yet
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).assertDoesNotExist()
+
+    composeTestRule.onNodeWithText("Cancel").performClick()
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS).assertDoesNotExist()
+  }
+
+  @Test
+  fun photoOptions_removeIsOfferedOnlyWithAPhoto_andCallsBack() {
+    var removed = false
+    composeTestRule.setContent {
+      PhotoOptionsDialog(
+          hasPhoto = true,
+          canTakePhoto = true,
+          onPickPhoto = {},
+          onTakePhoto = {},
+          onRemovePhoto = { removed = true },
+          onDismiss = {},
+      )
+    }
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).performClick()
+
+    assertTrue(removed)
   }
 }

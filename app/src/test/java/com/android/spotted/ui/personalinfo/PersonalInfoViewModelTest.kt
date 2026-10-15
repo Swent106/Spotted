@@ -7,6 +7,7 @@ import com.android.spotted.model.auth.User
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.location.LocationException
+import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -498,5 +499,64 @@ class PersonalInfoViewModelTest {
         val saved = userRepository.getUser("user-1").getOrThrow()
         assertEquals(Location(46.52, 6.63), saved.homeLocation)
         assertEquals(5, saved.alertRadiusKm)
+      }
+
+  @Test
+  fun onPhotoSelected_showsThenRemovesThePhoto() {
+    viewModel.onPhotoSelected("content://photos/1")
+    assertEquals("content://photos/1", viewModel.uiState.value.photoUri)
+
+    viewModel.onPhotoSelected(null)
+
+    assertNull(viewModel.uiState.value.photoUri)
+  }
+
+  @Test
+  fun saveProfile_uploadsANewPhotoBeforeSaving() =
+      runTest(testDispatcher) {
+        val photoRepository = FakePhotoRepository()
+        val photoViewModel =
+            PersonalInfoViewModel(
+                user = User(uid = "user-1", email = "jamie@example.com"),
+                userRepository = userRepository,
+                authRepository = authRepository,
+                photoRepository = photoRepository,
+            )
+        photoViewModel.onFirstNameChanged("Jamie")
+        photoViewModel.onHomeAreaChanged("Lausanne")
+        photoViewModel.onPhotoSelected("content://photos/me")
+
+        photoViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(
+            "content://photos/me",
+            photoRepository.uploadedPhotos[photoRepository.profilePhotoUrl("user-1")],
+        )
+        assertTrue(photoViewModel.uiState.value.isSaved)
+      }
+
+  @Test
+  fun saveProfile_whenThePhotoCannotBeUploaded_keepsTheFormAndSaysSo() =
+      runTest(testDispatcher) {
+        val photoRepository = FakePhotoRepository().apply { failure = Exception("offline") }
+        val photoViewModel =
+            PersonalInfoViewModel(
+                user = User(uid = "user-1", email = "jamie@example.com"),
+                userRepository = userRepository,
+                authRepository = authRepository,
+                photoRepository = photoRepository,
+            )
+        photoViewModel.onFirstNameChanged("Jamie")
+        photoViewModel.onHomeAreaChanged("Lausanne")
+        photoViewModel.onPhotoSelected("content://photos/me")
+
+        photoViewModel.saveProfile()
+        advanceUntilIdle()
+
+        val state = photoViewModel.uiState.value
+        assertEquals(PersonalInfoViewModel.PHOTO_UPLOAD_FAILED, state.errorMessage)
+        assertFalse(state.isSaved)
+        assertTrue(userRepository.getUser("user-1").isFailure)
       }
 }
