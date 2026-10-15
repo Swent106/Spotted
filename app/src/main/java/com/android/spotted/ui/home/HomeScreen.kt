@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -108,9 +108,6 @@ object HomeScreenTexts {
   const val RETRY = "Retry"
 }
 
-/** Space left under the scrolling content so that the tab bar never hides it. */
-private val TAB_BAR_SPACE = 91.dp
-
 /**
  * Home screen wired to its [HomeViewModel]. Navigation is done by the caller through the callbacks.
  */
@@ -154,55 +151,84 @@ fun HomeScreenContent(
         modifier = Modifier.matchParentSize().alpha(0.4f),
     )
 
-    // Lazy, so that a long list of lost pets only composes what is on screen
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().safeDrawingPadding().testTag(HomeScreenTestTags.BODY),
-        contentPadding =
-            PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = TAB_BAR_SPACE),
-    ) {
-      item(key = "header") {
-        Column {
-          Header(state.userName, onSettingsClick, onNotificationsClick)
-          state.errorMessage?.let { message ->
-            Spacer(Modifier.height(8.dp))
-            Text(
-                message,
-                style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
-                modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
-            )
+    // The tab bar is the Scaffold's bottom bar, so the list ends above it: no item can be
+    // hidden behind the tab bar, whatever the screen size or the number of items
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+          Box(Modifier.fillMaxWidth().navigationBarsPadding(), Alignment.Center) {
+            TabBar(onClicks = listOf({}, onMapClick, onCameraClick, onProfileClick))
           }
-        }
-      }
+        },
+    ) { innerPadding ->
+      HomeList(
+          state = state,
+          onReportMissingClick = onReportMissingClick,
+          onAlertClick = onAlertClick,
+          onSeenPetClick = onSeenPetClick,
+          onRetryClick = onRetryClick,
+          onSettingsClick = onSettingsClick,
+          onNotificationsClick = onNotificationsClick,
+          modifier = Modifier.padding(innerPadding),
+      )
+    }
+  }
+}
 
-      petsSection(state.pets, onRetryClick)
-
-      lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
-
-      // Report a pet missing: at the end of the scroll, as in Figma
-      item(key = "reportMissing") {
-        OutlinedButton(
-            onClick = onReportMissingClick,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, SpottedReportBorder),
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
-            modifier =
-                Modifier.padding(top = 9.dp)
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag(HomeScreenTestTags.REPORT_MISSING_BUTTON),
-        ) {
+/** Header, "Your pets", "Lost near you" and the Report missing button, in one lazy list. */
+@Composable
+private fun HomeList(
+    state: HomeUiState,
+    onReportMissingClick: () -> Unit,
+    onAlertClick: (alertId: String) -> Unit,
+    onSeenPetClick: (alertId: String) -> Unit,
+    onRetryClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+  // Lazy, so that a long list of lost pets only composes what is on screen
+  LazyColumn(
+      modifier = modifier.fillMaxSize().testTag(HomeScreenTestTags.BODY),
+      contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 16.dp),
+  ) {
+    item(key = "header") {
+      Column {
+        Header(state.userName, onSettingsClick, onNotificationsClick)
+        state.errorMessage?.let { message ->
+          Spacer(Modifier.height(8.dp))
           Text(
-              "Report a pet missing",
-              style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed),
+              message,
+              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
+              modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
           )
         }
       }
     }
 
-    TabBar(
-        onClicks = listOf({}, onMapClick, onCameraClick, onProfileClick),
-        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
-    )
+    petsSection(state.pets, onRetryClick)
+
+    lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
+
+    // Report a pet missing: at the end of the scroll, as in Figma
+    item(key = "reportMissing") {
+      OutlinedButton(
+          onClick = onReportMissingClick,
+          shape = RoundedCornerShape(14.dp),
+          border = BorderStroke(1.dp, SpottedReportBorder),
+          colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
+          modifier =
+              Modifier.padding(top = 9.dp)
+                  .fillMaxWidth()
+                  .height(52.dp)
+                  .testTag(HomeScreenTestTags.REPORT_MISSING_BUTTON),
+      ) {
+        Text(
+            "Report a pet missing",
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed),
+        )
+      }
+    }
   }
 }
 
