@@ -8,14 +8,25 @@ name: Build APK
 on:
   push:
     branches: [ "main" ]
-  # Also on PRs that change how the APK is built, so a broken build is caught before merging
+  # Also on PRs that change how the APK is built (workflow, signing, build scripts, dependencies,
+  # manifest), so a broken build is caught before merging
   pull_request:
     branches: [ "main" ]
     paths:
       - ".github/workflows/apk.yml"
       - "app/build.gradle.kts"
       - "app/debug.keystore"
+      - "app/src/main/AndroidManifest.xml"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/libs.versions.toml"
+      - "gradle/wrapper/gradle-wrapper.properties"
   workflow_dispatch:
+
+# Least privilege: the job only reads the repository. Uploading artifacts needs no extra permission.
+permissions:
+  contents: read
 
 jobs:
   build-apk:
