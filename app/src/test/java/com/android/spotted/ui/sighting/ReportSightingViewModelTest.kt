@@ -148,6 +148,34 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun loadCurrentLocation_failureWithoutMessage_setsDefaultErrorMessage() = runTest {
+    val fakeLocationRepo = FakeLocationRepository()
+    fakeLocationRepo.failure = Exception()
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals(
+        "Location unavailable. Tap to set location on map.",
+        vm.uiState.value.errorMessage,
+    )
+  }
+
+  @Test
+  fun loadCurrentLocation_withoutLocationRepository_leavesStateUnchanged() {
+    viewModel.loadCurrentLocation()
+
+    assertEquals(ReportSightingUiState(), viewModel.uiState.value)
+  }
+
+  @Test
   fun selectAlert_and_selectNoMatchingAlert_autoPrefillSpecies() {
     viewModel.selectNoMatchingAlert()
     assertEquals(Species.DOG, viewModel.uiState.value.selectedSpecies)
