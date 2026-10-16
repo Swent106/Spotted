@@ -23,4 +23,7 @@ interface AlertRepository {
 
   /** Returns the open alerts published by [ownerId], wherever they are, newest first. */
   suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>>
+
+  /** Deletes every alert published by [ownerId], e.g. when they delete their account. */
+  suspend fun deleteAlertsByOwner(ownerId: String): Result<Unit>
 }

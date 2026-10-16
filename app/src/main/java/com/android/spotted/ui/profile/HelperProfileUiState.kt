@@ -14,6 +14,8 @@ data class HelperProfileUiState(
     val alertRadiusKm: Int = PersonalInfoUiState.DEFAULT_ALERT_RADIUS_KM,
     val petsBroughtHome: Int = 0,
     val isLoading: Boolean = false,
+    /** True while signing out or deleting the account. */
+    val isLeaving: Boolean = false,
     val errorMessage: String? = null,
 ) {
   /** Letter shown in the avatar until profiles have a photo. */

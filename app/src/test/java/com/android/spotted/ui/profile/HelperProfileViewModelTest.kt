@@ -1,7 +1,13 @@
 package com.android.spotted.ui.profile
 
+import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.Pet
+import com.android.spotted.model.Pet.PetRepositoryLocal
+import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +19,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -23,6 +30,8 @@ class HelperProfileViewModelTest {
   private lateinit var userRepository: FakeUserRepository
   private lateinit var authRepository: FakeAuthRepository
   private lateinit var uid: String
+  private val petRepository = PetRepositoryLocal()
+  private val alertRepository = FakeAlertRepository()
 
   @Before
   fun setUp() = runTest {
@@ -42,10 +51,10 @@ class HelperProfileViewModelTest {
 
   /** A ViewModel as the screen shows it: loaded once. */
   private fun viewModel(auth: AuthRepository = authRepository) =
-      HelperProfileViewModel(userRepository, auth).apply { load() }
+      HelperProfileViewModel(userRepository, auth, petRepository, alertRepository).apply { load() }
 
   @Test
-  fun load_showsTheNameAreaAndRadius() {
+  fun init_loadsTheNameAndArea() {
     val state = viewModel().uiState.value
 
     assertEquals("Rayen", state.name)
@@ -55,7 +64,7 @@ class HelperProfileViewModelTest {
   }
 
   @Test
-  fun load_whenTheProfileCannotBeLoaded_showsAnError() {
+  fun init_whenTheProfileCannotBeLoaded_showsAnError() {
     userRepository.failure = IllegalStateException("offline")
 
     assertEquals(HelperProfileViewModel.LOAD_FAILED, viewModel().uiState.value.errorMessage)
@@ -67,5 +76,72 @@ class HelperProfileViewModelTest {
     assertTrue(HelperProfileUiState(petsBroughtHome = 1).hasFirstFind)
     assertFalse(HelperProfileUiState(petsBroughtHome = 4).hasFiveConfirmed)
     assertTrue(HelperProfileUiState(petsBroughtHome = 5).hasFiveConfirmed)
+  }
+
+  @Test
+  fun signOut_keepsTheProfile() = runTest {
+    viewModel().signOut()
+
+    assertNull(authRepository.currentUser.value)
+    assertTrue(userRepository.getUser(uid).isSuccess)
+  }
+
+  @Test
+  fun deleteAccount_deletesTheProfileAndSignsOut() = runTest {
+    viewModel().deleteAccount()
+
+    assertNull(authRepository.currentUser.value)
+    assertTrue(userRepository.getUser(uid).isFailure)
+  }
+
+  @Test
+  fun deleteAccount_alsoDeletesThePetsAndAlerts_soTheNextProfileStartsEmpty() = runTest {
+    val rex = Pet(id = "rex", ownerId = uid, name = "Rex", species = Species.DOG)
+    val someoneElses = Pet(id = "milo", ownerId = "other", name = "Milo", species = Species.CAT)
+    petRepository.addPet(rex)
+    petRepository.addPet(someoneElses)
+    alertRepository.publishAlert(
+        Alert(
+            id = "alert-rex",
+            petId = "rex",
+            ownerId = uid,
+            lastKnownLocation = Location(46.52, 6.63),
+            lostAtMillis = 0L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+        )
+    )
+
+    viewModel().deleteAccount()
+
+    assertEquals(emptyList<Pet>(), petRepository.getPetsByOwner(uid).getOrThrow())
+    assertEquals(listOf(someoneElses), petRepository.getPetsByOwner("other").getOrThrow())
+    assertEquals(emptyList<Alert>(), alertRepository.publishedAlerts)
+  }
+
+  @Test
+  fun deleteAccount_whenTheAccountCannotBeDeleted_stillSignsOut() = runTest {
+    val refusingAuth =
+        object : AuthRepository by authRepository {
+          override suspend fun deleteAccount() =
+              Result.failure<Unit>(IllegalStateException("Recent login required"))
+        }
+
+    viewModel(refusingAuth).deleteAccount()
+
+    assertNull(authRepository.currentUser.value)
+    assertTrue(userRepository.getUser(uid).isFailure)
+  }
+
+  @Test
+  fun deleteAccount_whenTheProfileCannotBeDeleted_staysSignedInWithAnError() {
+    val viewModel = viewModel()
+    userRepository.failure = IllegalStateException("offline")
+
+    viewModel.deleteAccount()
+
+    assertEquals(HelperProfileViewModel.DELETE_FAILED, viewModel.uiState.value.errorMessage)
+    assertFalse(viewModel.uiState.value.isLeaving)
+    assertEquals(uid, authRepository.currentUser.value?.uid)
   }
 }

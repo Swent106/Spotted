@@ -82,6 +82,8 @@ class HomeViewModelTest {
       currentUser.value = null
       return Result.success(Unit)
     }
+
+    override suspend fun deleteAccount(): Result<Unit> = signOut()
   }
 
   /** [PetRepositoryLocal] that can fail, and can answer slowly for some owners. */

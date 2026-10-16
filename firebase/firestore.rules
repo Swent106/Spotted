@@ -64,6 +64,8 @@ service cloud.firestore {
       allow update: if isOwner(userId)
           && uidNotModified(userId)
           && isValidUser(request.resource.data, userId);
+      // Lets users delete their own account
+      allow delete: if isOwner(userId);
     }
 
     match /pets/{petId} {

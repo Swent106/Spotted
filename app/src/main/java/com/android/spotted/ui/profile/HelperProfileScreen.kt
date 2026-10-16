@@ -10,18 +10,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,11 +37,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.credentials.ClearCredentialStateRequest
+import androidx.credentials.CredentialManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
@@ -46,6 +56,7 @@ import com.android.spotted.ui.theme.SpottedBadgeLockedIcon
 import com.android.spotted.ui.theme.SpottedBlue
 import com.android.spotted.ui.theme.SpottedError
 import com.android.spotted.ui.theme.SpottedInk
+import com.android.spotted.ui.theme.SpottedLogoutRed
 import com.android.spotted.ui.theme.SpottedProfileAvatar
 import com.android.spotted.ui.theme.SpottedProfileBackground
 import com.android.spotted.ui.theme.SpottedProfileInitial
@@ -56,15 +67,20 @@ import com.android.spotted.ui.theme.SpottedTextLabel
 import com.android.spotted.ui.theme.SpottedTextMuted
 import com.android.spotted.ui.theme.SpottedTextSecondary
 import com.android.spotted.ui.theme.jakarta
+import kotlinx.coroutines.launch
 
 /** Test tags used by UI tests to find the elements of the [HelperProfileContent]. */
 object HelperProfileTestTags {
   const val SCREEN = "helperProfile_screen"
   const val NAME = "helperProfile_name"
   const val AREA = "helperProfile_area"
+  const val ACCOUNT_BUTTON = "helperProfile_accountButton"
   const val PETS_BROUGHT_HOME = "helperProfile_petsBroughtHome"
   const val EDIT_PROFILE = "helperProfile_editProfile"
   const val ERROR = "helperProfile_error"
+  const val ACCOUNT_OPTIONS = "helperProfile_accountOptions"
+  const val SIGN_OUT = "helperProfile_signOut"
+  const val DELETE_ACCOUNT = "helperProfile_deleteAccount"
 
   fun badge(name: String) = "helperProfile_badge_$name"
 }
@@ -77,17 +93,49 @@ data class HelperProfileNavigation(
     val onEditProfileClick: () -> Unit = {},
 )
 
-/** Helper profile (Figma "13 · Helper profile"), wired to its [HelperProfileViewModel]. */
+/**
+ * Helper profile (Figma "13 · Helper profile"), wired to its [HelperProfileViewModel].
+ *
+ * The red button at the top offers to sign out or to delete the account. Both first clear the
+ * Google account remembered by Credential Manager (#75), so the next sign-in asks which account to
+ * use; MainViewModel then sends the app back to Sign in.
+ */
 @Composable
 fun HelperProfileScreen(
     viewModel: HelperProfileViewModel = viewModel(factory = HelperProfileViewModel.Factory),
     navigation: HelperProfileNavigation = HelperProfileNavigation(),
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  var showAccountOptions by rememberSaveable { mutableStateOf(false) }
   // Runs again when coming back from the profile form, so the changes are shown
   LaunchedEffect(Unit) { viewModel.load() }
 
-  HelperProfileContent(state = state, navigation = navigation)
+  // Forgets the chosen Google account before leaving, then runs the account action
+  fun leave(action: () -> Unit) {
+    showAccountOptions = false
+    scope.launch {
+      runCatching {
+        CredentialManager.create(context).clearCredentialState(ClearCredentialStateRequest())
+      }
+      action()
+    }
+  }
+
+  HelperProfileContent(
+      state = state,
+      navigation = navigation,
+      onAccountClick = { showAccountOptions = true },
+  )
+
+  if (showAccountOptions) {
+    AccountOptionsDialog(
+        onSignOut = { leave(viewModel::signOut) },
+        onDeleteAccount = { leave(viewModel::deleteAccount) },
+        onDismiss = { showAccountOptions = false },
+    )
+  }
 }
 
 /** Stateless Helper profile, the part UI tests target. */
@@ -95,6 +143,7 @@ fun HelperProfileScreen(
 fun HelperProfileContent(
     state: HelperProfileUiState,
     navigation: HelperProfileNavigation = HelperProfileNavigation(),
+    onAccountClick: () -> Unit = {},
 ) {
   Box(
       Modifier.fillMaxSize()
@@ -116,7 +165,7 @@ fun HelperProfileContent(
                   .statusBarsPadding()
                   .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 16.dp),
       ) {
-        Header(state)
+        Header(state, onAccountClick)
         state.errorMessage?.let { message ->
           Text(
               message,
@@ -142,15 +191,17 @@ fun HelperProfileContent(
   }
 }
 
-/** Avatar, name and area on a white card. */
+/** Avatar, name and area on a white card, and the red account button on the right. */
 @Composable
-private fun Header(state: HelperProfileUiState) {
+private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
   Box(Modifier.fillMaxWidth()) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             Modifier.align(Alignment.CenterStart)
+                // Leaves room for the account button on the right
+                .padding(end = 56.dp)
                 .clip(RoundedCornerShape(19.dp))
                 .background(Color.White)
                 .padding(end = 16.dp),
@@ -174,6 +225,35 @@ private fun Header(state: HelperProfileUiState) {
             style = jakarta(10, 17f, FontWeight.Medium, SpottedTextSecondary),
             maxLines = 1,
             modifier = Modifier.testTag(HelperProfileTestTags.AREA),
+        )
+      }
+    }
+    // 36 x 21 dp red pill as in Figma, inside a 48 dp touch target
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier.align(Alignment.CenterEnd)
+                .size(48.dp)
+                .clickable(
+                    enabled = !state.isLeaving,
+                    onClickLabel = "Sign out or delete account",
+                    role = Role.Button,
+                    onClick = onAccountClick,
+                )
+                .testTag(HelperProfileTestTags.ACCOUNT_BUTTON),
+    ) {
+      Box(
+          contentAlignment = Alignment.Center,
+          modifier =
+              Modifier.width(36.dp)
+                  .height(21.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .background(SpottedLogoutRed),
+      ) {
+        Image(
+            painterResource(R.drawable.ic_logout),
+            contentDescription = "Sign out",
+            modifier = Modifier.size(10.dp),
         )
       }
     }
@@ -311,4 +391,45 @@ private fun EditProfile(state: HelperProfileUiState, onClick: () -> Unit) {
     }
     Text(">", style = jakarta(16, 21f, FontWeight.SemiBold, SpottedTextFaint))
   }
+}
+
+/** Sign out, or delete the account so the next sign-in starts with a new profile. */
+@Composable
+internal fun AccountOptionsDialog(
+    onSignOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("Your account", style = jakarta(18, 24f, FontWeight.ExtraBold, SpottedInk)) },
+      text = {
+        Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
+          TextButton(
+              onClick = onSignOut,
+              modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.SIGN_OUT),
+          ) {
+            Text(
+                "Sign out",
+                style = jakarta(15, 20f, FontWeight.SemiBold, SpottedBlue),
+                modifier = Modifier.fillMaxWidth(),
+            )
+          }
+          TextButton(
+              onClick = onDeleteAccount,
+              modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.DELETE_ACCOUNT),
+          ) {
+            Column(Modifier.fillMaxWidth()) {
+              Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, SpottedError))
+              Text(
+                  "Removes your profile from Spotted. You can sign in again to start over.",
+                  style = jakarta(12, 16f, FontWeight.Medium, SpottedTextSecondary),
+              )
+            }
+          }
+        }
+      },
+      confirmButton = {},
+      dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+  )
 }

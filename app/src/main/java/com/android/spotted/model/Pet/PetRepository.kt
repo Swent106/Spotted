@@ -8,4 +8,7 @@ interface PetRepository {
   suspend fun getPet(id: String): Result<Pet>
 
   suspend fun getPetsByOwner(ownerId: String): Result<List<Pet>>
+
+  /** Deletes the pet [id]. Deleting a pet that doesn't exist succeeds. */
+  suspend fun deletePet(id: String): Result<Unit>
 }
