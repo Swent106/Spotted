@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
@@ -34,6 +35,8 @@ import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.report.ReportMissingScreen
+import com.android.spotted.ui.sighting.ReportSightingScreen
+import com.android.spotted.ui.sighting.ReportSightingViewModel
 import com.android.spotted.ui.theme.SampleAppTheme
 
 object Route {
@@ -45,6 +48,8 @@ object Route {
   const val ALERT_ID = "alertId"
   const val ALERT_DETAIL = "alert/{$ALERT_ID}"
   const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
+  /** Report sighting opened from the Camera tab, for a pet not linked to an alert yet. */
+  const val NEW_SIGHTING = "report_sighting"
   /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
   const val ADD_PET = "add_pet"
   const val MAP = "map"
@@ -140,8 +145,9 @@ fun NavGraphBuilder.addPetsDestination(
 
 /**
  * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
- * missing screen, [addPetContent] Add pets opened from Home and [mapContent] the Map tab; tests
- * replace them to use hand-built states instead of the real ViewModels.
+ * missing screen, [addPetContent] Add pets opened from Home, [reportSightingContent] Report
+ * sighting (for an alert, or none from the Camera tab) and [mapContent] the Map tab; tests replace
+ * them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -152,6 +158,7 @@ fun NavGraphBuilder.homeDestinations(
           onSeenPetClick = navigation.onSeenPetClick,
           onAddPetClick = navigation.onAddPetClick,
           onMapClick = navigation.onMapClick,
+          onCameraClick = navigation.onCameraClick,
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -160,6 +167,13 @@ fun NavGraphBuilder.homeDestinations(
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       AddPetsScreen(onBack = onDone, onDone = onDone, isOnboarding = false)
     },
+    reportSightingContent: @Composable (alertId: String?, onDone: () -> Unit) -> Unit =
+        { alertId, onDone ->
+          val viewModel: ReportSightingViewModel =
+              viewModel(factory = ReportSightingViewModel.Factory)
+          LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
+          ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone)
+        },
     mapContent: @Composable (onBack: () -> Unit, onAlertClick: (String) -> Unit) -> Unit =
         { onBack, onAlertClick ->
           AlertsMapScreen(onBack = onBack, onAlertClick = onAlertClick)
@@ -173,6 +187,7 @@ fun NavGraphBuilder.homeDestinations(
             onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
             onAddPetClick = { navController.navigate(Route.ADD_PET) },
             onMapClick = { navController.navigate(Route.MAP) },
+            onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
         )
     )
   }
@@ -187,8 +202,11 @@ fun NavGraphBuilder.homeDestinations(
     AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
   }
   composable(Route.REPORT_SIGHTING) { entry ->
-    ReportSightingScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
+    reportSightingContent(entry.arguments?.getString(Route.ALERT_ID)) {
+      navController.popBackStack()
+    }
   }
+  composable(Route.NEW_SIGHTING) { reportSightingContent(null) { navController.popBackStack() } }
 }
 
 /** Where Home can send the user. */
@@ -198,6 +216,7 @@ data class HomeNavigation(
     val onSeenPetClick: (alertId: String) -> Unit,
     val onAddPetClick: () -> Unit = {},
     val onMapClick: () -> Unit = {},
+    val onCameraClick: () -> Unit = {},
 )
 
 /** Shown until the Alert detail screen exists (S2-09). */
@@ -211,21 +230,6 @@ fun AlertDetailScreenPlaceholder(alertId: String) {
     Text(
         text = "Alert $alertId",
         modifier = Modifier.semantics { testTag = "alert_detail_screen" },
-    )
-  }
-}
-
-/** Shown until the Report sighting screen is wired here. */
-@Composable
-fun ReportSightingScreenPlaceholder(alertId: String) {
-  Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-  ) {
-    Text(
-        text = "Report a sighting of $alertId",
-        modifier = Modifier.semantics { testTag = "report_sighting_screen" },
     )
   }
 }

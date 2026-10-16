@@ -2,7 +2,9 @@ package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.FakePhotoRepository
@@ -334,5 +336,37 @@ class ReportSightingViewModelTest {
     val state = vm.uiState.value
     assertFalse(state.isSubmitting)
     assertEquals("Unexpected crash", state.errorMessage)
+  }
+
+  @Test
+  fun preselectAlert_listsTheAlertWithItsSpecies_soTheSightingCanBeSent() = runTest {
+    val alertRepository = FakeAlertRepository()
+    alertRepository.publishAlert(
+        Alert(
+            id = "alert-milo",
+            petId = "pet-milo",
+            ownerId = "owner",
+            lastKnownLocation = Location(46.52, 6.63),
+            lostAtMillis = 0L,
+            petName = "Milo",
+            petSpecies = Species.CAT,
+        )
+    )
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.preselectAlert("alert-milo")
+    vm.setLocation(Location(46.52, 6.63))
+
+    val state = vm.uiState.value
+    assertEquals("alert-milo", state.selectedAlertId)
+    assertEquals(Species.CAT, state.selectedSpecies)
+    assertEquals(listOf("Milo"), state.nearbyAlerts.map { it.petName })
+    assertTrue(state.canSubmit)
   }
 }
