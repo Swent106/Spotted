@@ -3,11 +3,16 @@ package com.android.spotted.ui.personalinfo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
+import com.android.spotted.data.location.AddressRepositoryGeocoder
+import com.android.spotted.data.location.LocationRepositoryFused
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +25,8 @@ class PersonalInfoViewModel(
     private val user: User?,
     private val userRepository: UserRepository,
     private val authRepository: AuthRepository,
+    private val locationRepository: LocationRepository? = null,
+    private val addressRepository: AddressRepository? = null,
 ) : ViewModel() {
 
   private val _uiState =
@@ -81,6 +88,31 @@ class PersonalInfoViewModel(
    */
   fun onHomeLocationChanged(location: Location) {
     _uiState.update { it.copy(homeLocation = location, isSaved = false) }
+  }
+
+  /**
+   * Places the home pin at the device's current position and writes its neighbourhood and city in
+   * the home area field. The View calls it once the location permission is granted; if no position
+   * is found, the user can still tap the map. If no place name is found, the pin is still placed
+   * and the field is left as it was.
+   */
+  fun useCurrentLocation() {
+    val repository = locationRepository ?: return
+    _uiState.update { it.copy(errorMessage = null) }
+    viewModelScope.launch {
+      val location =
+          repository.getCurrentLocation().getOrElse {
+            _uiState.update { it.copy(errorMessage = LOCATION_UNAVAILABLE) }
+            return@launch
+          }
+      onHomeLocationChanged(location)
+      addressRepository?.areaName(location)?.onSuccess { name -> onHomeAreaChanged(name) }
+    }
+  }
+
+  /** Called by the View when the user refuses the location permission. */
+  fun onLocationPermissionDenied() {
+    _uiState.update { it.copy(errorMessage = LOCATION_PERMISSION_DENIED) }
   }
 
   fun saveProfile() {
@@ -152,11 +184,17 @@ class PersonalInfoViewModel(
   }
 
   companion object {
+    const val LOCATION_UNAVAILABLE =
+        "Couldn't find your position. Tap the map to place your home instead."
+    const val LOCATION_PERMISSION_DENIED =
+        "Location permission denied. Tap the map to place your home instead."
+
     val Factory: ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
-          override fun <T : ViewModel> create(modelClass: Class<T>): T {
+          override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
             require(modelClass.isAssignableFrom(PersonalInfoViewModel::class.java))
             val authRepository = AuthRepositoryProvider.authRepository
+            val application = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
 
             return requireNotNull(
                 modelClass.cast(
@@ -164,6 +202,8 @@ class PersonalInfoViewModel(
                         user = authRepository.currentUser.value,
                         userRepository = UserRepositoryFirestore(),
                         authRepository = authRepository,
+                        locationRepository = application?.let { LocationRepositoryFused(it) },
+                        addressRepository = application?.let { AddressRepositoryGeocoder(it) },
                     )
                 )
             )
