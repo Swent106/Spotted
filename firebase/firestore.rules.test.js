@@ -323,11 +323,18 @@ describe("Firestore security rules", () => {
     await assertFails(updateDoc(profile, { name: "x".repeat(101) }));
   });
 
-  it("denies profile deletion", async () => {
+  it("allows users to delete their own profile", async () => {
     await seedUser("user-1");
     const db = firestoreForUser("user-1");
 
-    await assertFails(deleteDoc(doc(db, "users", "user-1")));
+    await assertSucceeds(deleteDoc(doc(db, "users", "user-1")));
+  });
+
+  it("denies deleting another user's profile", async () => {
+    await seedUser("user-1");
+
+    await assertFails(deleteDoc(doc(firestoreForUser("user-2"), "users", "user-1")));
+    await assertFails(deleteDoc(doc(firestoreForUser(null), "users", "user-1")));
   });
 });
 
