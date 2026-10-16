@@ -33,7 +33,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -119,6 +123,10 @@ fun HomeScreen(
     onSeenPetClick: (alertId: String) -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  // Home stays in the back stack: reload it when coming back, so a pet just reported missing or
+  // a profile change (radius, home) shows up. The first time, the ViewModel has just loaded
+  var shownBefore by rememberSaveable { mutableStateOf(false) }
+  LaunchedEffect(Unit) { if (shownBefore) viewModel.refresh() else shownBefore = true }
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,

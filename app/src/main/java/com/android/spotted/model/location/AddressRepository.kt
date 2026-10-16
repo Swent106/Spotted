@@ -13,4 +13,7 @@ interface AddressRepository {
 
   /** Returns the neighbourhood and city of [location], e.g. "Ouchy, Lausanne". */
   suspend fun areaName(location: Location): Result<String>
+
+  /** Returns the position of the place named [area], e.g. "Ouchy, Lausanne". */
+  suspend fun locate(area: String): Result<Location>
 }

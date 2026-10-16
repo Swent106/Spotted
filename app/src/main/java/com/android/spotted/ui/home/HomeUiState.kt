@@ -2,6 +2,7 @@ package com.android.spotted.ui.home
 
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.user.UserProfile
 
 /**
  * One section of the Home screen ("Your pets", "Lost near you"). Each section loads and fails on
@@ -35,6 +36,8 @@ data class HomeSection<T>(
 data class HomeUiState(
     val userName: String = "",
     val homeArea: String = "",
+    /** Radius of the lost pet search, from the profile, in kilometres. */
+    val alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM,
     val pets: HomeSection<Pet> = HomeSection(),
     val lostPetsNearby: HomeSection<Alert> = HomeSection(),
     val nowMillis: Long = 0L,

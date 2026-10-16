@@ -29,7 +29,9 @@ service cloud.firestore {
 
     function isValidUser(data, userId) {
       return data.keys().hasAll(['uid', 'name', 'phone', 'email', 'homeArea'])
-          && data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'homeArea'])
+          && data.keys().hasOnly([
+                'uid', 'name', 'phone', 'email', 'homeArea',
+                'homeLatitude', 'homeLongitude', 'alertRadiusKm'])
           && data.uid is string
           && data.uid.size() > 0
           && data.uid.size() <= 128
@@ -43,7 +45,15 @@ service cloud.firestore {
           && data.email.size() > 0
           && data.email.size() <= 254
           && data.homeArea is string
-          && data.homeArea.size() <= 120;
+          && data.homeArea.size() <= 120
+          // Optional: the home pin and the alert radius (one of the radius chips)
+          && (!('homeLatitude' in data) || data.homeLatitude == null
+              || (data.homeLatitude is number
+                  && data.homeLatitude >= -90 && data.homeLatitude <= 90))
+          && (!('homeLongitude' in data) || data.homeLongitude == null
+              || (data.homeLongitude is number
+                  && data.homeLongitude >= -180 && data.homeLongitude <= 180))
+          && (!('alertRadiusKm' in data) || data.alertRadiusKm in [1, 3, 5, 10]);
     }
 
     match /users/{userId} {

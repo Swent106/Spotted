@@ -35,6 +35,36 @@ class PersonalInfoViewModel(
       )
   val uiState: StateFlow<PersonalInfoUiState> = _uiState.asStateFlow()
 
+  init {
+    loadExistingProfile()
+  }
+
+  /**
+   * Fills the form with the saved profile, if there is one, so editing it doesn't start from empty
+   * fields. A new user has no profile yet: the form then stays empty.
+   */
+  private fun loadExistingProfile() {
+    val signedInUser = user ?: return
+    viewModelScope.launch {
+      val profile = userRepository.getUser(signedInUser.uid).getOrNull() ?: return@launch
+      // The name is saved as one string: the first word is the first name, the rest the last name
+      val firstName = profile.name.substringBefore(' ')
+      val lastName = profile.name.substringAfter(' ', missingDelimiterValue = "")
+      _uiState.update {
+        it.copy(
+            firstName = firstName,
+            lastName = lastName,
+            name = profile.name,
+            phone = profile.phone,
+            homeArea = profile.homeArea,
+            homeLocation = profile.homeLocation,
+            alertRadiusKm = profile.alertRadiusKm,
+            isEditing = true,
+        )
+      }
+    }
+  }
+
   fun onNameChanged(name: String) {
     _uiState.update { it.copy(name = name, isSaved = false, errorMessage = null) }
   }
@@ -83,8 +113,8 @@ class PersonalInfoViewModel(
   }
 
   /**
-   * Places the home pin at [location], as tapped on the map picker. Kept in the screen state only
-   * for now: it is not part of the saved profile yet.
+   * Places the home pin at [location], as tapped on the map picker. Saved with the profile: lost
+   * pets are searched around it.
    */
   fun onHomeLocationChanged(location: Location) {
     _uiState.update { it.copy(homeLocation = location, isSaved = false) }
@@ -127,6 +157,8 @@ class PersonalInfoViewModel(
             phone = currentState.phone,
             email = signedInUser.email,
             homeArea = currentState.homeArea.trim(),
+            homeLocation = currentState.homeLocation,
+            alertRadiusKm = currentState.alertRadiusKm,
         )
 
     _uiState.update { it.copy(isSaving = true, errorMessage = null) }

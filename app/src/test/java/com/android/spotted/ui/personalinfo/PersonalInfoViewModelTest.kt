@@ -8,6 +8,7 @@ import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.user.FakeUserRepository
+import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -442,4 +443,60 @@ class PersonalInfoViewModelTest {
         viewModel.uiState.value.errorMessage,
     )
   }
+
+  @Test
+  fun existingProfile_fillsTheFormForEditing() =
+      runTest(testDispatcher) {
+        userRepository.saveUser(
+            UserProfile(
+                uid = "user-1",
+                name = "Jamie Lee Curtis",
+                email = "jamie@example.com",
+                homeArea = "Ouchy, Lausanne",
+                homeLocation = Location(46.507, 6.627),
+                alertRadiusKm = 10,
+            )
+        )
+        val editViewModel =
+            PersonalInfoViewModel(
+                user = User(uid = "user-1", email = "jamie@example.com"),
+                userRepository = userRepository,
+                authRepository = authRepository,
+            )
+        advanceUntilIdle()
+
+        val state = editViewModel.uiState.value
+        assertTrue(state.isEditing)
+        assertEquals("Jamie", state.firstName)
+        assertEquals("Lee Curtis", state.lastName)
+        assertEquals("Ouchy, Lausanne", state.homeArea)
+        assertEquals(Location(46.507, 6.627), state.homeLocation)
+        assertEquals(10, state.alertRadiusKm)
+        assertTrue(state.canSave)
+      }
+
+  @Test
+  fun newUser_startsWithAnEmptyFormForCreating() =
+      runTest(testDispatcher) {
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isEditing)
+        assertEquals("", viewModel.uiState.value.firstName)
+      }
+
+  @Test
+  fun saveProfile_savesTheHomePinAndTheRadius() =
+      runTest(testDispatcher) {
+        viewModel.onFirstNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        viewModel.onHomeLocationChanged(Location(46.52, 6.63))
+        viewModel.onAlertRadiusChanged(5)
+
+        viewModel.saveProfile()
+        advanceUntilIdle()
+
+        val saved = userRepository.getUser("user-1").getOrThrow()
+        assertEquals(Location(46.52, 6.63), saved.homeLocation)
+        assertEquals(5, saved.alertRadiusKm)
+      }
 }
