@@ -1,5 +1,11 @@
 package com.android.spotted.ui.personalinfo
 
+import android.net.Uri
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,14 +21,18 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.core.app.ActivityOptionsCompat
+import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.user.FakeUserRepository
+import com.android.spotted.ui.addpets.CameraPhotoFile
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -322,6 +332,94 @@ class PersonalInfoScreenTest {
 
     assertNull(viewModel.uiState.value.photoUri)
     composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS).assertDoesNotExist()
+  }
+
+  @Test
+  fun personalInfoScreen_galleryPick_selectsThePickedPhoto() {
+    val viewModel = photoViewModel()
+    setScreenWithResult(viewModel, Uri.parse("content://photos/picked"))
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).performClick()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY).performClick()
+    composeTestRule.waitForIdle()
+
+    assertEquals("content://photos/picked", viewModel.uiState.value.photoUri)
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS).assertDoesNotExist()
+  }
+
+  @Test
+  fun personalInfoScreen_closingTheGallery_keepsTheCurrentPhoto() {
+    val viewModel = photoViewModel().apply { onPhotoSelected("content://photos/1") }
+    setScreenWithResult(viewModel, result = null)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).performClick()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY).performClick()
+    composeTestRule.waitForIdle()
+
+    assertEquals("content://photos/1", viewModel.uiState.value.photoUri)
+  }
+
+  @Test
+  fun personalInfoScreen_cameraPhoto_isSelectedOnceSaved() {
+    assumeTrue(CameraPhotoFile.deviceHasCamera(context()))
+    val viewModel = photoViewModel()
+    setScreenWithResult(viewModel, result = true)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).performClick()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA).performClick()
+    composeTestRule.waitForIdle()
+
+    val photoUri = viewModel.uiState.value.photoUri
+    assertTrue(photoUri.toString(), photoUri?.startsWith("content://") == true)
+  }
+
+  @Test
+  fun personalInfoScreen_cancelledCameraPhoto_isNotSelected() {
+    assumeTrue(CameraPhotoFile.deviceHasCamera(context()))
+    val viewModel = photoViewModel()
+    setScreenWithResult(viewModel, result = false)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).performClick()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA).performClick()
+    composeTestRule.waitForIdle()
+
+    assertNull(viewModel.uiState.value.photoUri)
+  }
+
+  private fun context() = InstrumentationRegistry.getInstrumentation().targetContext
+
+  private fun photoViewModel() =
+      PersonalInfoViewModel(
+          user = User(uid = "user-1", email = "rayen@example.com"),
+          userRepository = FakeUserRepository(),
+          authRepository = FakeAuthRepository(),
+      )
+
+  /**
+   * Shows [PersonalInfoScreen] with a registry that answers every launch with [result] at once, so
+   * the gallery and the camera are never opened.
+   */
+  private fun setScreenWithResult(viewModel: PersonalInfoViewModel, result: Any?) {
+    val registry =
+        object : ActivityResultRegistry() {
+          override fun <I, O> onLaunch(
+              requestCode: Int,
+              contract: ActivityResultContract<I, O>,
+              input: I,
+              options: ActivityOptionsCompat?,
+          ) {
+            @Suppress("UNCHECKED_CAST") dispatchResult(requestCode, result as O)
+          }
+        }
+    val owner =
+        object : ActivityResultRegistryOwner {
+          override val activityResultRegistry: ActivityResultRegistry = registry
+        }
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+        PersonalInfoScreen(viewModel = viewModel)
+      }
+    }
   }
 
   @Test
