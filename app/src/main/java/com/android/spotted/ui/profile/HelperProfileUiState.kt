@@ -11,6 +11,10 @@ import com.android.spotted.ui.personalinfo.PersonalInfoUiState
 data class HelperProfileUiState(
     val name: String = "",
     val homeArea: String = "",
+    /**
+     * The user's profile photo; the avatar shows [initial] behind it, and alone when there is none.
+     */
+    val photoUrl: String? = null,
     val alertRadiusKm: Int = PersonalInfoUiState.DEFAULT_ALERT_RADIUS_KM,
     val petsBroughtHome: Int = 0,
     val isLoading: Boolean = false,
@@ -18,7 +22,7 @@ data class HelperProfileUiState(
     val isLeaving: Boolean = false,
     val errorMessage: String? = null,
 ) {
-  /** Letter shown in the avatar until profiles have a photo. */
+  /** Letter shown in the avatar while there is no profile photo. */
   val initial: String
     get() = name.trim().firstOrNull()?.uppercase().orEmpty()
 

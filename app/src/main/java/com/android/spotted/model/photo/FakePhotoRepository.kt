@@ -24,6 +24,17 @@ class FakePhotoRepository : PhotoRepository {
     return Result.success(url)
   }
 
+  override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    val url = profilePhotoUrl(userId)
+    photos[url] = localUri
+    return Result.success(url)
+  }
+
+  override fun profilePhotoUrl(userId: String) = "$FAKE_URL_PREFIX/users/$userId/photo.jpg"
+
   companion object {
     const val FAKE_URL_PREFIX = "fake://storage"
   }

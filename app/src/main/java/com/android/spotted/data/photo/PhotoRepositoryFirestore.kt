@@ -21,8 +21,9 @@ import kotlinx.coroutines.withContext
  *
  * The photo is shrunk to at most [MAX_SIDE_PX] pixels and compressed as JPEG until it is under
  * [MAX_BYTES], then saved in base64 in `photos/{petId}` (a Firestore document holds at most 1 MiB).
- * The returned URL is a short `firestore://photos/{petId}` reference, so it fits in pets, alerts
- * and sightings; [FirestorePhotoFetcher] loads it for Coil.
+ * Profile photos go to `photos/profile_{uid}`, so the profile document itself is unchanged. The
+ * returned URL is a short `firestore://photos/{petId}` reference, so it fits in pets, alerts and
+ * sightings; [FirestorePhotoFetcher] loads it for Coil.
  */
 class PhotoRepositoryFirestore(
     private val context: Context,
@@ -34,6 +35,11 @@ class PhotoRepositoryFirestore(
       petId: String,
       localUri: String,
   ): Result<String> = upload(photoId = petId, ownerId = ownerId, localUri = localUri)
+
+  override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
+      upload(photoId = profilePhotoId(userId), ownerId = userId, localUri = localUri)
+
+  override fun profilePhotoUrl(userId: String) = photoUrl(profilePhotoId(userId))
 
   /** Saves the image at [localUri] as `photos/{photoId}`, owned by [ownerId]. */
   private suspend fun upload(photoId: String, ownerId: String, localUri: String): Result<String> =
@@ -128,6 +134,9 @@ class PhotoRepositoryFirestore(
     private const val START_QUALITY = 80
     private const val MIN_QUALITY = 35
     private const val QUALITY_STEP = 15
+
+    /** Id of a user's profile photo: one per user, replaced when they pick another. */
+    private fun profilePhotoId(userId: String) = "profile_$userId"
 
     /** Reference stored in pets, alerts and sightings for the photo saved as [photoId]. */
     fun photoUrl(photoId: String) = "$SCHEME://$PHOTOS_COLLECTION/$photoId"

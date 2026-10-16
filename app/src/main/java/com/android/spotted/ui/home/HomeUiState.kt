@@ -35,6 +35,8 @@ data class HomeSection<T>(
  */
 data class HomeUiState(
     val userName: String = "",
+    /** The user's profile photo; the avatar stays empty while there is none. */
+    val userPhotoUrl: String? = null,
     val homeArea: String = "",
     /** Radius of the lost pet search, from the profile, in kilometres. */
     val alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM,

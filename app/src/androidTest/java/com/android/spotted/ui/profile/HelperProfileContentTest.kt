@@ -3,6 +3,7 @@ package com.android.spotted.ui.profile
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -49,6 +50,24 @@ class HelperProfileContentTest {
     composeTestRule
         .onNodeWithTag(HelperProfileTestTags.PETS_BROUGHT_HOME)
         .assertTextEquals("4 pets brought home")
+  }
+
+  @Test
+  fun profilePhoto_isShownOverTheInitial_onlyWhenThereIsOne() {
+    setContent(HelperProfileUiState(name = "Rayen", photoUrl = "firestore://photos/profile_user-1"))
+
+    composeTestRule
+        .onNodeWithContentDescription("Profile photo", useUnmergedTree = true)
+        .assertExists()
+  }
+
+  @Test
+  fun noProfilePhoto_showsOnlyTheInitial() {
+    setContent(HelperProfileUiState(name = "Rayen"))
+
+    composeTestRule
+        .onNodeWithContentDescription("Profile photo", useUnmergedTree = true)
+        .assertDoesNotExist()
   }
 
   @Test

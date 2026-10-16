@@ -92,6 +92,7 @@ object HomeScreenTestTags {
   const val ALERTS_EMPTY = "home_alertsEmpty"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val ADD_PET_BUTTON = "home_addPetButton"
+  const val AVATAR = "home_avatar"
   const val TAB_BAR = "home_tabBar"
   const val TAB_HOME = "home_tabHome"
   const val TAB_MAP = "home_tabMap"
@@ -215,7 +216,7 @@ private fun HomeList(
   ) {
     item(key = "header") {
       Column {
-        Header(state.userName, onSettingsClick, onNotificationsClick)
+        Header(state.userName, state.userPhotoUrl, onSettingsClick, onNotificationsClick)
         state.errorMessage?.let { message ->
           Spacer(Modifier.height(8.dp))
           Text(
@@ -257,12 +258,19 @@ private fun HomeList(
 @Composable
 private fun Header(
     userName: String,
+    photoUrl: String?,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
 ) {
   Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-    // Avatar: empty until the profile has a photo
-    Box(Modifier.size(58.dp).clip(RoundedCornerShape(27.dp)).background(SpottedAvatarBackground))
+    // Avatar: the profile photo, or empty while there is none
+    PetPhoto(
+        photoUrl,
+        Modifier.size(58.dp)
+            .clip(RoundedCornerShape(27.dp))
+            .background(SpottedAvatarBackground)
+            .testTag(HomeScreenTestTags.AVATAR),
+    )
     Spacer(Modifier.width(9.dp))
     Text(
         if (userName.isBlank()) "Hey" else "Hey $userName",

@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.AddressRepositoryGeocoder
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
@@ -17,6 +18,7 @@ import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.Job
@@ -50,6 +52,7 @@ import kotlinx.coroutines.launch
  * @property radiusKm radius of the lost pet search when the profile can't be loaded, in km.
  * @property now current time in epoch millis; injected so that tests control it.
  * @property addressRepository finds the position of the home area; null searches [searchCenter].
+ * @property photoRepository gives where the profile photo is; null leaves the avatar empty.
  */
 class HomeViewModel(
     private val authRepository: AuthRepository,
@@ -60,6 +63,7 @@ class HomeViewModel(
     private val radiusKm: Double = DEFAULT_RADIUS_KM,
     private val now: () -> Long = System::currentTimeMillis,
     private val addressRepository: AddressRepository? = null,
+    private val photoRepository: PhotoRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HomeUiState())
@@ -133,6 +137,7 @@ class HomeViewModel(
           userName = profile.name,
           homeArea = profile.homeArea,
           alertRadiusKm = profile.alertRadiusKm,
+          userPhotoUrl = photoRepository?.profilePhotoUrl(uid),
       )
     }
     return profile
@@ -205,6 +210,7 @@ class HomeViewModel(
             petRepository = PetRepositoryFirestore(),
             alertRepository = AlertRepositoryFirestore(),
             addressRepository = application?.let { AddressRepositoryGeocoder(it) },
+            photoRepository = application?.let { PhotoRepositoryFirestore(it) },
         )
       }
     }

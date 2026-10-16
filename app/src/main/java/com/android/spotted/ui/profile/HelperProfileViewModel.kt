@@ -7,11 +7,13 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +37,7 @@ class HelperProfileViewModel(
     private val authRepository: AuthRepository,
     private val petRepository: PetRepository,
     private val alertRepository: AlertRepository,
+    private val photoRepository: PhotoRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HelperProfileUiState())
@@ -57,6 +60,7 @@ class HelperProfileViewModel(
                       name = profile.name,
                       homeArea = profile.homeArea,
                       alertRadiusKm = profile.alertRadiusKm,
+                      photoUrl = photoRepository?.profilePhotoUrl(user.uid),
                       isLoading = false,
                   )
                 }
@@ -129,6 +133,10 @@ class HelperProfileViewModel(
             authRepository = AuthRepositoryProvider.authRepository,
             petRepository = PetRepositoryFirestore(),
             alertRepository = AlertRepositoryFirestore(),
+            photoRepository =
+                PhotoRepositoryFirestore(
+                    this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
+                ),
         )
       }
     }

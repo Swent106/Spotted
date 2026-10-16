@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -85,6 +86,26 @@ class PhotoRepositoryFirebaseStorageTest {
     val result = repository.uploadPetPhoto(ownerId, "pet-1", Uri.fromFile(missingFile).toString())
 
     assertTrue(result.isFailure)
+  }
+
+  @Test
+  fun uploadProfilePhoto_isRefusedByTheStorageRules() = runTest {
+    // Profile photos are kept in Firestore: the Storage rules only accept pet photos
+    val result = repository.uploadProfilePhoto(ownerId, Uri.fromFile(localPhoto).toString())
+
+    assertTrue(result.isFailure)
+  }
+
+  @Test
+  fun profilePhotoUrl_pointsToTheUsersProfilePhotoPath() {
+    val url = repository.profilePhotoUrl("user-1")
+
+    assertEquals(
+        "users/user-1/photo.jpg",
+        PhotoRepositoryFirebaseStorage.profilePhotoPath("user-1"),
+    )
+    assertTrue(url, url.startsWith("gs://"))
+    assertTrue(url, url.endsWith("/users/user-1/photo.jpg"))
   }
 
   companion object {

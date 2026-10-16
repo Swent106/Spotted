@@ -13,6 +13,8 @@ data class PersonalInfoUiState(
     val homeArea: String = "",
     /** Home pin placed on the map picker; lost pets are searched around it. */
     val homeLocation: Location? = null,
+    /** Profile photo: the saved one, or one just picked or taken, uploaded when saving. */
+    val photoUri: String? = null,
     /** True when the user already has a profile: the form then edits it instead of creating it. */
     val isEditing: Boolean = false,
     val alertRadiusKm: Int = DEFAULT_ALERT_RADIUS_KM,
