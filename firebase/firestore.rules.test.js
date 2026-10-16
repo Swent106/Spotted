@@ -800,3 +800,113 @@ describe("Firestore sighting access rules", () => {
     });
   }
 });
+
+describe("Firestore photo access rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  function photo(ownerId, overrides = {}) {
+    return { ownerId, contentType: "image/jpeg", data: "aGVsbG8=", ...overrides };
+  }
+
+  async function seedPhoto(id, ownerId) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "photos", id), photo(ownerId));
+    });
+  }
+
+  it("photo read: signed-in users are allowed, anonymous users are denied", async () => {
+    await seedPhoto("pet-1", "user-1");
+
+    await assertSucceeds(getDoc(doc(firestoreForUser("user-1"), "photos", "pet-1")));
+    await assertSucceeds(getDoc(doc(firestoreForUser("user-2"), "photos", "pet-1")));
+    await assertFails(getDoc(doc(firestoreForUser(null), "photos", "pet-1")));
+  });
+
+  it("photo list: is denied, photos are read one by one", async () => {
+    await seedPhoto("pet-1", "user-1");
+
+    await assertFails(getDocs(collection(firestoreForUser("user-1"), "photos")));
+  });
+
+  const createCases = [
+    { who: "owner", userId: "user-1", data: photo("user-1"), allowed: true },
+    { who: "user saving for another owner", userId: "user-1", data: photo("user-2"), allowed: false },
+    { who: "anonymous user", userId: null, data: photo("user-1"), allowed: false },
+    {
+      who: "owner with another content type",
+      userId: "user-1",
+      data: photo("user-1", { contentType: "image/png" }),
+      allowed: false,
+    },
+    {
+      who: "owner with an extra field",
+      userId: "user-1",
+      data: photo("user-1", { name: "Milo" }),
+      allowed: false,
+    },
+    {
+      who: "owner with non-string data",
+      userId: "user-1",
+      data: photo("user-1", { data: 42 }),
+      allowed: false,
+    },
+  ];
+
+  for (const testCase of createCases) {
+    it(`photo create: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      const operation = setDoc(doc(firestoreForUser(testCase.userId), "photos", "pet-1"), testCase.data);
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  it("photo update: the owner can replace their photo, another user cannot", async () => {
+    await seedPhoto("pet-1", "user-1");
+
+    await assertSucceeds(
+      setDoc(doc(firestoreForUser("user-1"), "photos", "pet-1"), photo("user-1", { data: "bmV3" })),
+    );
+    await assertFails(
+      setDoc(doc(firestoreForUser("user-2"), "photos", "pet-1"), photo("user-2")),
+    );
+  });
+
+  it("photo delete: the owner is allowed, other users are denied", async () => {
+    await seedPhoto("pet-1", "user-1");
+
+    await assertFails(deleteDoc(doc(firestoreForUser("user-2"), "photos", "pet-1")));
+    await assertFails(deleteDoc(doc(firestoreForUser(null), "photos", "pet-1")));
+    await assertSucceeds(deleteDoc(doc(firestoreForUser("user-1"), "photos", "pet-1")));
+  });
+});
