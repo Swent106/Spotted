@@ -129,7 +129,7 @@ class MainUserFlowTest {
 
   private fun signIn() {
     waitFor(SignInScreenTestTags.SCREEN, "the Sign in screen should show at start")
-    node(SignInScreenTestTags.GOOGLE_BUTTON).performClick()
+    node(SignInScreenTestTags.GOOGLE_BUTTON).scrollToAndClick()
     // A new account has no profile: the app asks for one
     waitFor(PersonalInfoScreenTestTags.SCREEN, "Personal info should open after signing in")
     assertEquals(
@@ -143,7 +143,7 @@ class MainUserFlowTest {
     node(PersonalInfoScreenTestTags.FIRST_NAME_INPUT).performScrollTo().performTextInput("E2E")
     node(PersonalInfoScreenTestTags.LAST_NAME_INPUT).performScrollTo().performTextInput("Tester")
     node(PersonalInfoScreenTestTags.HOME_AREA_INPUT).performScrollTo().performTextInput("Lausanne")
-    node(PersonalInfoScreenTestTags.CREATE_PROFILE_BUTTON).assertIsEnabled().performClick()
+    node(PersonalInfoScreenTestTags.CREATE_PROFILE_BUTTON).assertIsEnabled().scrollToAndClick()
     waitFor(AddPetsScreenTestTags.SCREEN, "Add pets should open once the profile is saved")
   }
 
@@ -153,9 +153,9 @@ class MainUserFlowTest {
       node(AddPetsScreenTestTags.speciesChip(pet.species)).performScrollTo().performClick()
       val isLast = index == pets.lastIndex
       if (isLast) {
-        node(AddPetsScreenTestTags.SAVE_AND_CONTINUE_BUTTON).assertIsEnabled().performClick()
+        node(AddPetsScreenTestTags.SAVE_AND_CONTINUE_BUTTON).assertIsEnabled().scrollToAndClick()
       } else {
-        node(AddPetsScreenTestTags.ADD_ANOTHER_BUTTON).performClick()
+        node(AddPetsScreenTestTags.ADD_ANOTHER_BUTTON).scrollToAndClick()
         waitUntil("\"${pet.name}\" should be listed as added") {
           composeTestRule
               .onAllNodes(hasTestTag(AddPetsScreenTestTags.ADDED_PETS) and hasText(pet.name, true))
@@ -183,7 +183,7 @@ class MainUserFlowTest {
     val missing = pets.first()
     node(HomeScreenTestTags.BODY)
         .performScrollToNode(hasTestTag(HomeScreenTestTags.REPORT_MISSING_BUTTON))
-    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).performClick()
+    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).scrollToAndClick()
     waitFor(ReportMissingScreenTestTags.SCREEN, "Report missing should open")
     waitUntil("\"${missing.name}\" should be offered as the missing pet") {
       composeTestRule.onAllNodes(hasText(missing.name)).fetchSemanticsNodes().isNotEmpty()
@@ -228,9 +228,9 @@ class MainUserFlowTest {
   private fun signOut() {
     node(HomeScreenTestTags.TAB_PROFILE).performClick()
     waitFor(HelperProfileTestTags.SCREEN, "The Profile tab should open the Helper profile")
-    node(HelperProfileTestTags.ACCOUNT_BUTTON).performClick()
+    node(HelperProfileTestTags.ACCOUNT_BUTTON).scrollToAndClick()
     waitFor(HelperProfileTestTags.SIGN_OUT, "The account button should offer to sign out")
-    node(HelperProfileTestTags.SIGN_OUT).performClick()
+    node(HelperProfileTestTags.SIGN_OUT).scrollToAndClick()
     waitFor(SignInScreenTestTags.SCREEN, "The Sign in screen should show after signing out")
     waitUntil("Firebase should have no signed-in user after signing out") {
       FirebaseAuth.getInstance().currentUser == null
@@ -241,6 +241,16 @@ class MainUserFlowTest {
 
   private fun node(tag: String): SemanticsNodeInteraction =
       composeTestRule.onNodeWithTag(tag, useUnmergedTree = false)
+
+  /**
+   * Scrolls to the node when it is in a scrolling container, then clicks it. A click on a node
+   * outside the screen is lost, and CI emulators have smaller screens than most phones.
+   */
+  private fun SemanticsNodeInteraction.scrollToAndClick(): SemanticsNodeInteraction {
+    // performScrollTo fails when no parent scrolls: the node is then always on screen
+    runCatching { performScrollTo() }
+    return performClick()
+  }
 
   private fun waitFor(tag: String, message: String) {
     waitUntil(message) {
