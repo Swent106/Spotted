@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of GitHub Copilot.
 package com.android.spotted.model.Pet
 
 import java.util.UUID
