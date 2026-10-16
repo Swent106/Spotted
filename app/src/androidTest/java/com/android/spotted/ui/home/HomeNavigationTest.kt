@@ -48,6 +48,7 @@ class HomeNavigationTest {
                   onAlertClick = navigation.onAlertClick,
                   onSeenPetClick = navigation.onSeenPetClick,
                   onAddPetClick = navigation.onAddPetClick,
+                  onMapClick = navigation.onMapClick,
               )
             },
             // The real screen needs Firebase: a tagged text is enough to check the navigation
@@ -55,6 +56,7 @@ class HomeNavigationTest {
               Text("Report missing", Modifier.testTag(REPORT_MISSING_SCREEN))
             },
             addPetContent = { Text("Add pets", Modifier.testTag(ADD_PETS_SCREEN)) },
+            mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },
         )
       }
     }
@@ -93,6 +95,14 @@ class HomeNavigationTest {
   }
 
   @Test
+  fun mapTab_opensTheMap() {
+    node(HomeScreenTestTags.TAB_MAP).performClick()
+
+    node(MAP_SCREEN).assertIsDisplayed()
+    assertEquals(Route.MAP, navController.currentDestination?.route)
+  }
+
+  @Test
   fun addPetButton_opensAddPets() {
     scrollTo(HomeScreenTestTags.ADD_PET_BUTTON).performClick()
 
@@ -113,6 +123,7 @@ class HomeNavigationTest {
     const val REPORT_SIGHTING_SCREEN = "report_sighting_screen"
     const val REPORT_MISSING_SCREEN = "report_missing_screen"
     const val ADD_PETS_SCREEN = "add_pets_screen"
+    const val MAP_SCREEN = "map_screen"
 
     val MILO =
         Alert(
