@@ -131,6 +131,18 @@ class PhotoRepositoryFirestoreTest {
   }
 
   @Test
+  fun uploadProfilePhoto_savesItUnderTheUsersProfilePhotoReference() = runTest {
+    savedPhotoIds += "profile_$ownerId"
+
+    val result = repository.uploadProfilePhoto(ownerId, jpeg(width = 64, height = 64))
+
+    assertTrue(result.exceptionOrNull()?.toString(), result.isSuccess)
+    assertEquals(repository.profilePhotoUrl(ownerId), result.getOrThrow())
+    assertEquals("firestore://photos/profile_$ownerId", result.getOrThrow())
+    assertEquals(ownerId, savedDocument("profile_$ownerId")["ownerId"])
+  }
+
+  @Test
   fun photoUrl_pointsToThePhotosCollection() {
     assertEquals("firestore://photos/pet-1", PhotoRepositoryFirestore.photoUrl("pet-1"))
   }

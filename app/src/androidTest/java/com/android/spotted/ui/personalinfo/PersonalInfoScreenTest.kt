@@ -21,6 +21,7 @@ import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -301,6 +302,25 @@ class PersonalInfoScreenTest {
 
     composeTestRule.onNodeWithText("Cancel").performClick()
 
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS).assertDoesNotExist()
+  }
+
+  @Test
+  fun personalInfoScreen_removePhoto_clearsTheSelectedPhoto() {
+    val viewModel =
+        PersonalInfoViewModel(
+            user = User(uid = "user-1", email = "rayen@example.com"),
+            userRepository = FakeUserRepository(),
+            authRepository = FakeAuthRepository(),
+        )
+    viewModel.onPhotoSelected("content://photos/1")
+    composeTestRule.setContent { PersonalInfoScreen(viewModel = viewModel) }
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).performClick()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).performClick()
+    composeTestRule.waitForIdle()
+
+    assertNull(viewModel.uiState.value.photoUri)
     composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS).assertDoesNotExist()
   }
 
