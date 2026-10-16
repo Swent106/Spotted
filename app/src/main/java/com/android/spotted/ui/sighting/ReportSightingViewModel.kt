@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.android.spotted.data.alert.AlertRepositoryFirestore
-import com.android.spotted.data.location.LocationRepositoryFused
+import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.Location
@@ -229,7 +229,7 @@ class ReportSightingViewModel(
             return ReportSightingViewModel(
                 sightingRepository = SightingRepositoryFirestore(),
                 photoRepository = PhotoRepositoryFirestore(application),
-                locationRepository = LocationRepositoryFused(application),
+                locationRepository = LocationRepositoryProvider.create(application),
                 authRepository = AuthRepositoryProvider.authRepository,
                 alertRepository = AlertRepositoryFirestore(),
             )

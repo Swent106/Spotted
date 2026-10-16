@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.android.spotted.data.location.AddressRepositoryGeocoder
-import com.android.spotted.data.location.LocationRepositoryFused
+import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
@@ -259,7 +259,8 @@ class PersonalInfoViewModel(
                         user = authRepository.currentUser.value,
                         userRepository = UserRepositoryFirestore(),
                         authRepository = authRepository,
-                        locationRepository = application?.let { LocationRepositoryFused(it) },
+                        locationRepository =
+                            application?.let { LocationRepositoryProvider.create(it) },
                         addressRepository = application?.let { AddressRepositoryGeocoder(it) },
                         photoRepository = application?.let { PhotoRepositoryFirestore(it) },
                     )
