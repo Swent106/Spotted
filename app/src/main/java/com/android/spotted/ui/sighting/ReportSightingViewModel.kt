@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.LocationRepositoryFused
-import com.android.spotted.data.photo.PhotoRepositoryFirebaseStorage
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
@@ -178,15 +178,7 @@ class ReportSightingViewModel(
                   localUri = photoUri,
               )
 
-          if (uploadResult.isFailure) {
-            _uiState.update {
-              it.copy(
-                  isSubmitting = false,
-                  errorMessage = uploadResult.exceptionOrNull()?.message ?: "Photo upload failed",
-              )
-            }
-            return@launch
-          }
+          // The photo is optional: if it can't be uploaded, the sighting is still sent without it
           uploadedPhotoUrl = uploadResult.getOrNull()
         }
 
@@ -236,7 +228,7 @@ class ReportSightingViewModel(
             val application = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
             return ReportSightingViewModel(
                 sightingRepository = SightingRepositoryFirestore(),
-                photoRepository = PhotoRepositoryFirebaseStorage(),
+                photoRepository = PhotoRepositoryFirestore(application),
                 locationRepository = LocationRepositoryFused(application),
                 authRepository = AuthRepositoryProvider.authRepository,
                 alertRepository = AlertRepositoryFirestore(),
