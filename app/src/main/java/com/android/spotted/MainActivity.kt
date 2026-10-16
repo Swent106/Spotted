@@ -34,6 +34,8 @@ import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
+import com.android.spotted.ui.profile.HelperProfileNavigation
+import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
@@ -53,6 +55,9 @@ object Route {
   /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
   const val ADD_PET = "add_pet"
   const val MAP = "map"
+  const val PROFILE = "profile"
+  /** The profile form, opened from the Helper profile to change name, area or radius. */
+  const val EDIT_PROFILE = "edit_profile"
 
   fun alertDetail(alertId: String) = "alert/$alertId"
 
@@ -146,8 +151,9 @@ fun NavGraphBuilder.addPetsDestination(
 /**
  * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
  * missing screen, [addPetContent] Add pets opened from Home, [reportSightingContent] Report
- * sighting (for an alert, or none from the Camera tab) and [mapContent] the Map tab; tests replace
- * them to use hand-built states instead of the real ViewModels.
+ * sighting (for an alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent]
+ * the Helper profile (Profile tab) and [editProfileContent] the profile form it opens; tests
+ * replace them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -159,6 +165,7 @@ fun NavGraphBuilder.homeDestinations(
           onAddPetClick = navigation.onAddPetClick,
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
+          onProfileClick = navigation.onProfileClick,
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -178,6 +185,12 @@ fun NavGraphBuilder.homeDestinations(
         { onBack, onAlertClick ->
           AlertsMapScreen(onBack = onBack, onAlertClick = onAlertClick)
         },
+    profileContent: @Composable (HelperProfileNavigation) -> Unit = { navigation ->
+      HelperProfileScreen(navigation = navigation)
+    },
+    editProfileContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
+      PersonalInfoScreen(onBack = onDone, onSaved = onDone)
+    },
 ) {
   composable(Route.HOME) {
     homeContent(
@@ -188,9 +201,21 @@ fun NavGraphBuilder.homeDestinations(
             onAddPetClick = { navController.navigate(Route.ADD_PET) },
             onMapClick = { navController.navigate(Route.MAP) },
             onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
+            onProfileClick = { navController.navigate(Route.PROFILE) },
         )
     )
   }
+  composable(Route.PROFILE) {
+    profileContent(
+        HelperProfileNavigation(
+            onHomeClick = { navController.popBackStack(Route.HOME, inclusive = false) },
+            onMapClick = { navController.navigate(Route.MAP) },
+            onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
+            onEditProfileClick = { navController.navigate(Route.EDIT_PROFILE) },
+        )
+    )
+  }
+  composable(Route.EDIT_PROFILE) { editProfileContent { navController.popBackStack() } }
   composable(Route.MAP) {
     mapContent({ navController.popBackStack() }) { alertId ->
       navController.navigate(Route.alertDetail(alertId))
@@ -217,6 +242,7 @@ data class HomeNavigation(
     val onAddPetClick: () -> Unit = {},
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
+    val onProfileClick: () -> Unit = {},
 )
 
 /** Shown until the Alert detail screen exists (S2-09). */

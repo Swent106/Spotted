@@ -50,6 +50,7 @@ class HomeNavigationTest {
                   onAddPetClick = navigation.onAddPetClick,
                   onMapClick = navigation.onMapClick,
                   onCameraClick = navigation.onCameraClick,
+                  onProfileClick = navigation.onProfileClick,
               )
             },
             // The real screen needs Firebase: a tagged text is enough to check the navigation
@@ -64,6 +65,7 @@ class HomeNavigationTest {
               )
             },
             mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },
+            profileContent = { Text("Profile", Modifier.testTag(PROFILE_SCREEN)) },
         )
       }
     }
@@ -112,6 +114,14 @@ class HomeNavigationTest {
   }
 
   @Test
+  fun profileTab_opensTheHelperProfile() {
+    node(HomeScreenTestTags.TAB_PROFILE).performClick()
+
+    node(PROFILE_SCREEN).assertIsDisplayed()
+    assertEquals(Route.PROFILE, navController.currentDestination?.route)
+  }
+
+  @Test
   fun mapTab_opensTheMap() {
     node(HomeScreenTestTags.TAB_MAP).performClick()
 
@@ -141,6 +151,7 @@ class HomeNavigationTest {
     const val REPORT_MISSING_SCREEN = "report_missing_screen"
     const val ADD_PETS_SCREEN = "add_pets_screen"
     const val MAP_SCREEN = "map_screen"
+    const val PROFILE_SCREEN = "profile_screen"
 
     val MILO =
         Alert(
