@@ -277,7 +277,10 @@ class PersonalInfoScreenTest {
   fun photoSelected_isShownInTheAvatar() {
     setContent(validState.copy(photoUri = "content://photos/1"))
 
-    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO).assertExists()
+    // The photo is drawn inside the clickable avatar, which merges its children
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.PHOTO, useUnmergedTree = true)
+        .assertExists()
   }
 
   @Test
