@@ -1,8 +1,10 @@
 // Portions of this code were generated with the help of GitHub Copilot.
 package com.android.spotted.ui.alertdetail
 
+import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,8 +39,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -69,6 +73,8 @@ object AlertDetailTestTags {
   const val BEHAVIORS = "alertDetail_behaviors"
   const val BEHAVIOR_PREFIX = "alertDetail_behavior_"
   const val REPORT_SIGHTING = "alertDetail_reportSighting"
+  const val BACK = "alertDetail_back"
+  const val SHARE = "alertDetail_share"
 }
 
 @Composable
@@ -77,10 +83,29 @@ fun AlertDetailScreen(
     alertId: String,
     onReportSighting: () -> Unit,
     modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
 ) {
   LaunchedEffect(alertId) { viewModel.loadAlert(alertId) }
   val state by viewModel.uiState.collectAsState()
-  AlertDetailContent(state, onReportSighting, modifier)
+  val context = LocalContext.current
+  AlertDetailContent(
+      state = state,
+      onReportSighting = onReportSighting,
+      modifier = modifier,
+      onBack = onBack,
+      // The system share sheet, launched from the View
+      onShare = { alert ->
+        val text =
+            "${alert.petName} is missing near ${locationCoordinates(alert.lastKnownLocation)}." +
+                " Have you seen them? Open Spotted to help."
+        val send =
+            Intent(Intent.ACTION_SEND).apply {
+              type = "text/plain"
+              putExtra(Intent.EXTRA_TEXT, text)
+            }
+        context.startActivity(Intent.createChooser(send, null))
+      },
+  )
 }
 
 @Composable
@@ -88,6 +113,8 @@ fun AlertDetailContent(
     state: AlertDetailUiState,
     onReportSighting: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
+    onShare: (Alert) -> Unit = {},
 ) {
   when {
     state.isLoading || (state.alert == null && !state.notFound && state.errorMessage == null) ->
@@ -122,6 +149,8 @@ fun AlertDetailContent(
         AlertDetails(
             alert = state.alert,
             onReportSighting = onReportSighting,
+            onBack = onBack,
+            onShare = { onShare(state.alert) },
             modifier = modifier,
         )
   }
@@ -131,13 +160,15 @@ fun AlertDetailContent(
 private fun AlertDetails(
     alert: Alert,
     onReportSighting: () -> Unit,
+    onBack: () -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   Column(
       modifier =
           modifier.fillMaxSize().background(Color(0xFFF5F4F0)).testTag(AlertDetailTestTags.SCREEN),
   ) {
-    PetPhotoHeader(alert = alert)
+    PetPhotoHeader(alert = alert, onBack = onBack, onShare = onShare)
     Column(
         modifier =
             Modifier.weight(1f)
@@ -157,7 +188,7 @@ private fun AlertDetails(
 }
 
 @Composable
-private fun PetPhotoHeader(alert: Alert) {
+private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit) {
   Box(
       modifier =
           Modifier.fillMaxWidth()
@@ -188,8 +219,8 @@ private fun PetPhotoHeader(alert: Alert) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      HeaderCircleButton()
-      HeaderCircleButton("↗")
+      HeaderCircleButton(onClick = onBack, tag = AlertDetailTestTags.BACK)
+      HeaderCircleButton("↗", onClick = onShare, tag = AlertDetailTestTags.SHARE)
     }
     Row(
         modifier =
@@ -211,9 +242,18 @@ private fun PetPhotoHeader(alert: Alert) {
 }
 
 @Composable
-private fun HeaderCircleButton(symbol: String? = null) {
+private fun HeaderCircleButton(symbol: String? = null, onClick: () -> Unit, tag: String) {
   Box(
-      modifier = Modifier.size(38.dp).clip(CircleShape).background(Color.White),
+      modifier =
+          Modifier.size(38.dp)
+              .clip(CircleShape)
+              .background(Color.White)
+              .clickable(
+                  onClickLabel = if (symbol == null) "Back" else "Share",
+                  role = Role.Button,
+                  onClick = onClick,
+              )
+              .testTag(tag),
       contentAlignment = Alignment.Center,
   ) {
     if (symbol == null) {

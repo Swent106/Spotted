@@ -48,6 +48,7 @@ class HomeNavigationTest {
                   onAlertClick = navigation.onAlertClick,
                   onSeenPetClick = navigation.onSeenPetClick,
                   onAddPetClick = navigation.onAddPetClick,
+                  onPetClick = navigation.onPetClick,
                   onMapClick = navigation.onMapClick,
                   onCameraClick = navigation.onCameraClick,
                   onProfileClick = navigation.onProfileClick,
@@ -64,6 +65,7 @@ class HomeNavigationTest {
                   Modifier.testTag(REPORT_SIGHTING_SCREEN),
               )
             },
+            petProfileContent = { petId -> Text("Pet $petId", Modifier.testTag(PET_SCREEN)) },
             mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },
             profileContent = { Text("Profile", Modifier.testTag(PROFILE_SCREEN)) },
         )
@@ -151,6 +153,7 @@ class HomeNavigationTest {
     const val REPORT_MISSING_SCREEN = "report_missing_screen"
     const val ADD_PETS_SCREEN = "add_pets_screen"
     const val MAP_SCREEN = "map_screen"
+    const val PET_SCREEN = "pet_screen"
     const val PROFILE_SCREEN = "profile_screen"
 
     val MILO =
