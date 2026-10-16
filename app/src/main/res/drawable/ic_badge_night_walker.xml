@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- From the Figma frame "13 - Helper profile" -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+  <path
+      android:pathData="M11 19.25C11 19.25 17.4167 14.2083 17.4167 9.16667C17.4167 8.32402 17.2507 7.48962 16.9282 6.71111C16.6058 5.93261 16.1331 5.22524 15.5373 4.6294C14.9414 4.03356 14.2341 3.56091 13.4556 3.23844C12.677 2.91597 11.8426 2.75 11 2.75C10.1574 2.75 9.32295 2.91597 8.54445 3.23844C7.76594 3.56091 7.05857 4.03356 6.46273 4.6294C5.86689 5.22524 5.39424 5.93261 5.07177 6.71111C4.74931 7.48962 4.58333 8.32402 4.58333 9.16667C4.58333 14.2083 11 19.25 11 19.25Z"
+      android:strokeColor="#A7ACB6"
+      android:strokeWidth="1.8"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round" />
+  <path
+      android:pathData="M11 11.4583C12.2657 11.4583 13.2917 10.4323 13.2917 9.16667C13.2917 7.90101 12.2657 6.875 11 6.875C9.73435 6.875 8.70833 7.90101 8.70833 9.16667C8.70833 10.4323 9.73435 11.4583 11 11.4583Z"
+      android:strokeColor="#A7ACB6"
+      android:strokeWidth="1.8"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round" />
+</vector>
