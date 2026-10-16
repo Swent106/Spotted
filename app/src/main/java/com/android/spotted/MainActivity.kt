@@ -44,6 +44,8 @@ object Route {
   const val ALERT_ID = "alertId"
   const val ALERT_DETAIL = "alert/{$ALERT_ID}"
   const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
+  /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
+  const val ADD_PET = "add_pet"
 
   fun alertDetail(alertId: String) = "alert/$alertId"
 
@@ -135,8 +137,9 @@ fun NavGraphBuilder.addPetsDestination(
 }
 
 /**
- * Home and the screens it opens. [homeContent] draws Home and [reportMissingContent] the Report
- * missing screen; tests replace them to use hand-built states instead of the real ViewModels.
+ * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
+ * missing screen and [addPetContent] Add pets opened from Home; tests replace them to use
+ * hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -145,10 +148,14 @@ fun NavGraphBuilder.homeDestinations(
           onReportMissingClick = navigation.onReportMissingClick,
           onAlertClick = navigation.onAlertClick,
           onSeenPetClick = navigation.onSeenPetClick,
+          onAddPetClick = navigation.onAddPetClick,
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       ReportMissingScreen(onBack = onDone, onPublished = onDone)
+    },
+    addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
+      AddPetsScreen(onBack = onDone, onDone = onDone, isOnboarding = false)
     },
 ) {
   composable(Route.HOME) {
@@ -157,9 +164,11 @@ fun NavGraphBuilder.homeDestinations(
             onReportMissingClick = { navController.navigate(Route.REPORT_MISSING) },
             onAlertClick = { alertId -> navController.navigate(Route.alertDetail(alertId)) },
             onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
+            onAddPetClick = { navController.navigate(Route.ADD_PET) },
         )
     )
   }
+  composable(Route.ADD_PET) { addPetContent { navController.popBackStack() } }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
   composable(Route.ALERT_DETAIL) { entry ->
     AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
@@ -174,6 +183,7 @@ data class HomeNavigation(
     val onReportMissingClick: () -> Unit,
     val onAlertClick: (alertId: String) -> Unit,
     val onSeenPetClick: (alertId: String) -> Unit,
+    val onAddPetClick: () -> Unit = {},
 )
 
 /** Shown until the Alert detail screen exists (S2-09). */

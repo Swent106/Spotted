@@ -118,6 +118,7 @@ fun AddPetsContent(
     onBehaviorToggle: (Behavior) -> Unit,
     onSaveAndContinueClick: () -> Unit,
     onAddAnotherClick: () -> Unit,
+    isOnboarding: Boolean = true,
 ) {
   Box(
       Modifier.fillMaxSize()
@@ -138,7 +139,7 @@ fun AddPetsContent(
           verticalArrangement = Arrangement.spacedBy(12.dp),
           modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
       ) {
-        AddPetsHeader(isSaving = state.isSaving, onBackClick, onSkipClick)
+        AddPetsHeader(isSaving = state.isSaving, isOnboarding, onBackClick, onSkipClick)
         FormCard {
           SectionLabel("NAME")
           FormField(
@@ -196,29 +197,45 @@ fun AddPetsContent(
             }
           }
         }
-        if (state.addedPets.isNotEmpty()) {
-          Text(
-              "Added: " + state.addedPets.joinToString { it.name },
-              style = jakarta(13, 18f, 600, 0xFF5F6672),
-              modifier = Modifier.fillMaxWidth().testTag(AddPetsScreenTestTags.ADDED_PETS),
-          )
-        }
-        state.errorMessage?.let { message ->
-          Text(
-              message,
-              style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
-              modifier = Modifier.fillMaxWidth().testTag(AddPetsScreenTestTags.ERROR_MESSAGE),
-          )
-        }
       }
+      // Above the buttons, outside the scroll, so the result of a tap is always visible
       Spacer(Modifier.height(12.dp))
+      if (state.addedPets.isNotEmpty()) {
+        Text(
+            "Added: " + state.addedPets.joinToString { it.name },
+            style = jakarta(13, 18f, 600, 0xFF5F6672, TextAlign.Center),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .testTag(AddPetsScreenTestTags.ADDED_PETS),
+        )
+      }
+      (state.errorMessage ?: state.missingField)?.let { message ->
+        Text(
+            message,
+            style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .testTag(AddPetsScreenTestTags.ERROR_MESSAGE),
+        )
+      }
       AddPetsFooter(state, onSaveAndContinueClick, onAddAnotherClick)
     }
   }
 }
 
+/**
+ * Back, title and, during onboarding ([isOnboarding]), the step and "Skip". Opened from Home, Back
+ * is enough to leave without adding a pet.
+ */
 @Composable
-private fun AddPetsHeader(isSaving: Boolean, onBackClick: () -> Unit, onSkipClick: () -> Unit) {
+private fun AddPetsHeader(
+    isSaving: Boolean,
+    isOnboarding: Boolean,
+    onBackClick: () -> Unit,
+    onSkipClick: () -> Unit,
+) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -242,20 +259,24 @@ private fun AddPetsHeader(isSaving: Boolean, onBackClick: () -> Unit, onSkipClic
     }
     Column(Modifier.weight(1f)) {
       Text("Add your pet", style = jakarta(23, 31f, 800, 0xFF14161A))
+      if (isOnboarding) {
+        Text(
+            "Step 2 of 2 · you can edit it later",
+            style = jakarta(12, 16f, 500, 0xFF5F6672),
+        )
+      }
+    }
+    if (isOnboarding) {
       Text(
-          "Step 2 of 2 · you can edit it later",
-          style = jakarta(12, 16f, 500, 0xFF5F6672),
+          "Skip",
+          style = jakarta(14, 18f, 700, 0xFF1B5BD7),
+          modifier =
+              Modifier.clip(RoundedCornerShape(10.dp))
+                  .clickable(enabled = !isSaving, role = Role.Button, onClick = onSkipClick)
+                  .padding(horizontal = 8.dp, vertical = 6.dp)
+                  .testTag(AddPetsScreenTestTags.SKIP_BUTTON),
       )
     }
-    Text(
-        "Skip",
-        style = jakarta(14, 18f, 700, 0xFF1B5BD7),
-        modifier =
-            Modifier.clip(RoundedCornerShape(10.dp))
-                .clickable(enabled = !isSaving, role = Role.Button, onClick = onSkipClick)
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-                .testTag(AddPetsScreenTestTags.SKIP_BUTTON),
-    )
   }
 }
 
@@ -428,6 +449,7 @@ fun AddPetsScreen(
     viewModel: AddPetsViewModel = viewModel(factory = AddPetsViewModel.Factory),
     onBack: () -> Unit = {},
     onDone: () -> Unit = {},
+    isOnboarding: Boolean = true,
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -441,6 +463,7 @@ fun AddPetsScreen(
 
   AddPetsContent(
       state = state,
+      isOnboarding = isOnboarding,
       onBackClick = onBack,
       onSkipClick = viewModel::skip,
       onNameChange = viewModel::onNameChanged,

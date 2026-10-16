@@ -28,6 +28,19 @@ data class AddPetsUiState(
   val canFinish: Boolean
     get() = !isSaving && !isDone && (!hasFormInput || canSave)
 
+  /**
+   * Why the started pet can't be saved yet, shown above the buttons so they are never disabled
+   * without a reason; null when there is nothing missing.
+   */
+  val missingField: String?
+    get() =
+        when {
+          !hasFormInput || isSaving -> null
+          name.isBlank() -> "Add your pet's name to save it"
+          species == null -> "Choose an animal to save ${name.trim()}"
+          else -> null
+        }
+
   /** True when the user has started filling in the current pet. */
   val hasFormInput: Boolean
     get() =
