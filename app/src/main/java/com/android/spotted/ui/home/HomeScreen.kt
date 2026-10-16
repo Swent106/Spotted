@@ -445,31 +445,52 @@ internal fun SectionMessage(message: String, color: Color, tag: String) {
 }
 
 /** A tab of the tab bar, sized as in Figma. */
+/** One tab; it is wider when selected, as in the Figma frames "01 · Near you" and "13". */
 private class Tab(
     val icon: Int,
     val iconSize: Dp,
     val width: Dp,
+    val selectedWidth: Dp,
     val label: String,
     val tag: String,
 )
 
 private val TABS =
     listOf(
-        Tab(R.drawable.ic_tab_home, 26.dp, 81.dp, "Home", HomeScreenTestTags.TAB_HOME),
-        Tab(R.drawable.ic_tab_map, 31.dp, 53.dp, "Map", HomeScreenTestTags.TAB_MAP),
-        Tab(R.drawable.ic_tab_camera, 26.dp, 52.dp, "Camera", HomeScreenTestTags.TAB_CAMERA),
-        Tab(R.drawable.ic_tab_profile, 33.dp, 51.dp, "Profile", HomeScreenTestTags.TAB_PROFILE),
+        Tab(R.drawable.ic_tab_home, 26.dp, 54.dp, 81.dp, "Home", HomeScreenTestTags.TAB_HOME),
+        Tab(R.drawable.ic_tab_map, 31.dp, 53.dp, 81.dp, "Map", HomeScreenTestTags.TAB_MAP),
+        Tab(R.drawable.ic_tab_camera, 26.dp, 52.dp, 81.dp, "Camera", HomeScreenTestTags.TAB_CAMERA),
+        Tab(
+            R.drawable.ic_tab_profile,
+            33.dp,
+            51.dp,
+            85.dp,
+            "Profile",
+            HomeScreenTestTags.TAB_PROFILE,
+        ),
     )
 
+/** Index of each tab in the [TabBar], to pass as its `selectedIndex`. */
+internal object TabIndex {
+  const val HOME = 0
+  const val PROFILE = 3
+}
+
 /**
- * The [TABS], with one click callback per tab in the same order. Home is selected, and each tab
- * tells accessibility services whether it is the selected one.
+ * The [TABS], with one click callback per tab in the same order. The tab at [selectedIndex] is
+ * highlighted, and each tab tells accessibility services whether it is the selected one. Also used
+ * by the Helper profile screen.
  */
 @Composable
-private fun TabBar(onClicks: List<() -> Unit>, modifier: Modifier = Modifier) {
+internal fun TabBar(
+    onClicks: List<() -> Unit>,
+    modifier: Modifier = Modifier,
+    selectedIndex: Int = TabIndex.HOME,
+) {
   Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(7.dp),
+      // Spreads the remaining width between the tabs: 7 dp with Home selected, as in Figma
+      horizontalArrangement = Arrangement.SpaceBetween,
       modifier =
           modifier
               .padding(bottom = 7.dp)
@@ -482,11 +503,11 @@ private fun TabBar(onClicks: List<() -> Unit>, modifier: Modifier = Modifier) {
               .testTag(HomeScreenTestTags.TAB_BAR),
   ) {
     TABS.forEachIndexed { index, tab ->
-      val selected = index == 0
+      val selected = index == selectedIndex
       Box(
           contentAlignment = Alignment.Center,
           modifier =
-              Modifier.width(tab.width)
+              Modifier.width(if (selected) tab.selectedWidth else tab.width)
                   .height(51.dp)
                   .clip(RoundedCornerShape(27.dp))
                   .background(if (selected) SpottedTabSelected else Color.White)
