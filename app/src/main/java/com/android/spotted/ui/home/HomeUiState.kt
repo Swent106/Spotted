@@ -40,6 +40,8 @@ data class HomeUiState(
     val alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM,
     val pets: HomeSection<Pet> = HomeSection(),
     val lostPetsNearby: HomeSection<Alert> = HomeSection(),
+    /** The user's own open alerts, wherever they are: not in "Lost near you", but on the map. */
+    val ownLostPets: List<Alert> = emptyList(),
     val nowMillis: Long = 0L,
     val errorMessage: String? = null,
 )

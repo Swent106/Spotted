@@ -73,6 +73,9 @@ class ReportMissingContentTest {
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(published.toList())
+
+    override suspend fun getOpenAlertsByOwner(ownerId: String) =
+        Result.success(published.filter { it.ownerId == ownerId })
   }
 
   @Test
