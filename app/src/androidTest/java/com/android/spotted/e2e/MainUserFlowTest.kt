@@ -45,7 +45,6 @@ import com.android.spotted.ui.profile.HelperProfileTestTags
 import com.android.spotted.ui.report.ReportMissingScreenTestTags
 import com.android.spotted.ui.sighting.ReportSightingScreenTestTags
 import com.android.spotted.utils.FakeJwtGenerator
-import com.android.spotted.utils.FirebaseEmulators
 import com.google.android.gms.tasks.Tasks
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
@@ -93,7 +92,6 @@ class MainUserFlowTest {
   @Before
   fun setUp() {
     assertTrue("$PET_COUNT_ARGUMENT must be at least 1 to report a pet missing", petCount >= 1)
-    FirebaseEmulators.configure()
     clearEmulators()
     FirebaseAuth.getInstance().signOut()
     CredentialManagerProvider.create = { TestCredentialManager }

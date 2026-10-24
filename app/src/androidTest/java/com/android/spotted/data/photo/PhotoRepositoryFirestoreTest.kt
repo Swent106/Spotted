@@ -9,7 +9,6 @@ import android.net.Uri
 import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.android.spotted.utils.FirebaseEmulators
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -22,7 +21,6 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -186,13 +184,5 @@ class PhotoRepositoryFirestoreTest {
   private fun decode(base64: String): Bitmap {
     val bytes = Base64.decode(base64, Base64.NO_WRAP)
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-  }
-
-  companion object {
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      FirebaseEmulators.configure()
-    }
   }
 }
