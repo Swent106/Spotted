@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -17,7 +18,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -111,12 +111,5 @@ class PhotoRepositoryFirebaseStorageTest {
   companion object {
     private val PHOTO_BYTES = byteArrayOf(1, 2, 3, 4, 5)
     private const val MAX_DOWNLOAD_BYTES = 1024L
-
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      FirebaseStorage.getInstance().useEmulator("10.0.2.2", 9199)
-    }
   }
 }

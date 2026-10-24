@@ -8,9 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.ui.home.HomeViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoViewModel
 import com.android.spotted.ui.profile.HelperProfileViewModel
-import com.android.spotted.utils.FirebaseEmulators
 import org.junit.Assert.assertNotNull
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -39,13 +37,5 @@ class ViewModelFactoriesTest {
   @Test
   fun helperProfileFactory_createsTheViewModel() {
     assertNotNull(HelperProfileViewModel.Factory.create(HelperProfileViewModel::class.java, extras))
-  }
-
-  companion object {
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      FirebaseEmulators.configure()
-    }
   }
 }

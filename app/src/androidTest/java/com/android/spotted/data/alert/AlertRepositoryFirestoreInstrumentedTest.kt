@@ -17,7 +17,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -227,20 +226,5 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     assertTrue("Nearby alert should be found", alerts!!.any { it.id == alert1.id })
     assertTrue("Far alert should NOT be found", alerts.none { it.id == alert2.id })
-  }
-
-  companion object {
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      // useEmulator() must be called before any other use of Firestore/Auth in the process.
-      try {
-        FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
-        FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      } catch (e: IllegalStateException) {
-        // Don't swallow silently: if this fires, tests may be hitting the real backend.
-        println("Emulator config failed (already initialized?): ${e.message}")
-      }
-    }
   }
 }
