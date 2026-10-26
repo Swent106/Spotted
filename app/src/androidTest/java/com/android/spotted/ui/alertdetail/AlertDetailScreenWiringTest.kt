@@ -106,6 +106,11 @@ class AlertDetailScreenWiringTest {
     override suspend fun getAlertById(id: String): Result<Alert?> =
         Result.success(alert.takeIf { it.id == id })
 
+    override suspend fun getMyAlerts(ownerId: String) =
+        Result.success(listOf(alert).filter { it.ownerId == ownerId })
+
+    override suspend fun closeAlert(alertId: String): Result<Unit> = Result.success(Unit)
+
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(listOf(alert))
 

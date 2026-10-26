@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.alert
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -26,6 +27,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
   private lateinit var firestore: FirebaseFirestore
   private lateinit var auth: FirebaseAuth
   private lateinit var repository: AlertRepositoryFirestore
+  private var nowMillis = 0L
 
   // Documents created during a test, deleted in tearDown
   private val createdPetIds = mutableListOf<String>()
@@ -35,7 +37,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
   fun setUp() = runBlocking {
     firestore = FirebaseFirestore.getInstance()
     auth = FirebaseAuth.getInstance()
-    repository = AlertRepositoryFirestore(firestore)
+    repository = AlertRepositoryFirestore(firestore, now = { nowMillis })
 
     // Anonymous sign-in so that Firestore rules see an authenticated user
     auth.signInAnonymously().await()
@@ -226,5 +228,64 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     assertTrue("Nearby alert should be found", alerts!!.any { it.id == alert1.id })
     assertTrue("Far alert should NOT be found", alerts.none { it.id == alert2.id })
+  }
+
+  /** Seeds a pet and publishes an open alert for it at [location], owned by the signed-in user. */
+  private suspend fun publishOpenAlert(location: Location): Alert {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = location,
+            lostAtMillis = 1000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+        )
+    val result = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue("Alert should be published: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    return alert
+  }
+
+  @Test
+  fun closeAlert_removesAlertFromOpenAlertsNear_butKeepsItInMyAlerts() = runBlocking {
+    val center = Location(latitude = 46.0, longitude = 6.0)
+    val alert = publishOpenAlert(center)
+    nowMillis = 5_000L
+
+    val result = repository.closeAlert(alert.id)
+
+    assertTrue("closeAlert should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    val openAlerts = repository.getOpenAlertsNear(center, radiusKm = 5.0).getOrThrow()
+    assertTrue("Closed alert should NOT be found", openAlerts.none { it.id == alert.id })
+    val myAlert = repository.getMyAlerts(alert.ownerId).getOrThrow().single { it.id == alert.id }
+    assertEquals(alert.copy(status = AlertStatus.CLOSED, closedAtMillis = 5_000L), myAlert)
+  }
+
+  @Test
+  fun closeAlert_twice_keepsFirstClosingTime() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0))
+    nowMillis = 5_000L
+    repository.closeAlert(alert.id).getOrThrow()
+    nowMillis = 9_000L
+
+    val result = repository.closeAlert(alert.id)
+
+    assertTrue(
+        "Second close should succeed: ${result.exceptionOrNull()?.message}",
+        result.isSuccess,
+    )
+    assertEquals(5_000L, repository.getAlertById(alert.id).getOrThrow()?.closedAtMillis)
+  }
+
+  @Test
+  fun closeAlert_returnsFailureWhenAlertDoesNotExist() = runBlocking {
+    val result = repository.closeAlert("missing-${java.util.UUID.randomUUID()}")
+
+    assertTrue(result.isFailure)
   }
 }

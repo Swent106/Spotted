@@ -98,14 +98,17 @@ service cloud.firestore {
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
                 'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
           && d.keys().hasOnly([
-                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
-                'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
+                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
           && validLocation(d.lastKnownLocation)
           && d.lostAtMillis is int
           && d.status in ['OPEN', 'CLOSED']
+          // Only a closed alert may carry a closing time; the app writes null while open
+          && (!('closedAtMillis' in d) || d.closedAtMillis == null
+              || (d.closedAtMillis is int && d.status == 'CLOSED'))
           && d.petName is string && d.petName.size() > 0 && d.petName.size() <= 100
           && d.petSpecies is string && d.petSpecies.size() <= 50
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
@@ -123,12 +126,15 @@ service cloud.firestore {
           && request.resource.data.status == 'OPEN'
           && ownsPet(request.resource.data.petId);
 
-      // The owner may only close the alert or move it; identity fields are immutable.
+      // The owner may only close an open alert or move it; identity fields are immutable.
+      // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
+      // field existed count as open.
       allow update: if request.auth != null
           && resource.data.ownerId == request.auth.uid
+          && resource.data.get('status', 'OPEN') == 'OPEN'
           && validAlert(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'lastKnownLocation']);
+               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis']);
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;

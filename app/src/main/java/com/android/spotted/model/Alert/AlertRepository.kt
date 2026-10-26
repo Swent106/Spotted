@@ -11,6 +11,10 @@ interface AlertRepository {
   /** Returns the alert with [id], or null when no such alert exists. */
   suspend fun getAlertById(id: String): Result<Alert?>
 
+  suspend fun getMyAlerts(ownerId: String): Result<List<Alert>>
+
+  suspend fun closeAlert(alertId: String): Result<Unit>
+
   /**
    * Returns open alerts within the inclusive [radiusKm] of [center], filtered by exact distance and
    * ordered newest first. Alerts with the same [Alert.lostAtMillis] are ordered by ascending

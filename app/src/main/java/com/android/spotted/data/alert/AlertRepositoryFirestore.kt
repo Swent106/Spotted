@@ -3,12 +3,14 @@ package com.android.spotted.data.alert
 import com.android.spotted.model.Location
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
+import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
 class AlertRepositoryFirestore(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val now: () -> Long = System::currentTimeMillis,
 ) : AlertRepository {
 
   // The name of the collection in Firestore where all alerts will be stored
@@ -43,6 +45,51 @@ class AlertRepositoryFirestore(
                 ?: throw IllegalStateException("Alert $id contains invalid data")
         Result.success(alert)
       }
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
+  override suspend fun getMyAlerts(ownerId: String): Result<List<Alert>> {
+    return try {
+      val snapshot =
+          db.collection(collectionPath).whereEqualTo("ownerId", ownerId).limit(100).get().await()
+      val alerts =
+          snapshot
+              .toObjects(AlertDto::class.java)
+              .mapNotNull { it.toDomain() }
+              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+      Result.success(alerts)
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
+  override suspend fun closeAlert(alertId: String): Result<Unit> {
+    return try {
+      val ref = db.collection(collectionPath).document(alertId)
+      // Read and write in one transaction so two concurrent closes keep the first closing time
+      // Transactions allow you to run a series of operations that do not change any data until the
+      // transaction is committed.
+      db.runTransaction { transaction ->
+            val snapshot = transaction.get(ref)
+            if (!snapshot.exists()) throw NoSuchElementException("No alert with id $alertId")
+            // Closing is one-way: an already closed alert is left untouched
+            if (snapshot.getString("status") != AlertStatus.CLOSED.name) {
+              transaction.update(
+                  ref,
+                  mapOf("status" to AlertStatus.CLOSED.name, "closedAtMillis" to now()),
+              )
+            }
+          }
+          .await()
+      Result.success(Unit)
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
