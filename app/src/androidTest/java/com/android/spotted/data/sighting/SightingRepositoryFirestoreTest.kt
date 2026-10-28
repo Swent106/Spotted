@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
@@ -22,7 +23,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.yield
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -221,10 +221,14 @@ class SightingRepositoryFirestoreTest {
 
     val received = CopyOnWriteArrayList<List<Sighting>>()
     inRealTime {
+      val listening = CompletableDeferred<Unit>()
       val collector = launch {
-        repository.observeSightingsForAlert(alertId).collect { received += it.getOrThrow() }
+        repository.observeSightingsForAlert(alertId).collect {
+          received += it.getOrThrow()
+          if (it.getOrThrow() == listOf(before)) listening.complete(Unit)
+        }
       }
-      while (received.lastOrNull() != listOf(before)) yield()
+      listening.await()
       collector.cancelAndJoin()
       val receivedBeforeCancel = received.toList()
 
