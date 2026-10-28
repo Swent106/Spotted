@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.addpets
 
 import com.android.spotted.model.Pet.Behavior
@@ -228,7 +229,10 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
-    assertEquals(AddPetsViewModel.PHOTO_ERROR_MESSAGE, state.errorMessage)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_photo_upload_error),
+        state.errorMessage,
+    )
     assertFalse(state.isSaving)
     val saved = savedPets().single()
     assertEquals("Milo", saved.name)
@@ -244,7 +248,7 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
-    assertEquals("Denied", state.errorMessage)
+    assertEquals(AddPetsMessage.Text("Denied"), state.errorMessage)
     assertEquals("Rex", state.name)
     assertTrue(state.addedPets.isEmpty())
     assertFalse(state.isSaving)
@@ -258,7 +262,10 @@ class AddPetsViewModelTest {
     viewModel.savePet()
     advanceUntilIdle()
 
-    assertEquals(AddPetsViewModel.SAVE_ERROR_MESSAGE, viewModel.uiState.value.errorMessage)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error),
+        viewModel.uiState.value.errorMessage,
+    )
   }
 
   @Test
@@ -283,7 +290,10 @@ class AddPetsViewModelTest {
 
     val state = viewModel.uiState.value
     assertTrue(state.needsSignIn)
-    assertEquals(AddPetsViewModel.NOT_SIGNED_IN_MESSAGE, state.errorMessage)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_not_signed_in),
+        state.errorMessage,
+    )
     assertFalse(state.isSaving)
     assertTrue(savedPets().isEmpty())
   }
@@ -294,11 +304,21 @@ class AddPetsViewModelTest {
     fillForm(name = "Rex", species = Species.DOG)
     viewModel.savePet()
     advanceUntilIdle()
-    assertEquals("Denied", viewModel.uiState.value.errorMessage)
+    assertEquals(AddPetsMessage.Text("Denied"), viewModel.uiState.value.errorMessage)
 
     viewModel.onNameChanged("Rex")
 
     assertNull(viewModel.uiState.value.errorMessage)
+  }
+
+  @Test
+  fun photoPickerError_showsLocalizedCameraUnavailableMessage() {
+    viewModel.onPhotoPickerError()
+
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.photo_camera_unavailable),
+        viewModel.uiState.value.errorMessage,
+    )
   }
 
   @Test
@@ -352,7 +372,7 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     assertFalse(viewModel.uiState.value.isDone)
-    assertEquals("Denied", viewModel.uiState.value.errorMessage)
+    assertEquals(AddPetsMessage.Text("Denied"), viewModel.uiState.value.errorMessage)
   }
 
   private fun fillForm(name: String, species: Species) {
@@ -391,13 +411,22 @@ class AddPetsViewModelTest {
 
     viewModel.onSpeciesChanged(Species.CAT)
 
-    assertEquals("Add your pet's name to save it", viewModel.uiState.value.missingField)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_missing_name),
+        viewModel.uiState.value.missingField,
+    )
   }
 
   @Test
   fun missingField_asksForTheAnimalOnceTheNameIsTyped() {
     viewModel.onNameChanged("Milo")
-    assertEquals("Choose an animal to save Milo", viewModel.uiState.value.missingField)
+    assertEquals(
+        AddPetsMessage.Resource(
+            com.android.spotted.R.string.add_pets_missing_species,
+            listOf("Milo"),
+        ),
+        viewModel.uiState.value.missingField,
+    )
 
     viewModel.onSpeciesChanged(Species.CAT)
 

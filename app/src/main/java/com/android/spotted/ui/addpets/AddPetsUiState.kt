@@ -1,8 +1,16 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.addpets
 
+import com.android.spotted.R
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
+
+sealed interface AddPetsMessage {
+  data class Resource(val id: Int, val arguments: List<Any> = emptyList()) : AddPetsMessage
+
+  data class Text(val value: String) : AddPetsMessage
+}
 
 data class AddPetsUiState(
     val name: String = "",
@@ -18,7 +26,7 @@ data class AddPetsUiState(
     val isSaving: Boolean = false,
     val isDone: Boolean = false,
     val needsSignIn: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: AddPetsMessage? = null,
 ) {
   /** A name and a species are required to save a pet. */
   val canSave: Boolean
@@ -32,12 +40,13 @@ data class AddPetsUiState(
    * Why the started pet can't be saved yet, shown above the buttons so they are never disabled
    * without a reason; null when there is nothing missing.
    */
-  val missingField: String?
+  val missingField: AddPetsMessage?
     get() =
         when {
           !hasFormInput || isSaving -> null
-          name.isBlank() -> "Add your pet's name to save it"
-          species == null -> "Choose an animal to save ${name.trim()}"
+          name.isBlank() -> AddPetsMessage.Resource(R.string.add_pets_missing_name)
+          species == null ->
+              AddPetsMessage.Resource(R.string.add_pets_missing_species, listOf(name.trim()))
           else -> null
         }
 

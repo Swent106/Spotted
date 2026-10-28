@@ -1,6 +1,13 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.sighting
 
 import android.Manifest
+import android.net.Uri
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -10,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.model.Location
@@ -128,6 +136,41 @@ class ReportSightingContentTest {
 
     composeTestRule.onNodeWithText("Looks like a cat · you can correct this").assertIsDisplayed()
     composeTestRule.onNodeWithText("Retake").assertIsDisplayed()
+  }
+
+  @Test
+  fun photoButton_usesSharedPickerAndReturnsTheSelectedUri() {
+    val selectedUri = Uri.parse("content://photos/sighting")
+    val registry =
+        object : ActivityResultRegistry() {
+          override fun <I, O> onLaunch(
+              requestCode: Int,
+              contract: ActivityResultContract<I, O>,
+              input: I,
+              options: ActivityOptionsCompat?,
+          ) {
+            @Suppress("UNCHECKED_CAST") dispatchResult(requestCode, selectedUri as O)
+          }
+        }
+    val owner =
+        object : ActivityResultRegistryOwner {
+          override val activityResultRegistry: ActivityResultRegistry = registry
+        }
+    var actualUri: Uri? = null
+
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+        ReportSightingContent(
+            state = ReportSightingUiState(),
+            onPhotoSelected = { actualUri = it },
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_BUTTON).performClick()
+    composeTestRule.waitForIdle()
+
+    assertEquals(selectedUri, actualUri)
   }
 
   @Test

@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.personalinfo
 
 import android.net.Uri
@@ -440,5 +441,24 @@ class PersonalInfoScreenTest {
     composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).performClick()
 
     assertTrue(removed)
+  }
+
+  @Test
+  fun photoOptions_cameraUnavailable_showsGalleryFallback() {
+    composeTestRule.setContent {
+      PhotoOptionsDialog(
+          hasPhoto = false,
+          canTakePhoto = true,
+          cameraError = true,
+          onPickPhoto = {},
+          onTakePhoto = {},
+          onRemovePhoto = {},
+          onDismiss = {},
+      )
+    }
+
+    composeTestRule
+        .onNodeWithText("Unable to open the camera. Choose a photo from your gallery instead.")
+        .assertIsDisplayed()
   }
 }

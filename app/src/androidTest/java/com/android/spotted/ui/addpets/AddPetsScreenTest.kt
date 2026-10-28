@@ -186,7 +186,18 @@ class AddPetsScreenTest {
 
   @Test
   fun errorMessage_isShown() {
-    setContent(completeForm.copy(errorMessage = "Unable to save the pet"))
+    setContent(completeForm.copy(errorMessage = AddPetsMessage.Text("Unable to save the pet")))
+
+    node(AddPetsScreenTestTags.ERROR_MESSAGE).assertTextEquals("Unable to save the pet")
+  }
+
+  @Test
+  fun localizedErrorMessage_isShown() {
+    setContent(
+        completeForm.copy(
+            errorMessage = AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error)
+        )
+    )
 
     node(AddPetsScreenTestTags.ERROR_MESSAGE).assertTextEquals("Unable to save the pet")
   }

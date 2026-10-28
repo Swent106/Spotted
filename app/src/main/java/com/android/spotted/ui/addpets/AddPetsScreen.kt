@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -77,21 +78,21 @@ object AddPetsScreenTestTags {
   fun behaviorChip(behavior: Behavior) = "addPets_behaviorChip_${behavior.name}"
 }
 
-/** Label shown for each [Species] chip. */
-internal fun Species.label(): String =
+/** Resource label shown for each [Species] chip. */
+internal fun Species.labelRes(): Int =
     when (this) {
-      Species.DOG -> "Dog"
-      Species.CAT -> "Cat"
-      Species.OTHER -> "Other"
+      Species.DOG -> R.string.add_pets_species_dog
+      Species.CAT -> R.string.add_pets_species_cat
+      Species.OTHER -> R.string.add_pets_species_other
     }
 
-/** Label shown for each [Behavior] chip, under "Characteristics". */
-internal fun Behavior.label(): String =
+/** Resource label shown for each [Behavior] chip, under "Characteristics". */
+internal fun Behavior.labelRes(): Int =
     when (this) {
-      Behavior.STRESSED_IN_CROWDS -> "Stressed in crowds"
-      Behavior.DOESNT_LIKE_BEING_TOUCHED -> "Doesn't like being touched"
-      Behavior.REACTIVE_TO_OTHER_ANIMALS -> "Reactive to other animals"
-      Behavior.FEARFUL_OF_STRANGERS -> "Fearful of strangers"
+      Behavior.STRESSED_IN_CROWDS -> R.string.add_pets_behavior_stressed_in_crowds
+      Behavior.DOESNT_LIKE_BEING_TOUCHED -> R.string.add_pets_behavior_doesnt_like_being_touched
+      Behavior.REACTIVE_TO_OTHER_ANIMALS -> R.string.add_pets_behavior_reactive_to_other_animals
+      Behavior.FEARFUL_OF_STRANGERS -> R.string.add_pets_behavior_fearful_of_strangers
     }
 
 private val sectionLabelStyle = jakarta(11, 15f, 700, 0xFF6B7280)
@@ -119,6 +120,7 @@ fun AddPetsContent(
     onSaveAndContinueClick: () -> Unit,
     onAddAnotherClick: () -> Unit,
     isOnboarding: Boolean = true,
+    onPhotoError: () -> Unit = {},
 ) {
   Box(
       Modifier.fillMaxSize()
@@ -141,18 +143,18 @@ fun AddPetsContent(
       ) {
         AddPetsHeader(isSaving = state.isSaving, isOnboarding, onBackClick, onSkipClick)
         FormCard {
-          SectionLabel("NAME")
+          SectionLabel(R.string.add_pets_name_section)
           FormField(
               value = state.name,
               onValueChange = onNameChange,
-              placeholder = "Your pet's name",
+              placeholder = stringResource(R.string.add_pets_name_placeholder),
               testTag = AddPetsScreenTestTags.NAME_INPUT,
           )
-          SectionLabel("ANIMAL")
+          SectionLabel(R.string.add_pets_animal_section)
           ChipFlow {
             Species.entries.forEach { species ->
               FormChip(
-                  text = species.label(),
+                  text = stringResource(species.labelRes()),
                   selected = state.species == species,
                   role = Role.RadioButton,
                   testTag = AddPetsScreenTestTags.speciesChip(species),
@@ -162,33 +164,37 @@ fun AddPetsContent(
           }
         }
         FormCard {
-          SectionLabel("PHOTO")
-          PetPhotoPicker(photoUri = state.photoUri, onPhotoSelected = onPhotoChange)
+          SectionLabel(R.string.add_pets_photo_section)
+          PetPhotoPicker(
+              photoUri = state.photoUri,
+              onPhotoSelected = onPhotoChange,
+              onPhotoError = onPhotoError,
+          )
         }
         // The details card is tighter than the others in the Figma
         FormCard(spacing = 8.dp) {
-          SectionLabel("DESCRIPTION")
+          SectionLabel(R.string.add_pets_description_section)
           FormField(
               value = state.description,
               onValueChange = onDescriptionChange,
-              placeholder = "Colour, size, collar…",
+              placeholder = stringResource(R.string.add_pets_description_placeholder),
               testTag = AddPetsScreenTestTags.DESCRIPTION_INPUT,
               singleLine = false,
               minHeight = 52.dp,
           )
-          SectionLabel("AGE")
+          SectionLabel(R.string.add_pets_age_section)
           FormField(
               value = state.age,
               onValueChange = onAgeChange,
-              placeholder = "e.g. 4 years",
+              placeholder = stringResource(R.string.add_pets_age_placeholder),
               testTag = AddPetsScreenTestTags.AGE_INPUT,
               width = 150.dp,
           )
-          SectionLabel("CHARACTERISTICS")
+          SectionLabel(R.string.add_pets_characteristics_section)
           ChipFlow {
             Behavior.entries.forEach { behavior ->
               FormChip(
-                  text = behavior.label(),
+                  text = stringResource(behavior.labelRes()),
                   selected = behavior in state.behaviors,
                   role = Role.Checkbox,
                   testTag = AddPetsScreenTestTags.behaviorChip(behavior),
@@ -202,7 +208,7 @@ fun AddPetsContent(
       Spacer(Modifier.height(12.dp))
       if (state.addedPets.isNotEmpty()) {
         Text(
-            "Added: " + state.addedPets.joinToString { it.name },
+            stringResource(R.string.add_pets_added_pets, state.addedPets.joinToString { it.name }),
             style = jakarta(13, 18f, 600, 0xFF5F6672, TextAlign.Center),
             modifier =
                 Modifier.fillMaxWidth()
@@ -212,7 +218,7 @@ fun AddPetsContent(
       }
       (state.errorMessage ?: state.missingField)?.let { message ->
         Text(
-            message,
+            message.resolve(),
             style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
             modifier =
                 Modifier.fillMaxWidth()
@@ -247,28 +253,35 @@ private fun AddPetsHeader(
             Modifier.size(40.dp)
                 .clip(CircleShape)
                 .background(Color.White)
-                .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBackClick)
+                .clickable(
+                    onClickLabel = stringResource(R.string.add_pets_back),
+                    role = Role.Button,
+                    onClick = onBackClick,
+                )
                 .testTag(AddPetsScreenTestTags.BACK_BUTTON),
     ) {
       Icon(
           painterResource(R.drawable.ic_arrow_back),
-          contentDescription = "Back",
+          contentDescription = stringResource(R.string.add_pets_back),
           tint = SpottedInk,
           modifier = Modifier.size(20.dp),
       )
     }
     Column(Modifier.weight(1f)) {
-      Text("Add your pet", style = jakarta(23, 31f, 800, 0xFF14161A))
+      Text(
+          stringResource(R.string.add_pets_screen_title),
+          style = jakarta(23, 31f, 800, 0xFF14161A),
+      )
       if (isOnboarding) {
         Text(
-            "Step 2 of 2 · you can edit it later",
+            stringResource(R.string.add_pets_onboarding_step),
             style = jakarta(12, 16f, 500, 0xFF5F6672),
         )
       }
     }
     if (isOnboarding) {
       Text(
-          "Skip",
+          stringResource(R.string.add_pets_skip),
           style = jakarta(14, 18f, 700, 0xFF1B5BD7),
           modifier =
               Modifier.clip(RoundedCornerShape(10.dp))
@@ -295,9 +308,16 @@ private fun FormCard(spacing: Dp = 10.dp, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-  Text(text, style = sectionLabelStyle)
+private fun SectionLabel(resourceId: Int) {
+  Text(stringResource(resourceId), style = sectionLabelStyle)
 }
+
+@Composable
+private fun AddPetsMessage.resolve(): String =
+    when (this) {
+      is AddPetsMessage.Resource -> stringResource(id, *arguments.toTypedArray())
+      is AddPetsMessage.Text -> value
+    }
 
 @Composable
 private fun ChipFlow(content: @Composable () -> Unit) {
@@ -408,7 +428,10 @@ private fun AddPetsFooter(
             modifier = Modifier.size(20.dp).testTag(AddPetsScreenTestTags.LOADER),
         )
       } else {
-        Text("Save & continue", style = jakarta(15, 20f, 700, 0xFFFFFFFF))
+        Text(
+            stringResource(R.string.add_pets_save_and_continue),
+            style = jakarta(15, 20f, 700, 0xFFFFFFFF),
+        )
       }
     }
     Box(
@@ -424,7 +447,7 @@ private fun AddPetsFooter(
                 )
                 .clickable(
                     enabled = state.canSave,
-                    onClickLabel = "Add another pet",
+                    onClickLabel = stringResource(R.string.add_pets_add_another),
                     role = Role.Button,
                     onClick = onAddAnotherClick,
                 )
@@ -474,5 +497,6 @@ fun AddPetsScreen(
       onBehaviorToggle = viewModel::onBehaviorToggled,
       onSaveAndContinueClick = viewModel::finish,
       onAddAnotherClick = viewModel::savePet,
+      onPhotoError = viewModel::onPhotoPickerError,
   )
 }

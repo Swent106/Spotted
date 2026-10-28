@@ -1,13 +1,9 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.personalinfo
 
 import android.Manifest
-import android.content.ActivityNotFoundException
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
-import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,6 +51,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +67,7 @@ import coil.imageLoader
 import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.ui.addpets.CameraPhotoFile
+import com.android.spotted.ui.addpets.rememberPhotoPickerActions
 import com.android.spotted.ui.components.MapPicker
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedAvatarBackground
@@ -242,7 +240,10 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
   ) {
     Box(
         Modifier.size(96.dp)
-            .clickable(onClickLabel = "Change photo", onClick = onChangePhotoClick)
+            .clickable(
+                onClickLabel = stringResource(R.string.profile_photo_change_accessibility),
+                onClick = onChangePhotoClick,
+            )
             .testTag(PersonalInfoScreenTestTags.AVATAR)
     ) {
       Box(
@@ -254,7 +255,7 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
         if (photoUri != null) {
           AsyncImage(
               model = photoUri,
-              contentDescription = "Profile photo",
+              contentDescription = stringResource(R.string.profile_photo_description),
               contentScale = ContentScale.Crop,
               modifier =
                   Modifier.matchParentSize()
@@ -277,7 +278,7 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
       }
     }
     Text(
-        "Change photo (optional)",
+        stringResource(R.string.profile_photo_change_optional),
         style = jakarta(12, 16, Bold, SpottedBlue),
         modifier =
             Modifier.clickable(role = Role.Button, onClick = onChangePhotoClick)
@@ -500,20 +501,15 @@ fun PersonalInfoScreen(
   val context = LocalContext.current
 
   var showPhotoOptions by rememberSaveable { mutableStateOf(false) }
-  val galleryLauncher =
-      rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
-        // Null when the user closes the picker without choosing: keep the current photo
-        if (uri != null) viewModel.onPhotoSelected(uri.toString())
-      }
-  // File the camera app writes to; saved so it survives rotation while the camera is in front
-  var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-  val cameraLauncher =
-      rememberLauncherForActivityResult(TakePicture()) { saved ->
-        val uri = pendingCameraUri ?: return@rememberLauncherForActivityResult
-        pendingCameraUri = null
-        if (saved) viewModel.onPhotoSelected(uri.toString())
-        else context.contentResolver.delete(uri, null, null)
-      }
+  var cameraError by rememberSaveable { mutableStateOf(false) }
+  val photoPickerActions =
+      rememberPhotoPickerActions(
+          onPhotoSelected = { uri -> uri?.let { viewModel.onPhotoSelected(it.toString()) } },
+          onCameraUnavailable = {
+            cameraError = true
+            showPhotoOptions = true
+          },
+      )
 
   val locationPermissionLauncher =
       rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -535,7 +531,10 @@ fun PersonalInfoScreen(
   PersonalInfoContent(
       state = state,
       onBackClick = onBack,
-      onChangePhotoClick = { showPhotoOptions = true },
+      onChangePhotoClick = {
+        cameraError = false
+        showPhotoOptions = true
+      },
       onUsernameChange = viewModel::onUsernameChanged,
       onFirstNameChange = viewModel::onFirstNameChanged,
       onLastNameChange = viewModel::onLastNameChanged,
@@ -557,27 +556,25 @@ fun PersonalInfoScreen(
     PhotoOptionsDialog(
         hasPhoto = state.photoUri != null,
         canTakePhoto = remember(context) { CameraPhotoFile.deviceHasCamera(context) },
+        cameraError = cameraError,
         onPickPhoto = {
+          cameraError = false
           showPhotoOptions = false
-          galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+          photoPickerActions.pickFromGallery()
         },
         onTakePhoto = {
+          cameraError = false
           showPhotoOptions = false
-          val uri = CameraPhotoFile.newPhotoUri(context)
-          pendingCameraUri = uri
-          try {
-            cameraLauncher.launch(uri)
-          } catch (e: ActivityNotFoundException) {
-            // No camera app: nothing happens, the gallery still works
-            pendingCameraUri = null
-            context.contentResolver.delete(uri, null, null)
-          }
+          photoPickerActions.takePhoto()
         },
         onRemovePhoto = {
           showPhotoOptions = false
           viewModel.onPhotoSelected(null)
         },
-        onDismiss = { showPhotoOptions = false },
+        onDismiss = {
+          cameraError = false
+          showPhotoOptions = false
+        },
     )
   }
 }
@@ -587,6 +584,7 @@ fun PersonalInfoScreen(
 internal fun PhotoOptionsDialog(
     hasPhoto: Boolean,
     canTakePhoto: Boolean,
+    cameraError: Boolean = false,
     onPickPhoto: () -> Unit,
     onTakePhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
@@ -594,24 +592,43 @@ internal fun PhotoOptionsDialog(
 ) {
   AlertDialog(
       onDismissRequest = onDismiss,
-      title = { Text("Profile photo", style = jakarta(18, 24, Bold, SpottedInk)) },
+      title = {
+        Text(
+            stringResource(R.string.profile_photo_title),
+            style = jakarta(18, 24, Bold, SpottedInk),
+        )
+      },
       text = {
         Column(Modifier.testTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS)) {
+          if (cameraError) {
+            Text(
+                stringResource(R.string.photo_camera_unavailable),
+                style = jakarta(13, 18, FontWeight.Medium, SpottedError),
+            )
+          }
           PhotoOption(
-              "Choose from gallery",
+              stringResource(R.string.profile_photo_choose_gallery),
               PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY,
               onPickPhoto,
           )
           if (canTakePhoto) {
-            PhotoOption("Take a photo", PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA, onTakePhoto)
+            PhotoOption(
+                stringResource(R.string.pet_photo_take),
+                PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA,
+                onTakePhoto,
+            )
           }
           if (hasPhoto) {
-            PhotoOption("Remove photo", PersonalInfoScreenTestTags.PHOTO_REMOVE, onRemovePhoto)
+            PhotoOption(
+                stringResource(R.string.profile_photo_remove),
+                PersonalInfoScreenTestTags.PHOTO_REMOVE,
+                onRemovePhoto,
+            )
           }
         }
       },
       confirmButton = {},
-      dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+      dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
   )
 }
 
