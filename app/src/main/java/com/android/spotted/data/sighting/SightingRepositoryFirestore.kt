@@ -13,6 +13,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -44,9 +45,12 @@ class SightingRepositoryFirestore(
 
   override fun observeSightingsForAlert(alertId: String): Flow<Result<List<Sighting>>> =
       callbackFlow {
-        // Firestore calls the listener with the current sightings, then after every change
+        // Firestore calls the listener with the current sightings, then after every change.
+        // It runs on a background thread, so parsing the documents never blocks the UI.
         val registration =
-            alertSightingsQuery(alertId).addSnapshotListener { snapshots, error ->
+            alertSightingsQuery(alertId).addSnapshotListener(Dispatchers.Default.asExecutor()) {
+                snapshots,
+                error ->
               if (error != null) {
                 trySend(Result.failure(error))
                 close()
