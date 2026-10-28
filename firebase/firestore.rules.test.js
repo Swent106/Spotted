@@ -766,6 +766,82 @@ describe("Firestore sighting access rules", () => {
     }
   });
 
+  // Only the fields the sighting rules read; the alert schema is tested above.
+  async function seedAlert(id, ownerId) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "alerts", id), { id, ownerId, status: "OPEN" });
+    });
+  }
+
+  const statusCases = [
+    { who: "alert owner", userId: "owner-1", allowed: true },
+    { who: "reporter", userId: "user-1", allowed: false },
+    { who: "another user", userId: "user-2", allowed: false },
+    { who: "anonymous user", userId: null, allowed: false },
+  ];
+
+  for (const testCase of statusCases) {
+    it(`sighting status: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedAlert("alert-1", "owner-1");
+      await seedSighting("sighting-1", "user-1");
+      const db = firestoreForUser(testCase.userId);
+      const operation = updateDoc(doc(db, "sightings", "sighting-1"), { status: "CONFIRMED" });
+
+      if (testCase.allowed) {
+        await assertSucceeds(operation);
+      } else {
+        await assertFails(operation);
+      }
+    });
+  }
+
+  it("sighting status: alert owner can change their mind, but only to a known status", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1", { status: "CONFIRMED" });
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "DISMISSED" }));
+    await assertSucceeds(updateDoc(ref, { status: "PENDING" }));
+    await assertFails(updateDoc(ref, { status: "MAYBE" }));
+    await assertFails(updateDoc(ref, { status: deleteField() }));
+  });
+
+  it("sighting status: alert owner cannot change anything else", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { status: "CONFIRMED", species: "CAT" }));
+    await assertFails(updateDoc(ref, { alertId: "alert-2" }));
+  });
+
+  it("sighting status: denied when the sighting has no alert or the alert is missing", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("no-alert", "user-1", { alertId: null });
+    await seedSighting("missing-alert", "user-1", { alertId: "alert-404" });
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "sightings", "no-alert"), { status: "CONFIRMED" }));
+    await assertFails(updateDoc(doc(db, "sightings", "missing-alert"), { status: "CONFIRMED" }));
+  });
+
+  it("sighting status: a new sighting must be pending", async () => {
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(setDoc(ref, sighting("sighting-1", "user-1", { status: "CONFIRMED" })));
+    await assertSucceeds(setDoc(ref, sighting("sighting-1", "user-1", { status: "PENDING" })));
+  });
+
+  it("sighting status: reporter can still edit a reviewed sighting without changing its status", async () => {
+    await seedSighting("sighting-1", "user-1", { status: "CONFIRMED" });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { species: "CAT" }));
+    await assertFails(
+      setDoc(ref, sighting("sighting-1", "user-1", { species: "CAT", status: "PENDING" })),
+    );
+  });
+
   const boundaryCases = [
     { field: "species", value: "DOG", allowed: true },
     { field: "species", value: "CAT", allowed: true },
