@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted
 
 import android.os.Bundle
@@ -53,10 +54,11 @@ object Route {
   const val HOME = "home"
   const val REPORT_MISSING = "report_missing"
   const val ALERT_ID = "alertId"
-  const val ALERT_DETAIL = "alert/{$ALERT_ID}"
-  const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
+  private const val ALERT = "alert"
+  const val ALERT_DETAIL = "$ALERT/{$ALERT_ID}"
   /** Report sighting opened from the Camera tab, for a pet not linked to an alert yet. */
   const val NEW_SIGHTING = "report_sighting"
+  const val REPORT_SIGHTING = "$NEW_SIGHTING/{$ALERT_ID}"
   /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
   const val ADD_PET = "add_pet"
   const val MAP = "map"
@@ -64,13 +66,14 @@ object Route {
   /** The profile form, opened from the Helper profile to change name, area or radius. */
   const val EDIT_PROFILE = "edit_profile"
   const val PET_ID = "petId"
-  const val PET_PROFILE = "pet/{$PET_ID}"
+  private const val PET = "pet"
+  const val PET_PROFILE = "$PET/{$PET_ID}"
 
-  fun petProfile(petId: String) = "pet/$petId"
+  fun petProfile(petId: String) = "$PET/$petId"
 
-  fun alertDetail(alertId: String) = "alert/$alertId"
+  fun alertDetail(alertId: String) = "$ALERT/$alertId"
 
-  fun reportSighting(alertId: String) = "report_sighting/$alertId"
+  fun reportSighting(alertId: String) = "$NEW_SIGHTING/$alertId"
 }
 
 class MainActivity : ComponentActivity() {
