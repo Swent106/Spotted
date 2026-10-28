@@ -16,6 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
@@ -109,18 +112,7 @@ fun SpottedApp(
   val destination by viewModel.uiState.collectAsState()
   val navController = rememberNavController()
 
-  LaunchedEffect(destination) {
-    val targetRoute =
-        when (destination) {
-          StartDestination.SIGNIN -> Route.SIGNIN
-          StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
-          StartDestination.HOME -> Route.HOME
-        }
-    navController.navigate(targetRoute) {
-      popUpTo(0) { inclusive = true }
-      launchSingleTop = true
-    }
-  }
+  StartRouting(destination, navController)
 
   NavHost(
       navController = navController,
@@ -138,6 +130,31 @@ fun SpottedApp(
     }
     addPetsDestination(navController)
     homeDestinations(navController)
+  }
+}
+
+/**
+ * Opens the screen for [destination] whenever it changes, clearing the back stack. The last
+ * destination handled is saved, so recreating the activity (e.g. rotating the phone) keeps the
+ * current screen instead of going back to the start one.
+ */
+@Composable
+fun StartRouting(destination: StartDestination, navController: NavController) {
+  var routedDestination by rememberSaveable { mutableStateOf<StartDestination?>(null) }
+
+  LaunchedEffect(destination) {
+    if (destination == routedDestination) return@LaunchedEffect
+    routedDestination = destination
+    val targetRoute =
+        when (destination) {
+          StartDestination.SIGNIN -> Route.SIGNIN
+          StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
+          StartDestination.HOME -> Route.HOME
+        }
+    navController.navigate(targetRoute) {
+      popUpTo(0) { inclusive = true }
+      launchSingleTop = true
+    }
   }
 }
 
