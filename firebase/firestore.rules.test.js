@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
