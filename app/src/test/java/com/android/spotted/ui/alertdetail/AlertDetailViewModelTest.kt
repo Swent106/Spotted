@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.alertdetail
 
 import androidx.lifecycle.ViewModel
@@ -7,10 +8,19 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.distanceKm
+import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.formatDistance
+import com.android.spotted.model.location.LocationException
+import com.android.spotted.model.user.FakeUserRepository
+import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -150,6 +160,113 @@ class AlertDetailViewModelTest {
         assertEquals(secondAlert, viewModel.uiState.value.alert)
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.errorMessage)
+      }
+
+  // ===================== Distance to the alert =====================
+
+  private val alertLocation = Location(latitude = 46.2, longitude = 6.1)
+  private val device = Location(latitude = 46.2054, longitude = 6.1) // About 600 m away
+  private val home = Location(latitude = 46.22, longitude = 6.1)
+
+  private val authRepository = FakeAuthRepository()
+  private val userRepository = FakeUserRepository()
+
+  /** Signs a user in and saves their profile, with [homeLocation] as the home pin. */
+  private fun signInWithHome(homeLocation: Location?, homeArea: String = "") = runBlocking {
+    val user = authRepository.signInWithGoogle("token").getOrThrow()
+    userRepository.saveUser(
+        UserProfile(
+            uid = user.uid,
+            name = "Alice",
+            email = user.email,
+            homeArea = homeArea,
+            homeLocation = homeLocation,
+        )
+    )
+  }
+
+  private fun viewModelWithLocation(
+      locationRepository: FakeLocationRepository,
+      addressRepository: FakeAddressRepository? = null,
+  ) =
+      AlertDetailViewModel(
+          alertRepository = alertRepository,
+          locationRepository = locationRepository,
+          authRepository = authRepository,
+          userRepository = userRepository,
+          addressRepository = addressRepository,
+      )
+
+  @Test
+  fun distance_isMeasuredFromTheDevicePosition() =
+      runTest(testDispatcher) {
+        signInWithHome(home)
+        alertRepository.publishAlert(alert("alert-1"))
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = device))
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertEquals(
+            formatDistance(device.distanceKm(alertLocation)),
+            viewModel.uiState.value.distanceText,
+        )
+      }
+
+  @Test
+  fun distance_permissionDenied_isMeasuredFromTheHomePin() =
+      runTest(testDispatcher) {
+        signInWithHome(home)
+        alertRepository.publishAlert(alert("alert-1"))
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.PermissionDenied() }
+        val viewModel = viewModelWithLocation(locationRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertEquals(
+            formatDistance(home.distanceKm(alertLocation)),
+            viewModel.uiState.value.distanceText,
+        )
+      }
+
+  @Test
+  fun distance_noFix_isMeasuredFromTheHomeArea_whenThereIsNoPin() =
+      runTest(testDispatcher) {
+        signInWithHome(homeLocation = null, homeArea = "Plainpalais, Geneva")
+        alertRepository.publishAlert(alert("alert-1"))
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+        val viewModel =
+            viewModelWithLocation(locationRepository, FakeAddressRepository(location = home))
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertEquals(
+            formatDistance(home.distanceKm(alertLocation)),
+            viewModel.uiState.value.distanceText,
+        )
+      }
+
+  @Test
+  fun distance_noPositionAndNoHome_showsTheAlertWithoutDistance() =
+      runTest(testDispatcher) {
+        signInWithHome(homeLocation = null)
+        val expectedAlert = alert("alert-1")
+        alertRepository.publishAlert(expectedAlert)
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+        val viewModel = viewModelWithLocation(locationRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(expectedAlert, state.alert)
+        assertNull(state.distanceText)
+        assertNull(state.errorMessage)
       }
 
   @Test
