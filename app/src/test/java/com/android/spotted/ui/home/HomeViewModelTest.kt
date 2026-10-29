@@ -644,6 +644,7 @@ class HomeViewModelTest {
 
         assertEquals(listOf(newer, older), viewModel.uiState.value.lostPetsNearby.items)
       }
+
   // ===================== Distance to each lost pet =====================
 
   private fun viewModelWithLocation(
