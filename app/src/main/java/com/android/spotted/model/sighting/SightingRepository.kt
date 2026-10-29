@@ -15,7 +15,11 @@ interface SightingRepository {
   /** Returns a new unique id to use for a [Sighting] before reporting it. */
   fun getNewId(): String
 
-  /** Saves [sighting]. Reporting the same id again replaces the previous sighting. */
+  /**
+   * Saves [sighting]. Reporting the same id again replaces the previous sighting, but only while it
+   * is [SightingStatus.PENDING] and on the same alert (a sighting with no alert may get one): once
+   * the alert owner reviewed it, it is evidence they rely on, so it fails.
+   */
   suspend fun reportSighting(sighting: Sighting): Result<Unit>
 
   /**

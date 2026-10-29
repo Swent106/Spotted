@@ -53,10 +53,11 @@ class SightingRepositoryFirestoreTest {
   @After
   fun cleanUp() = runTest {
     withContext(Dispatchers.IO) {
+      // Reviewed sightings and other users' alerts cannot be deleted by the test user, so
+      // everything is deleted as the admin
       insertedSightingIds.forEach { id ->
-        Tasks.await(firestore.collection("sightings").document(id).delete())
+        emulatorRequest(method = "DELETE", path = "sightings/$id")
       }
-      // Some alerts belong to another user, so they are deleted as the admin
       insertedAlertIds.forEach { id -> emulatorRequest(method = "DELETE", path = "alerts/$id") }
       auth.signOut()
     }
@@ -238,6 +239,19 @@ class SightingRepositoryFirestoreTest {
 
       assertEquals(receivedBeforeCancel, received.toList())
     }
+  }
+
+  @Test
+  fun reportSighting_sameIdAfterReview_returnsFailureAndKeepsReview() = runTest {
+    val alertId = seedAlertBypassingRules(ownerId = currentUserId())
+    val sighting = sighting(id = repository.getNewId(), alertId = alertId)
+    repository.reportSighting(sighting).getOrThrow()
+    repository.setSightingStatus(sighting.id, SightingStatus.CONFIRMED).getOrThrow()
+    val confirmed = sighting.copy(status = SightingStatus.CONFIRMED)
+
+    assertTrue(repository.reportSighting(confirmed.copy(seenAtMillis = 5_000L)).isFailure)
+
+    assertEquals(listOf(confirmed), repository.getSightingsForAlert(alertId).getOrThrow())
   }
 
   @Test

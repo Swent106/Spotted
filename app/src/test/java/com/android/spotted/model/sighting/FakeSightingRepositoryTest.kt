@@ -173,6 +173,28 @@ class FakeSightingRepositoryTest {
     )
   }
 
+  @Test
+  fun reportSighting_sameIdAgain_failsOnceReviewedOrMovedToAnotherAlert() = runTest {
+    val reviewed = sighting(id = "s-reviewed", alertId = "alert-1")
+    val pending = sighting(id = "s-pending", alertId = "alert-1")
+    val unlinked = sighting(id = "s-unlinked", alertId = null)
+    listOf(reviewed, pending, unlinked).forEach { repository.reportSighting(it) }
+    repository.setSightingStatus(reviewed.id, SightingStatus.CONFIRMED)
+    val confirmed = reviewed.copy(status = SightingStatus.CONFIRMED)
+
+    assertTrue(repository.reportSighting(confirmed.copy(seenAtMillis = 5L)).isFailure)
+    assertTrue(repository.reportSighting(pending.copy(alertId = "alert-2")).isFailure)
+    assertTrue(repository.reportSighting(pending.copy(alertId = null)).isFailure)
+    assertEquals(listOf(confirmed, pending, unlinked), repository.reportedSightings)
+
+    // Still allowed: editing a pending sighting, and linking one that had no alert
+    val edited = pending.copy(seenAtMillis = 5L)
+    val linked = unlinked.copy(alertId = "alert-2")
+    assertTrue(repository.reportSighting(edited).isSuccess)
+    assertTrue(repository.reportSighting(linked).isSuccess)
+    assertEquals(listOf(confirmed, edited, linked), repository.reportedSightings)
+  }
+
   /** Collects [FakeSightingRepository.observeSightingsForAlert] until the test ends. */
   private fun TestScope.collectSightingsOf(alertId: String): List<Result<List<Sighting>>> {
     val emissions = mutableListOf<Result<List<Sighting>>>()

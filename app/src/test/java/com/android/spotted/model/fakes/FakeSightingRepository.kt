@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
  *   matching calls fail with it.
  * - [reportedSightings]: everything reported, in order, so tests can check what was saved.
  * - [observeSightingsForAlert] is live: reporting a sighting or changing a status emits again.
+ * - Like Firestore, reporting an existing id fails once it was reviewed or moved to another alert.
  * - The fake does not know who is signed in, so it does not check that the caller owns the alert
  *   (the Firestore rules do).
  */
@@ -38,6 +39,15 @@ class FakeSightingRepository : SightingRepository {
   override suspend fun reportSighting(sighting: Sighting): Result<Unit> {
     reportFailure?.let {
       return Result.failure(it)
+    }
+    // Same checks as the Firestore rules on a sighting that already exists
+    val saved = sightings.value[sighting.id]
+    if (
+        saved != null &&
+            (saved.status != SightingStatus.PENDING ||
+                (saved.alertId != null && saved.alertId != sighting.alertId))
+    ) {
+      return Result.failure(IllegalStateException("Sighting ${sighting.id} cannot be changed"))
     }
     sightings.update { it + (sighting.id to sighting) }
     return Result.success(Unit)
