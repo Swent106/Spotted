@@ -5,6 +5,7 @@
     <string name="pet_profile_photo_description">Pet profile picture</string>
     <string name="pet_profile_no_photo">No Photo</string>
     <string name="pet_profile_species">Species: %1$s</string>
+    <string name="alert_detail_found_message">Good news: %1$s has been found</string>
     <string name="add_pets_screen_title">Add your pet</string>
     <string name="add_pets_onboarding_step">Step 2 of 2 · you can edit it later</string>
     <string name="add_pets_back">Back</string>
