@@ -2,6 +2,7 @@ package com.android.spotted.ui.home
 
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.user.UserProfile
 
 /**
  * One section of the Home screen ("Your pets", "Lost near you"). Each section loads and fails on
@@ -34,9 +35,15 @@ data class HomeSection<T>(
  */
 data class HomeUiState(
     val userName: String = "",
+    /** The user's profile photo; the avatar stays empty while there is none. */
+    val userPhotoUrl: String? = null,
     val homeArea: String = "",
+    /** Radius of the lost pet search, from the profile, in kilometres. */
+    val alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM,
     val pets: HomeSection<Pet> = HomeSection(),
     val lostPetsNearby: HomeSection<Alert> = HomeSection(),
+    /** The user's own open alerts, wherever they are: not in "Lost near you", but on the map. */
+    val ownLostPets: List<Alert> = emptyList(),
     val nowMillis: Long = 0L,
     val errorMessage: String? = null,
 )

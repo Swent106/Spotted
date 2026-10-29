@@ -1,8 +1,8 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.Pet
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.Pet.PetRepositoryFirestore
-import com.android.spotted.utils.FirebaseEmulators
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -14,7 +14,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,7 +31,6 @@ class PetRepositoryFirestoreTest {
       auth = FirebaseAuth.getInstance()
       firestore = FirebaseFirestore.getInstance()
       repository = PetRepositoryFirestore(firestore)
-      Thread.sleep(3000)
       Tasks.await(auth.signInAnonymously())
     }
   }
@@ -169,12 +167,4 @@ class PetRepositoryFirestoreTest {
           behaviors = behaviors,
           note = note,
       )
-
-  companion object {
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      FirebaseEmulators.configure()
-    }
-  }
 }

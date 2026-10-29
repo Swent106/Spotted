@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.alert
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -17,7 +18,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -27,6 +27,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
   private lateinit var firestore: FirebaseFirestore
   private lateinit var auth: FirebaseAuth
   private lateinit var repository: AlertRepositoryFirestore
+  private var nowMillis = 0L
 
   // Documents created during a test, deleted in tearDown
   private val createdPetIds = mutableListOf<String>()
@@ -36,7 +37,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
   fun setUp() = runBlocking {
     firestore = FirebaseFirestore.getInstance()
     auth = FirebaseAuth.getInstance()
-    repository = AlertRepositoryFirestore(firestore)
+    repository = AlertRepositoryFirestore(firestore, now = { nowMillis })
 
     // Anonymous sign-in so that Firestore rules see an authenticated user
     auth.signInAnonymously().await()
@@ -229,18 +230,79 @@ class AlertRepositoryFirestoreInstrumentedTest {
     assertTrue("Far alert should NOT be found", alerts.none { it.id == alert2.id })
   }
 
-  companion object {
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      // useEmulator() must be called before any other use of Firestore/Auth in the process.
-      try {
-        FirebaseFirestore.getInstance().useEmulator("10.0.2.2", 8080)
-        FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      } catch (e: IllegalStateException) {
-        // Don't swallow silently: if this fires, tests may be hitting the real backend.
-        println("Emulator config failed (already initialized?): ${e.message}")
-      }
-    }
+  /** Seeds a pet and publishes an open alert for it at [location], owned by the signed-in user. */
+  private suspend fun publishOpenAlert(location: Location, lostAtMillis: Long = 1000L): Alert {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = location,
+            lostAtMillis = lostAtMillis,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+        )
+    val result = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue("Alert should be published: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    return alert
+  }
+
+  @Test
+  fun closeAlert_removesAlertFromOpenAlertsNear_butKeepsItInMyAlerts() = runBlocking {
+    val center = Location(latitude = 46.0, longitude = 6.0)
+    val alert = publishOpenAlert(center)
+    nowMillis = 5_000L
+
+    val result = repository.closeAlert(alert.id)
+
+    assertTrue("closeAlert should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    val openAlerts = repository.getOpenAlertsNear(center, radiusKm = 5.0).getOrThrow()
+    assertTrue("Closed alert should NOT be found", openAlerts.none { it.id == alert.id })
+    val myAlert = repository.getMyAlerts(alert.ownerId).getOrThrow().single { it.id == alert.id }
+    assertEquals(alert.copy(status = AlertStatus.CLOSED, closedAtMillis = 5_000L), myAlert)
+  }
+
+  @Test
+  fun closeAlert_twice_keepsFirstClosingTime() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0))
+    nowMillis = 5_000L
+    repository.closeAlert(alert.id).getOrThrow()
+    nowMillis = 9_000L
+
+    val result = repository.closeAlert(alert.id)
+
+    assertTrue(
+        "Second close should succeed: ${result.exceptionOrNull()?.message}",
+        result.isSuccess,
+    )
+    assertEquals(5_000L, repository.getAlertById(alert.id).getOrThrow()?.closedAtMillis)
+  }
+
+  @Test
+  fun closeAlert_returnsNoSuchElementWhenAlertDoesNotExist() = runBlocking {
+    val result = repository.closeAlert("missing-${java.util.UUID.randomUUID()}")
+
+    assertTrue(
+        "Expected NoSuchElementException, got ${result.exceptionOrNull()}",
+        result.exceptionOrNull() is NoSuchElementException,
+    )
+  }
+
+  @Test
+  fun getMyAlerts_isSortedByFirestore_newestFirst() = runBlocking {
+    val location = Location(latitude = 46.0, longitude = 6.0)
+    // Published oldest last, so the order can't come from the order of writes
+    val newest = publishOpenAlert(location, lostAtMillis = 3_000L)
+    val oldest = publishOpenAlert(location, lostAtMillis = 1_000L)
+    val middle = publishOpenAlert(location, lostAtMillis = 2_000L)
+
+    val result = repository.getMyAlerts(auth.currentUser!!.uid)
+
+    assertTrue("Query should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    assertEquals(listOf(newest.id, middle.id, oldest.id), result.getOrThrow().map { it.id })
   }
 }

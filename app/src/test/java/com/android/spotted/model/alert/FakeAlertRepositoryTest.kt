@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
@@ -6,12 +7,14 @@ import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAlertRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FakeAlertRepositoryTest {
-  private val repository = FakeAlertRepository()
+  private var nowMillis = 0L
+  private val repository = FakeAlertRepository(now = { nowMillis })
   private val center = Location(latitude = 0.0, longitude = 0.0)
 
   @Test
@@ -115,16 +118,101 @@ class FakeAlertRepositoryTest {
     )
   }
 
+  @Test
+  fun getMyAlerts_returnsOpenAndClosedAlertsOfOwnerOnly_newestFirst() = runTest {
+    val older = alert(id = "alert-older", lostAtMillis = 1L, latitude = 0.0, longitude = 0.0)
+    val newerClosed =
+        alert(id = "alert-closed", lostAtMillis = 2L, latitude = 0.0, longitude = 0.0)
+            .copy(status = AlertStatus.CLOSED, closedAtMillis = 3L)
+    val someoneElses =
+        alert(id = "alert-other", latitude = 0.0, longitude = 0.0, ownerId = "owner-2")
+    listOf(older, newerClosed, someoneElses).forEach { repository.publishAlert(it) }
+
+    assertEquals(listOf(newerClosed, older), repository.getMyAlerts("owner-1").getOrThrow())
+  }
+
+  @Test
+  fun getMyAlerts_overTheLimit_keepsTheNewestOnly() = runTest {
+    val limit = AlertRepository.MY_ALERTS_LIMIT
+    // Published oldest first, so the limit can't keep the newest by insertion order
+    val alerts =
+        (1..limit + 1).map { i ->
+          alert(id = "alert-$i", lostAtMillis = i.toLong(), latitude = 0.0, longitude = 0.0)
+        }
+    alerts.forEach { repository.publishAlert(it) }
+
+    val myAlerts = repository.getMyAlerts("owner-1").getOrThrow()
+
+    assertEquals(alerts.drop(1).reversed(), myAlerts)
+  }
+
+  @Test
+  fun getMyAlerts_returnsConfiguredFailure() = runTest {
+    val expectedFailure = IllegalStateException("query failed")
+    repository.failure = expectedFailure
+
+    assertSame(expectedFailure, repository.getMyAlerts("owner-1").exceptionOrNull())
+  }
+
+  @Test
+  fun closeAlert_closesAlertAtCurrentTime_andHidesItFromOpenAlerts() = runTest {
+    val alert = alert(id = "alert-1", latitude = 0.0, longitude = 0.0)
+    repository.publishAlert(alert)
+    nowMillis = 42L
+
+    assertTrue(repository.closeAlert(alert.id).isSuccess)
+
+    val closed = repository.getAlertById(alert.id).getOrThrow()
+    assertEquals(alert.copy(status = AlertStatus.CLOSED, closedAtMillis = 42L), closed)
+    assertTrue(repository.getOpenAlertsNear(center, radiusKm = 1.0).getOrThrow().isEmpty())
+  }
+
+  @Test
+  fun closeAlert_onClosedAlert_keepsOriginalClosingTime() = runTest {
+    val alert = alert(id = "alert-1", latitude = 0.0, longitude = 0.0)
+    repository.publishAlert(alert)
+    nowMillis = 42L
+    repository.closeAlert(alert.id)
+    nowMillis = 99L
+
+    assertTrue(repository.closeAlert(alert.id).isSuccess)
+
+    assertEquals(42L, repository.getAlertById(alert.id).getOrThrow()?.closedAtMillis)
+  }
+
+  @Test
+  fun closeAlert_returnsFailureWhenAlertIsMissing() = runTest {
+    val result = repository.closeAlert("missing")
+
+    assertTrue(result.exceptionOrNull() is NoSuchElementException)
+  }
+
+  @Test
+  fun closeAlert_returnsConfiguredFailureWithoutClosing() = runTest {
+    val alert = alert(id = "alert-1", latitude = 0.0, longitude = 0.0)
+    repository.publishAlert(alert)
+    val expectedFailure = IllegalStateException("update failed")
+    repository.failure = expectedFailure
+
+    assertSame(expectedFailure, repository.closeAlert(alert.id).exceptionOrNull())
+
+    repository.failure = null
+    val stored = repository.getAlertById(alert.id).getOrThrow()
+    assertEquals(AlertStatus.OPEN, stored?.status)
+    assertNull(stored?.closedAtMillis)
+  }
+
   private fun alert(
       id: String,
       lostAtMillis: Long = 1L,
       latitude: Double,
       longitude: Double,
+      ownerId: String = "owner-1",
   ): Alert =
       Alert(
           id = id,
           petId = "pet-$id",
-          ownerId = "owner-1",
+          ownerId = ownerId,
           lastKnownLocation = Location(latitude = latitude, longitude = longitude),
           lostAtMillis = lostAtMillis,
           petName = "Buddy",

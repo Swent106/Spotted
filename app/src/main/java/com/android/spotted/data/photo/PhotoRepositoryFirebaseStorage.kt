@@ -26,6 +26,20 @@ class PhotoRepositoryFirebaseStorage(
     }
   }
 
+  override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
+      storageResult {
+        withContext(Dispatchers.IO) {
+          val photoRef = storage.reference.child(profilePhotoPath(userId))
+          val metadata = StorageMetadata.Builder().setContentType(PHOTO_CONTENT_TYPE).build()
+          Tasks.await(photoRef.putFile(Uri.parse(localUri), metadata))
+          Tasks.await(photoRef.downloadUrl).toString()
+        }
+      }
+
+  /** The Storage path; Storage download URLs carry a token, so this can't be loaded directly. */
+  override fun profilePhotoUrl(userId: String) =
+      "gs://${storage.reference.bucket}/${profilePhotoPath(userId)}"
+
   private suspend fun <T> storageResult(action: suspend () -> T): Result<T> =
       try {
         Result.success(action())
@@ -43,5 +57,8 @@ class PhotoRepositoryFirebaseStorage(
     /** Storage path of a pet's photo. The owner is part of the path so rules can check it. */
     fun petPhotoPath(ownerId: String, petId: String): String =
         "$PETS_FOLDER/$ownerId/$petId/$PHOTO_FILE"
+
+    /** Storage path of a user's profile photo. */
+    fun profilePhotoPath(userId: String): String = "users/$userId/$PHOTO_FILE"
   }
 }

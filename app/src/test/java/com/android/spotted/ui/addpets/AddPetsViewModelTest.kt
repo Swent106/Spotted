@@ -219,8 +219,8 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun savePet_whenPhotoUploadFails_keepsFormAndSavesNothing() = runTest {
-    photoRepository.failure = IllegalStateException("Network down")
+  fun savePet_whenPhotoUploadFails_savesThePetWithoutPhotoAndSaysSo() = runTest {
+    photoRepository.failure = IllegalStateException("Object does not exist at location")
     fillForm(name = "Milo", species = Species.CAT)
     viewModel.onPhotoChanged("content://photos/milo")
 
@@ -228,11 +228,11 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
-    assertEquals("Network down", state.errorMessage)
-    assertEquals("Milo", state.name)
-    assertEquals("content://photos/milo", state.photoUri)
+    assertEquals(AddPetsViewModel.PHOTO_ERROR_MESSAGE, state.errorMessage)
     assertFalse(state.isSaving)
-    assertTrue(savedPets().isEmpty())
+    val saved = savedPets().single()
+    assertEquals("Milo", saved.name)
+    assertNull(saved.photoUrl)
   }
 
   @Test
@@ -369,5 +369,38 @@ class AddPetsViewModelTest {
   private class FailingPetRepository(private val error: Throwable) :
       PetRepository by PetRepositoryLocal() {
     override suspend fun addPet(pet: Pet): Result<Unit> = Result.failure(error)
+  }
+
+  @Test
+  fun samePetAddedWithPlusThenSavedAgain_isNotSavedTwice() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    fillForm(name = "rex", species = Species.DOG)
+    viewModel.finish()
+    advanceUntilIdle()
+
+    assertEquals(1, savedPets().size)
+    assertTrue(viewModel.uiState.value.isDone)
+  }
+
+  @Test
+  fun missingField_asksForTheNameWhenOnlyTheAnimalIsChosen() {
+    assertEquals(null, viewModel.uiState.value.missingField)
+
+    viewModel.onSpeciesChanged(Species.CAT)
+
+    assertEquals("Add your pet's name to save it", viewModel.uiState.value.missingField)
+  }
+
+  @Test
+  fun missingField_asksForTheAnimalOnceTheNameIsTyped() {
+    viewModel.onNameChanged("Milo")
+    assertEquals("Choose an animal to save Milo", viewModel.uiState.value.missingField)
+
+    viewModel.onSpeciesChanged(Species.CAT)
+
+    assertEquals(null, viewModel.uiState.value.missingField)
   }
 }

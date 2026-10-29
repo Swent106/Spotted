@@ -1,6 +1,8 @@
 package com.android.spotted.ui.sighting
 
+import android.Manifest
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -9,8 +11,15 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.model.sighting.Sighting
+import com.android.spotted.model.sighting.SightingRepository
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -79,7 +88,7 @@ class ReportSightingContentTest {
     composeTestRule
         .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
-        .assertIsDisplayed()
+        .assertIsEnabled()
   }
 
   @Test
@@ -128,6 +137,30 @@ class ReportSightingContentTest {
     composeTestRule.setContent { ReportSightingContent(state = state) }
 
     composeTestRule.onNodeWithText("You are offline").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun nearbyAlert_withPhotoUrl_and_selectedState_rendersCorrectly() {
+    val state =
+        ReportSightingUiState(
+            selectedAlertId = "alert_1",
+            isNoMatchingAlertSelected = false,
+            nearbyAlerts =
+                listOf(
+                    NearbyAlertOption(
+                        alertId = "alert_1",
+                        petName = "Milo",
+                        description = "Orange cat",
+                        photoUrl = "https://example.com/photo.jpg",
+                    ),
+                ),
+        )
+
+    composeTestRule.setContent { ReportSightingContent(state = state) }
+
+    composeTestRule
+        .onNodeWithTag("${ReportSightingScreenTestTags.PET_OPTION_PREFIX}alert_1")
+        .assertIsDisplayed()
   }
 
   @Test
@@ -181,9 +214,122 @@ class ReportSightingContentTest {
   }
 
   @Test
-  fun reportSightingScreen_wrapper_rendersContent() {
-    composeTestRule.setContent { ReportSightingScreen() }
+  fun reportSightingScreen_wrapper_fullInteraction_triggersSubmittedCallback() = runBlocking {
+    var submittedCalled = false
+    val sightingRepo =
+        object : SightingRepository {
+          override fun getNewId(): String = "id_1"
 
-    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SCREEN).assertIsDisplayed()
+          override suspend fun reportSighting(sighting: Sighting): Result<Unit> =
+              Result.success(Unit)
+
+          override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
+              Result.success(emptyList())
+        }
+    val photoRepo = FakePhotoRepository()
+    val authRepo = FakeAuthRepository()
+    authRepo.signInWithGoogle("token")
+
+    val viewModel = ReportSightingViewModel(sightingRepo, photoRepo, authRepository = authRepo)
+    viewModel.setSpecies(Species.CAT)
+    viewModel.setLocation(Location(46.5, 6.6))
+    viewModel.selectNoMatchingAlert()
+
+    composeTestRule.setContent {
+      ReportSightingScreen(
+          viewModel = viewModel,
+          onSubmitted = { submittedCalled = true },
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.LOCATION_CARD).performClick()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .performClick()
+
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { submittedCalled }
+    assertTrue(submittedCalled)
+  }
+
+  @Test
+  fun reportSightingScreen_locationGranted_prefillsGpsPosition() {
+    grantLocationPermission()
+    val viewModel = viewModelWithFakes()
+
+    composeTestRule.setContent { ReportSightingScreen(viewModel = viewModel) }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.LOCATION_CARD).performClick()
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { viewModel.uiState.value.location != null }
+
+    assertEquals(GPS_LOCATION, viewModel.uiState.value.location)
+    composeTestRule.onNodeWithText("Taken from your GPS").assertIsDisplayed()
+  }
+
+  @Test
+  fun reportSightingScreen_successfulSubmit_callsOnSubmitted() {
+    grantLocationPermission()
+    val viewModel = viewModelWithFakes()
+    var submittedCalled = false
+
+    composeTestRule.setContent {
+      ReportSightingScreen(viewModel = viewModel, onSubmitted = { submittedCalled = true })
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.LOCATION_CARD).performClick()
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { viewModel.uiState.value.location != null }
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.NO_MATCH_OPTION)
+        .performScrollTo()
+        .performClick()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .performClick()
+
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { submittedCalled }
+  }
+
+  private fun grantLocationPermission() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    instrumentation.uiAutomation.grantRuntimePermission(
+        instrumentation.targetContext.packageName,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+    )
+  }
+
+  /** A ViewModel with a signed-in user and fakes only, so no Firebase or real GPS is needed. */
+  private fun viewModelWithFakes(): ReportSightingViewModel {
+    val authRepository = FakeAuthRepository()
+    runBlocking { authRepository.signInWithGoogle("token") }
+    return ReportSightingViewModel(
+        sightingRepository = InMemorySightingRepository(),
+        photoRepository = FakePhotoRepository(),
+        locationRepository =
+            object : LocationRepository {
+              override suspend fun getCurrentLocation() = Result.success(GPS_LOCATION)
+            },
+        authRepository = authRepository,
+    )
+  }
+
+  /** Keeps reported sightings in memory (the unit test fake is not visible from androidTest). */
+  private class InMemorySightingRepository : SightingRepository {
+    private val sightings = mutableListOf<Sighting>()
+
+    override fun getNewId() = "sighting-${sightings.size + 1}"
+
+    override suspend fun reportSighting(sighting: Sighting): Result<Unit> {
+      sightings.add(sighting)
+      return Result.success(Unit)
+    }
+
+    override suspend fun getSightingsForAlert(alertId: String) =
+        Result.success(sightings.filter { it.alertId == alertId })
+  }
+
+  private companion object {
+    val GPS_LOCATION = Location(46.52, 6.63)
+    const val TIMEOUT_MILLIS = 5_000L
   }
 }

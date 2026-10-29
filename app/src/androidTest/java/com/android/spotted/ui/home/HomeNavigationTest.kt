@@ -50,6 +50,11 @@ class HomeNavigationTest {
                   onReportMissingClick = navigation.onReportMissingClick,
                   onAlertClick = navigation.onAlertClick,
                   onSeenPetClick = navigation.onSeenPetClick,
+                  onAddPetClick = navigation.onAddPetClick,
+                  onPetClick = navigation.onPetClick,
+                  onMapClick = navigation.onMapClick,
+                  onCameraClick = navigation.onCameraClick,
+                  onProfileClick = navigation.onProfileClick,
               )
             },
             // The real screen needs Firebase: a tagged text is enough to check the navigation
@@ -68,6 +73,16 @@ class HomeNavigationTest {
                 }
               }
             },
+            addPetContent = { Text("Add pets", Modifier.testTag(ADD_PETS_SCREEN)) },
+            reportSightingContent = { alertId, _ ->
+              Text(
+                  "Report a sighting of ${alertId ?: "a new pet"}",
+                  Modifier.testTag(REPORT_SIGHTING_SCREEN),
+              )
+            },
+            petProfileContent = { petId -> Text("Pet $petId", Modifier.testTag(PET_SCREEN)) },
+            mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },
+            profileContent = { Text("Profile", Modifier.testTag(PROFILE_SCREEN)) },
         )
       }
     }
@@ -118,6 +133,40 @@ class HomeNavigationTest {
   }
 
   @Test
+  fun cameraTab_opensReportSightingWithoutAlert() {
+    node(HomeScreenTestTags.TAB_CAMERA).performClick()
+
+    node(REPORT_SIGHTING_SCREEN)
+        .assertIsDisplayed()
+        .assertTextEquals("Report a sighting of a new pet")
+    assertEquals(Route.NEW_SIGHTING, navController.currentDestination?.route)
+  }
+
+  @Test
+  fun profileTab_opensTheHelperProfile() {
+    node(HomeScreenTestTags.TAB_PROFILE).performClick()
+
+    node(PROFILE_SCREEN).assertIsDisplayed()
+    assertEquals(Route.PROFILE, navController.currentDestination?.route)
+  }
+
+  @Test
+  fun mapTab_opensTheMap() {
+    node(HomeScreenTestTags.TAB_MAP).performClick()
+
+    node(MAP_SCREEN).assertIsDisplayed()
+    assertEquals(Route.MAP, navController.currentDestination?.route)
+  }
+
+  @Test
+  fun addPetButton_opensAddPets() {
+    scrollTo(HomeScreenTestTags.ADD_PET_BUTTON).performClick()
+
+    node(ADD_PETS_SCREEN).assertIsDisplayed()
+    assertEquals(Route.ADD_PET, navController.currentDestination?.route)
+  }
+
+  @Test
   fun back_fromAlertDetail_returnsHome() {
     scrollTo(HomeScreenTestTags.alertCard(MILO.id)).performClick()
     composeTestRule.runOnIdle { navController.popBackStack() }
@@ -130,6 +179,10 @@ class HomeNavigationTest {
     const val ALERT_DETAIL_REPORT_SIGHTING = "alert_detail_report_sighting"
     const val REPORT_SIGHTING_SCREEN = "report_sighting_screen"
     const val REPORT_MISSING_SCREEN = "report_missing_screen"
+    const val ADD_PETS_SCREEN = "add_pets_screen"
+    const val MAP_SCREEN = "map_screen"
+    const val PET_SCREEN = "pet_screen"
+    const val PROFILE_SCREEN = "profile_screen"
 
     val MILO =
         Alert(

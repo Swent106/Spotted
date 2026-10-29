@@ -52,6 +52,13 @@ class PetRepositoryFirestore(
     }
   }
 
+  override suspend fun deletePet(id: String): Result<Unit> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      Tasks.await(pets.document(id).delete())
+      Unit
+    }
+  }
+
   private suspend fun <T> firestoreResult(action: suspend () -> T): Result<T> =
       try {
         Result.success(action())

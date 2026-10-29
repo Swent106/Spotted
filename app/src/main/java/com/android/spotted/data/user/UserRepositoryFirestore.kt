@@ -1,5 +1,6 @@
 package com.android.spotted.data.user
 
+import com.android.spotted.model.Location
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import com.google.android.gms.tasks.Tasks
@@ -36,6 +37,13 @@ class UserRepositoryFirestore(
     }
   }
 
+  override suspend fun deleteUser(uid: String): Result<Unit> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      Tasks.await(users.document(uid).delete())
+      Unit
+    }
+  }
+
   private suspend fun <T> firestoreResult(action: suspend () -> T): Result<T> =
       try {
         Result.success(action())
@@ -51,6 +59,10 @@ class UserRepositoryFirestore(
     var phone: String = ""
     var email: String = ""
     var homeArea: String = ""
+    // Null in profiles saved before the home pin was stored
+    var homeLatitude: Double? = null
+    var homeLongitude: Double? = null
+    var alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM
 
     fun toUserProfile() =
         UserProfile(
@@ -59,6 +71,9 @@ class UserRepositoryFirestore(
             phone = phone,
             email = email,
             homeArea = homeArea,
+            homeLocation =
+                homeLatitude?.let { latitude -> homeLongitude?.let { Location(latitude, it) } },
+            alertRadiusKm = alertRadiusKm,
         )
 
     companion object {
@@ -69,6 +84,9 @@ class UserRepositoryFirestore(
             phone = user.phone
             email = user.email
             homeArea = user.homeArea
+            homeLatitude = user.homeLocation?.latitude
+            homeLongitude = user.homeLocation?.longitude
+            alertRadiusKm = user.alertRadiusKm
           }
     }
   }

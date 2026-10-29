@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -13,10 +14,10 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -87,15 +88,28 @@ class PhotoRepositoryFirebaseStorageTest {
     assertTrue(result.isFailure)
   }
 
+  @Test
+  fun uploadProfilePhoto_isRefusedByTheStorageRules() = runTest {
+    // Profile photos are kept in Firestore: the Storage rules only accept pet photos
+    val result = repository.uploadProfilePhoto(ownerId, Uri.fromFile(localPhoto).toString())
+
+    assertTrue(result.isFailure)
+  }
+
+  @Test
+  fun profilePhotoUrl_pointsToTheUsersProfilePhotoPath() {
+    val url = repository.profilePhotoUrl("user-1")
+
+    assertEquals(
+        "users/user-1/photo.jpg",
+        PhotoRepositoryFirebaseStorage.profilePhotoPath("user-1"),
+    )
+    assertTrue(url, url.startsWith("gs://"))
+    assertTrue(url, url.endsWith("/users/user-1/photo.jpg"))
+  }
+
   companion object {
     private val PHOTO_BYTES = byteArrayOf(1, 2, 3, 4, 5)
     private const val MAX_DOWNLOAD_BYTES = 1024L
-
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      FirebaseStorage.getInstance().useEmulator("10.0.2.2", 9199)
-    }
   }
 }

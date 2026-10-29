@@ -10,6 +10,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
@@ -81,6 +82,8 @@ class HomeViewModelTest {
       currentUser.value = null
       return Result.success(Unit)
     }
+
+    override suspend fun deleteAccount(): Result<Unit> = signOut()
   }
 
   /** [PetRepositoryLocal] that can fail, and can answer slowly for some owners. */
@@ -513,4 +516,81 @@ class HomeViewModelTest {
             petSpecies = Species.CAT,
         )
   }
+
+  // ===================== Search around the user's home =====================
+
+  private fun viewModelWithAddresses(addressRepository: FakeAddressRepository) =
+      HomeViewModel(
+          authRepository = authRepository,
+          userRepository = userRepository,
+          petRepository = petRepository,
+          alertRepository = alertRepository,
+          searchCenter = CENTER,
+          radiusKm = RADIUS_KM,
+          now = { NOW },
+          addressRepository = addressRepository,
+      )
+
+  @Test
+  fun lostPets_areSearchedAroundTheSavedHomePin_withTheSavedRadius() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        // 10 km around Zurich: a pet 5 km away is in, one in Geneva is not
+        saveProfile(ALICE_PROFILE.copy(homeLocation = FAR_AWAY, alertRadiusKm = 10))
+        val inZurich = alert("zurich", location = Location(47.4200, 8.5417))
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inZurich, inGeneva)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(inZurich), viewModel.uiState.value.lostPetsNearby.items)
+        assertEquals(10, viewModel.uiState.value.alertRadiusKm)
+      }
+
+  @Test
+  fun lostPets_areSearchedAroundTheHomeArea_whenThereIsNoPin() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+        val inZurich = alert("zurich", location = FAR_AWAY)
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inZurich, inGeneva)
+
+        val viewModel = viewModelWithAddresses(FakeAddressRepository(location = FAR_AWAY))
+        advanceUntilIdle()
+
+        assertEquals(listOf(inZurich), viewModel.uiState.value.lostPetsNearby.items)
+      }
+
+  @Test
+  fun lostPets_areSearchedAroundTheDefaultCenter_whenTheHomeAreaIsNotFound() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inGeneva)
+        val addressRepository =
+            FakeAddressRepository().apply { failure = NoSuchElementException("unknown place") }
+
+        val viewModel = viewModelWithAddresses(addressRepository)
+        advanceUntilIdle()
+
+        assertEquals(listOf(inGeneva), viewModel.uiState.value.lostPetsNearby.items)
+      }
+
+  @Test
+  fun ownLostPets_areKeptForTheMap_evenFarAway_butNotListedAsNearYou() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val mine = alert("mine", ownerId = ALICE.uid, location = FAR_AWAY)
+        val theirs = alert("theirs")
+        publish(mine, theirs)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(theirs), viewModel.uiState.value.lostPetsNearby.items)
+        assertEquals(listOf(mine), viewModel.uiState.value.ownLostPets)
+      }
 }

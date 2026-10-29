@@ -27,4 +27,9 @@ class PetRepositoryLocal : PetRepository {
   override suspend fun getPetsByOwner(ownerId: String): Result<List<Pet>> {
     return Result.success(pets.values.filter { it.ownerId == ownerId })
   }
+
+  override suspend fun deletePet(id: String): Result<Unit> {
+    pets.remove(id)
+    return Result.success(Unit)
+  }
 }

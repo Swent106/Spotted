@@ -1,4 +1,5 @@
 rules_version = '2';
+// Portions of this code were generated with the help of Claude (Anthropic).
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -29,7 +30,9 @@ service cloud.firestore {
 
     function isValidUser(data, userId) {
       return data.keys().hasAll(['uid', 'name', 'phone', 'email', 'homeArea'])
-          && data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'homeArea'])
+          && data.keys().hasOnly([
+                'uid', 'name', 'phone', 'email', 'homeArea',
+                'homeLatitude', 'homeLongitude', 'alertRadiusKm'])
           && data.uid is string
           && data.uid.size() > 0
           && data.uid.size() <= 128
@@ -43,7 +46,15 @@ service cloud.firestore {
           && data.email.size() > 0
           && data.email.size() <= 254
           && data.homeArea is string
-          && data.homeArea.size() <= 120;
+          && data.homeArea.size() <= 120
+          // Optional: the home pin and the alert radius (one of the radius chips)
+          && (!('homeLatitude' in data) || data.homeLatitude == null
+              || (data.homeLatitude is number
+                  && data.homeLatitude >= -90 && data.homeLatitude <= 90))
+          && (!('homeLongitude' in data) || data.homeLongitude == null
+              || (data.homeLongitude is number
+                  && data.homeLongitude >= -180 && data.homeLongitude <= 180))
+          && (!('alertRadiusKm' in data) || data.alertRadiusKm in [1, 3, 5, 10]);
     }
 
     match /users/{userId} {
@@ -54,6 +65,8 @@ service cloud.firestore {
       allow update: if isOwner(userId)
           && uidNotModified(userId)
           && isValidUser(request.resource.data, userId);
+      // Lets users delete their own account
+      allow delete: if isOwner(userId);
     }
 
     match /pets/{petId} {
@@ -86,14 +99,22 @@ service cloud.firestore {
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
                 'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
           && d.keys().hasOnly([
-                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
-                'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
+                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
           && validLocation(d.lastKnownLocation)
           && d.lostAtMillis is int
           && d.status in ['OPEN', 'CLOSED']
+          // An open alert has no closing time (the app writes null). A closed one must have one,
+          // after it was lost and not in the future: the time comes from the phone, so a minute
+          // of clock difference with the server is accepted.
+          && (d.status == 'OPEN'
+              ? d.get('closedAtMillis', null) == null
+              : (d.get('closedAtMillis', null) is int
+                  && d.closedAtMillis >= d.lostAtMillis
+                  && d.closedAtMillis <= request.time.toMillis() + 60000))
           && d.petName is string && d.petName.size() > 0 && d.petName.size() <= 100
           && d.petSpecies is string && d.petSpecies.size() <= 50
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
@@ -111,12 +132,15 @@ service cloud.firestore {
           && request.resource.data.status == 'OPEN'
           && ownsPet(request.resource.data.petId);
 
-      // The owner may only close the alert or move it; identity fields are immutable.
+      // The owner may only close an open alert or move it; identity fields are immutable.
+      // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
+      // field existed count as open.
       allow update: if request.auth != null
           && resource.data.ownerId == request.auth.uid
+          && resource.data.get('status', 'OPEN') == 'OPEN'
           && validAlert(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'lastKnownLocation']);
+               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis']);
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
@@ -163,6 +187,19 @@ service cloud.firestore {
 
       allow delete: if request.auth != null
           && resource.data.reporterId == request.auth.uid;
+    }
+
+    // Photos of pets and sightings, saved in base64 by PhotoRepositoryFirestore (no Storage).
+    // photos/{id}: ownerId, contentType and data; a document holds at most 1 MiB.
+    match /photos/{photoId} {
+      allow get: if request.auth != null;
+      allow create, update: if request.auth != null
+          && request.resource.data.keys().hasOnly(['ownerId', 'contentType', 'data'])
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.contentType == 'image/jpeg'
+          && request.resource.data.data is string
+          && (resource == null || resource.data.ownerId == request.auth.uid);
+      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
     }
 
     match /{document=**} {

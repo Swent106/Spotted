@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
-import com.android.spotted.data.photo.PhotoRepositoryFirebaseStorage
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
@@ -110,6 +110,15 @@ class AddPetsViewModel(
     val state = _uiState.value
     if (!state.canSave) return
     val species = state.species ?: return
+    // Already added with "+": saving it again would create the same pet twice
+    if (
+        state.addedPets.any {
+          it.name.equals(state.name.trim(), ignoreCase = true) && it.species == species
+        }
+    ) {
+      _uiState.update { AddPetsUiState(addedPets = it.addedPets, isDone = finishAfterSaving) }
+      return
+    }
     val ownerId = user?.uid
     if (ownerId == null) {
       _uiState.update { it.copy(needsSignIn = true, errorMessage = NOT_SIGNED_IN_MESSAGE) }
@@ -119,13 +128,11 @@ class AddPetsViewModel(
     _uiState.update { it.copy(isSaving = true, errorMessage = null) }
     viewModelScope.launch {
       val petId = petRepository.getNewId()
-      val photoUrl =
-          state.photoUri?.let { photoUri ->
-            photoRepository.uploadPetPhoto(ownerId, petId, photoUri).getOrElse { failure ->
-              showError(failure, PHOTO_ERROR_MESSAGE)
-              return@launch
-            }
-          }
+      // The photo is optional: if it can't be uploaded (e.g. Storage unavailable), the pet is
+      // still saved, without it, and the user is told
+      val photoUpload = state.photoUri?.let { photoRepository.uploadPetPhoto(ownerId, petId, it) }
+      val photoUrl = photoUpload?.getOrNull()
+      val photoFailed = photoUpload?.isFailure == true
       val pet =
           Pet(
               id = petId,
@@ -143,7 +150,11 @@ class AddPetsViewModel(
           .fold(
               onSuccess = {
                 _uiState.update {
-                  AddPetsUiState(addedPets = it.addedPets + pet, isDone = finishAfterSaving)
+                  AddPetsUiState(
+                      addedPets = it.addedPets + pet,
+                      isDone = finishAfterSaving,
+                      errorMessage = if (photoFailed) PHOTO_ERROR_MESSAGE else null,
+                  )
                 }
               },
               onFailure = { failure -> showError(failure, SAVE_ERROR_MESSAGE) },
@@ -159,15 +170,16 @@ class AddPetsViewModel(
 
   companion object {
     const val NOT_SIGNED_IN_MESSAGE = "You need to be signed in to add a pet"
-    const val PHOTO_ERROR_MESSAGE = "Unable to upload the photo"
+    const val PHOTO_ERROR_MESSAGE = "The photo couldn't be uploaded: the pet was saved without it"
     const val SAVE_ERROR_MESSAGE = "Unable to save the pet"
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
+        val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
         AddPetsViewModel(
             user = AuthRepositoryProvider.authRepository.currentUser.value,
             petRepository = PetRepositoryFirestore(),
-            photoRepository = PhotoRepositoryFirebaseStorage(),
+            photoRepository = PhotoRepositoryFirestore(application),
         )
       }
     }

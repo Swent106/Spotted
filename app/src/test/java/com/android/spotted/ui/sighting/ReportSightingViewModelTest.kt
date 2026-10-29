@@ -2,7 +2,10 @@ package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.sighting.Sighting
@@ -72,7 +75,12 @@ class ReportSightingViewModelTest {
 
   @Test
   fun defaultConstructorParameters_workCorrectly() {
-    val vm = ReportSightingViewModel(sightingRepository, photoRepository, authRepository)
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository,
+            photoRepository,
+            authRepository = authRepository,
+        )
     assertNotNull(vm)
   }
 
@@ -103,6 +111,70 @@ class ReportSightingViewModelTest {
             .isSuccess,
     )
     assertTrue(innerRepo.getSightingsForAlert("alert-1").getOrNull()?.isEmpty() == true)
+  }
+
+  @Test
+  fun loadCurrentLocation_success_updatesState() = runTest {
+    val fakeLocationRepo = FakeLocationRepository(location = Location(46.52, 6.63))
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals(Location(46.52, 6.63), vm.uiState.value.location)
+    assertEquals("Taken from your GPS", vm.uiState.value.locationAddress)
+  }
+
+  @Test
+  fun loadCurrentLocation_failure_setsErrorMessage() = runTest {
+    val fakeLocationRepo = FakeLocationRepository()
+    fakeLocationRepo.failure = Exception("GPS disabled")
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals("GPS disabled", vm.uiState.value.errorMessage)
+  }
+
+  @Test
+  fun loadCurrentLocation_failureWithoutMessage_setsDefaultErrorMessage() = runTest {
+    val fakeLocationRepo = FakeLocationRepository()
+    fakeLocationRepo.failure = Exception()
+
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            locationRepository = fakeLocationRepo,
+            authRepository = authRepository,
+        )
+
+    vm.loadCurrentLocation()
+
+    assertEquals(
+        "Location unavailable. Tap to set location on map.",
+        vm.uiState.value.errorMessage,
+    )
+  }
+
+  @Test
+  fun loadCurrentLocation_withoutLocationRepository_leavesStateUnchanged() {
+    viewModel.loadCurrentLocation()
+
+    assertEquals(ReportSightingUiState(), viewModel.uiState.value)
   }
 
   @Test
@@ -198,7 +270,7 @@ class ReportSightingViewModelTest {
   }
 
   @Test
-  fun submitSighting_photoUploadFailure_setsErrorMessageAndPreservesForm() = runTest {
+  fun submitSighting_photoUploadFailure_sendsTheSightingWithoutPhoto() = runTest {
     viewModel.setSpecies(Species.CAT)
     viewModel.setLocation(Location(46.5, 6.6))
     viewModel.setPhotoUri("content://media/cat.jpg")
@@ -208,14 +280,8 @@ class ReportSightingViewModelTest {
 
     viewModel.submitSighting()
 
-    val state = viewModel.uiState.value
-    assertFalse("submitted should be false", state.submitted)
-    assertFalse("isSubmitting should be false", state.isSubmitting)
-    assertEquals("Upload failed", state.errorMessage)
-
-    assertEquals(Species.CAT, state.selectedSpecies)
-    assertEquals("content://media/cat.jpg", state.photoUri)
-    assertTrue(sightingRepository.reportedSightings.isEmpty())
+    assertTrue(viewModel.uiState.value.submitted)
+    assertNull(sightingRepository.reportedSightings.single().photoUrl)
   }
 
   @Test
@@ -264,5 +330,37 @@ class ReportSightingViewModelTest {
     val state = vm.uiState.value
     assertFalse(state.isSubmitting)
     assertEquals("Unexpected crash", state.errorMessage)
+  }
+
+  @Test
+  fun preselectAlert_listsTheAlertWithItsSpecies_soTheSightingCanBeSent() = runTest {
+    val alertRepository = FakeAlertRepository()
+    alertRepository.publishAlert(
+        Alert(
+            id = "alert-milo",
+            petId = "pet-milo",
+            ownerId = "owner",
+            lastKnownLocation = Location(46.52, 6.63),
+            lostAtMillis = 0L,
+            petName = "Milo",
+            petSpecies = Species.CAT,
+        )
+    )
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.preselectAlert("alert-milo")
+    vm.setLocation(Location(46.52, 6.63))
+
+    val state = vm.uiState.value
+    assertEquals("alert-milo", state.selectedAlertId)
+    assertEquals(Species.CAT, state.selectedSpecies)
+    assertEquals(listOf("Milo"), state.nearbyAlerts.map { it.petName })
+    assertTrue(state.canSubmit)
   }
 }

@@ -33,7 +33,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -87,6 +91,8 @@ object HomeScreenTestTags {
   const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
+  const val ADD_PET_BUTTON = "home_addPetButton"
+  const val AVATAR = "home_avatar"
   const val TAB_BAR = "home_tabBar"
   const val TAB_HOME = "home_tabHome"
   const val TAB_MAP = "home_tabMap"
@@ -106,6 +112,7 @@ object HomeScreenTexts {
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
   const val NO_LOST_PETS = "No missing pets near you"
   const val RETRY = "Retry"
+  const val ADD_PET = "Add a pet"
 }
 
 /**
@@ -117,11 +124,25 @@ fun HomeScreen(
     onReportMissingClick: () -> Unit = {},
     onAlertClick: (alertId: String) -> Unit = {},
     onSeenPetClick: (alertId: String) -> Unit = {},
+    onAddPetClick: () -> Unit = {},
+    onPetClick: (petId: String) -> Unit = {},
+    onMapClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  // Home stays in the back stack: reload it when coming back, so a pet just reported missing or
+  // a profile change (radius, home) shows up. The first time, the ViewModel has just loaded
+  var shownBefore by rememberSaveable { mutableStateOf(false) }
+  LaunchedEffect(Unit) { if (shownBefore) viewModel.refresh() else shownBefore = true }
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,
+      onAddPetClick = onAddPetClick,
+      onPetClick = onPetClick,
+      onMapClick = onMapClick,
+      onCameraClick = onCameraClick,
+      onProfileClick = onProfileClick,
       onAlertClick = onAlertClick,
       onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,
@@ -136,6 +157,8 @@ fun HomeScreenContent(
     onAlertClick: (alertId: String) -> Unit = {},
     onSeenPetClick: (alertId: String) -> Unit = {},
     onRetryClick: () -> Unit = {},
+    onAddPetClick: () -> Unit = {},
+    onPetClick: (petId: String) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -167,6 +190,8 @@ fun HomeScreenContent(
           onAlertClick = onAlertClick,
           onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
+          onAddPetClick = onAddPetClick,
+          onPetClick = onPetClick,
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),
@@ -183,6 +208,8 @@ private fun HomeList(
     onAlertClick: (alertId: String) -> Unit,
     onSeenPetClick: (alertId: String) -> Unit,
     onRetryClick: () -> Unit,
+    onAddPetClick: () -> Unit,
+    onPetClick: (petId: String) -> Unit,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -194,7 +221,7 @@ private fun HomeList(
   ) {
     item(key = "header") {
       Column {
-        Header(state.userName, onSettingsClick, onNotificationsClick)
+        Header(state.userName, state.userPhotoUrl, onSettingsClick, onNotificationsClick)
         state.errorMessage?.let { message ->
           Spacer(Modifier.height(8.dp))
           Text(
@@ -206,7 +233,7 @@ private fun HomeList(
       }
     }
 
-    petsSection(state.pets, onRetryClick)
+    petsSection(state.pets, onRetryClick, onAddPetClick, onPetClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
@@ -236,12 +263,19 @@ private fun HomeList(
 @Composable
 private fun Header(
     userName: String,
+    photoUrl: String?,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
 ) {
   Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-    // Avatar: empty until the profile has a photo
-    Box(Modifier.size(58.dp).clip(RoundedCornerShape(27.dp)).background(SpottedAvatarBackground))
+    // Avatar: the profile photo, or empty while there is none
+    PetPhoto(
+        photoUrl,
+        Modifier.size(58.dp)
+            .clip(RoundedCornerShape(27.dp))
+            .background(SpottedAvatarBackground)
+            .testTag(HomeScreenTestTags.AVATAR),
+    )
     Spacer(Modifier.width(9.dp))
     Text(
         if (userName.isBlank()) "Hey" else "Hey $userName",
@@ -293,8 +327,16 @@ private fun HeaderButton(
   }
 }
 
-/** "Your pets": one title, then one card per pet, with its own loading, error and empty state. */
-private fun LazyListScope.petsSection(pets: HomeSection<Pet>, onRetryClick: () -> Unit) {
+/**
+ * "Your pets": one title, then one card per pet, with its own loading, error and empty state, and
+ * an "Add a pet" button so pets can still be added after skipping that onboarding step.
+ */
+private fun LazyListScope.petsSection(
+    pets: HomeSection<Pet>,
+    onRetryClick: () -> Unit,
+    onAddPetClick: () -> Unit,
+    onPetClick: (petId: String) -> Unit,
+) {
   item(key = "petsTitle") {
     Text(
         HomeScreenTexts.PETS_TITLE,
@@ -317,10 +359,21 @@ private fun LazyListScope.petsSection(pets: HomeSection<Pet>, onRetryClick: () -
           )
         }
   }
-  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) }
+  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) { onPetClick(pet.id) } }
   // A refresh that failed keeps the pets and shows the error under them
   if (error != null && pets.items.isNotEmpty()) {
     item(key = "petsError") { PetsError(error, onRetryClick) }
+  }
+  item(key = "addPet") {
+    TextButton(
+        onClick = onAddPetClick,
+        modifier = Modifier.testTag(HomeScreenTestTags.ADD_PET_BUTTON),
+    ) {
+      Text(
+          HomeScreenTexts.ADD_PET,
+          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected),
+      )
+    }
   }
 }
 
@@ -347,7 +400,7 @@ internal fun SectionError(
 
 /** The pet's name and status on the left, its photo on the right; grows with long texts. */
 @Composable
-private fun PetCard(pet: Pet) {
+private fun PetCard(pet: Pet, onClick: () -> Unit) {
   Row(
       Modifier.padding(top = 12.dp)
           .fillMaxWidth()
@@ -355,6 +408,7 @@ private fun PetCard(pet: Pet) {
           .height(IntrinsicSize.Min)
           .clip(RoundedCornerShape(22.dp))
           .background(Color.White)
+          .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
           .testTag(HomeScreenTestTags.petCard(pet.id))
   ) {
     Column(Modifier.weight(1f).padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp)) {
@@ -408,31 +462,52 @@ internal fun SectionMessage(message: String, color: Color, tag: String) {
 }
 
 /** A tab of the tab bar, sized as in Figma. */
+/** One tab; it is wider when selected, as in the Figma frames "01 · Near you" and "13". */
 private class Tab(
     val icon: Int,
     val iconSize: Dp,
     val width: Dp,
+    val selectedWidth: Dp,
     val label: String,
     val tag: String,
 )
 
 private val TABS =
     listOf(
-        Tab(R.drawable.ic_tab_home, 26.dp, 81.dp, "Home", HomeScreenTestTags.TAB_HOME),
-        Tab(R.drawable.ic_tab_map, 31.dp, 53.dp, "Map", HomeScreenTestTags.TAB_MAP),
-        Tab(R.drawable.ic_tab_camera, 26.dp, 52.dp, "Camera", HomeScreenTestTags.TAB_CAMERA),
-        Tab(R.drawable.ic_tab_profile, 33.dp, 51.dp, "Profile", HomeScreenTestTags.TAB_PROFILE),
+        Tab(R.drawable.ic_tab_home, 26.dp, 54.dp, 81.dp, "Home", HomeScreenTestTags.TAB_HOME),
+        Tab(R.drawable.ic_tab_map, 31.dp, 53.dp, 81.dp, "Map", HomeScreenTestTags.TAB_MAP),
+        Tab(R.drawable.ic_tab_camera, 26.dp, 52.dp, 81.dp, "Camera", HomeScreenTestTags.TAB_CAMERA),
+        Tab(
+            R.drawable.ic_tab_profile,
+            33.dp,
+            51.dp,
+            85.dp,
+            "Profile",
+            HomeScreenTestTags.TAB_PROFILE,
+        ),
     )
 
+/** Index of each tab in the [TabBar], to pass as its `selectedIndex`. */
+internal object TabIndex {
+  const val HOME = 0
+  const val PROFILE = 3
+}
+
 /**
- * The [TABS], with one click callback per tab in the same order. Home is selected, and each tab
- * tells accessibility services whether it is the selected one.
+ * The [TABS], with one click callback per tab in the same order. The tab at [selectedIndex] is
+ * highlighted, and each tab tells accessibility services whether it is the selected one. Also used
+ * by the Helper profile screen.
  */
 @Composable
-private fun TabBar(onClicks: List<() -> Unit>, modifier: Modifier = Modifier) {
+internal fun TabBar(
+    onClicks: List<() -> Unit>,
+    modifier: Modifier = Modifier,
+    selectedIndex: Int = TabIndex.HOME,
+) {
   Row(
       verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(7.dp),
+      // Spreads the remaining width between the tabs: 7 dp with Home selected, as in Figma
+      horizontalArrangement = Arrangement.SpaceBetween,
       modifier =
           modifier
               .padding(bottom = 7.dp)
@@ -445,11 +520,11 @@ private fun TabBar(onClicks: List<() -> Unit>, modifier: Modifier = Modifier) {
               .testTag(HomeScreenTestTags.TAB_BAR),
   ) {
     TABS.forEachIndexed { index, tab ->
-      val selected = index == 0
+      val selected = index == selectedIndex
       Box(
           contentAlignment = Alignment.Center,
           modifier =
-              Modifier.width(tab.width)
+              Modifier.width(if (selected) tab.selectedWidth else tab.width)
                   .height(51.dp)
                   .clip(RoundedCornerShape(27.dp))
                   .background(if (selected) SpottedTabSelected else Color.White)

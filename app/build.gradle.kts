@@ -22,8 +22,19 @@ android {
     versionCode = 1
     versionName = "1.0"
 
-    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    testInstrumentationRunner = "com.android.spotted.utils.FirebaseEmulatorTestRunner"
     vectorDrawables { useSupportLibrary = true }
+  }
+
+  // One debug key shared by the team and CI, so every debug APK has the SHA-1 registered in
+  // Firebase and Google sign-in works on any device. Debug-only; never use it for a release.
+  signingConfigs {
+    getByName("debug") {
+      storeFile = file("debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
+    }
   }
 
   buildTypes {
@@ -36,6 +47,7 @@ android {
     }
 
     debug {
+      signingConfig = signingConfigs.getByName("debug")
       enableUnitTestCoverage = true
       enableAndroidTestCoverage = true
     }

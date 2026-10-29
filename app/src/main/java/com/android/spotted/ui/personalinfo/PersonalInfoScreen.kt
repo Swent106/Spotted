@@ -1,5 +1,13 @@
 package com.android.spotted.ui.personalinfo
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,20 +32,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -50,8 +65,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.imageLoader
 import com.android.spotted.R
 import com.android.spotted.model.Location
+import com.android.spotted.ui.addpets.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedAvatarBackground
@@ -71,6 +89,11 @@ object PersonalInfoScreenTestTags {
   const val BACK_BUTTON = "personalInfo_backButton"
   const val AVATAR = "personalInfo_avatar"
   const val CHANGE_PHOTO = "personalInfo_changePhoto"
+  const val PHOTO = "personalInfo_photo"
+  const val PHOTO_OPTIONS = "personalInfo_photoOptions"
+  const val PHOTO_FROM_GALLERY = "personalInfo_photoFromGallery"
+  const val PHOTO_FROM_CAMERA = "personalInfo_photoFromCamera"
+  const val PHOTO_REMOVE = "personalInfo_photoRemove"
   const val USERNAME_INPUT = "personalInfo_usernameInput"
   const val FIRST_NAME_INPUT = "personalInfo_firstNameInput"
   const val LAST_NAME_INPUT = "personalInfo_lastNameInput"
@@ -149,8 +172,8 @@ fun PersonalInfoContent(
           verticalArrangement = Arrangement.spacedBy(12.dp),
           modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
       ) {
-        Header(onBackClick)
-        Avatar(onChangePhotoClick)
+        Header(state.isEditing, onBackClick)
+        Avatar(state.photoUri, onChangePhotoClick)
         IdentityCard(state, onUsernameChange, onFirstNameChange, onLastNameChange)
         HomeLocationCard(
             state,
@@ -174,7 +197,7 @@ fun PersonalInfoContent(
 }
 
 @Composable
-private fun Header(onBackClick: () -> Unit) {
+private fun Header(isEditing: Boolean, onBackClick: () -> Unit) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
@@ -197,9 +220,13 @@ private fun Header(onBackClick: () -> Unit) {
       )
     }
     Column(Modifier.weight(1f)) {
-      Text("Create your profile", style = jakarta(23, 31, FontWeight.ExtraBold, SpottedInk))
       Text(
-          "Step 1 of 2 · tell the community who you are",
+          if (isEditing) "Edit your profile" else "Create your profile",
+          style = jakarta(23, 31, FontWeight.ExtraBold, SpottedInk),
+      )
+      Text(
+          if (isEditing) "Changes are saved to your profile"
+          else "Step 1 of 2 · tell the community who you are",
           style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
       )
     }
@@ -207,7 +234,7 @@ private fun Header(onBackClick: () -> Unit) {
 }
 
 @Composable
-private fun Avatar(onChangePhotoClick: () -> Unit) {
+private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
   Column(
       verticalArrangement = Arrangement.spacedBy(8.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
@@ -218,13 +245,25 @@ private fun Avatar(onChangePhotoClick: () -> Unit) {
             .clickable(onClickLabel = "Change photo", onClick = onChangePhotoClick)
             .testTag(PersonalInfoScreenTestTags.AVATAR)
     ) {
-      // Empty photo slot: the profile photo is user data, picked later through the Photo Picker.
       Box(
           Modifier.size(96.dp)
               .clip(CircleShape)
               .background(SpottedAvatarBackground)
               .border(4.dp, Color.White, CircleShape)
-      )
+      ) {
+        if (photoUri != null) {
+          AsyncImage(
+              model = photoUri,
+              contentDescription = "Profile photo",
+              contentScale = ContentScale.Crop,
+              modifier =
+                  Modifier.matchParentSize()
+                      .padding(4.dp)
+                      .clip(CircleShape)
+                      .testTag(PersonalInfoScreenTestTags.PHOTO),
+          )
+        }
+      }
       Box(
           contentAlignment = Alignment.Center,
           modifier =
@@ -435,7 +474,10 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
           modifier = Modifier.size(20.dp).testTag(PersonalInfoScreenTestTags.LOADER),
       )
     } else {
-      Text("Create profile", style = jakarta(15, 20, Bold, Color.White))
+      Text(
+          if (state.isEditing) "Save changes" else "Create profile",
+          style = jakarta(15, 20, Bold, Color.White),
+      )
     }
   }
 }
@@ -444,23 +486,48 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
  * Stateful entry point of the Personal Info screen.
  *
  * Collects the [PersonalInfoViewModel] state, forwards user input to it, and calls [onSaved] once
- * the profile is saved. Photo picking and device location are launched by the caller through
- * [onChangePhotoClick] and [onUseMyLocationClick].
+ * the profile is saved. "Use my location" asks for the location permission (precise or approximate)
+ * and, once granted, lets the ViewModel place the home pin and name the area. Tapping the avatar
+ * offers the gallery (system Photo Picker) or the camera app, as for pet photos.
  */
 @Composable
 fun PersonalInfoScreen(
     viewModel: PersonalInfoViewModel = viewModel(factory = PersonalInfoViewModel.Factory),
     onBack: () -> Unit = {},
     onSaved: () -> Unit = {},
-    onChangePhotoClick: () -> Unit = {},
-    onUseMyLocationClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
+
+  var showPhotoOptions by rememberSaveable { mutableStateOf(false) }
+  val galleryLauncher =
+      rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
+        // Null when the user closes the picker without choosing: keep the current photo
+        if (uri != null) viewModel.onPhotoSelected(uri.toString())
+      }
+  // File the camera app writes to; saved so it survives rotation while the camera is in front
+  var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+  val cameraLauncher =
+      rememberLauncherForActivityResult(TakePicture()) { saved ->
+        val uri = pendingCameraUri ?: return@rememberLauncherForActivityResult
+        pendingCameraUri = null
+        if (saved) viewModel.onPhotoSelected(uri.toString())
+        else context.contentResolver.delete(uri, null, null)
+      }
+
+  val locationPermissionLauncher =
+      rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+          grants ->
+        if (grants.values.any { it }) viewModel.useCurrentLocation()
+        else viewModel.onLocationPermissionDenied()
+      }
 
   val currentOnSaved by rememberUpdatedState(onSaved)
   LaunchedEffect(state.isSaved) {
     if (state.isSaved) {
       viewModel.onSavedHandled()
+      // The profile photo keeps the same URL when replaced: drop the old one from Coil's cache
+      context.imageLoader.memoryCache?.clear()
       currentOnSaved()
     }
   }
@@ -468,14 +535,89 @@ fun PersonalInfoScreen(
   PersonalInfoContent(
       state = state,
       onBackClick = onBack,
-      onChangePhotoClick = onChangePhotoClick,
+      onChangePhotoClick = { showPhotoOptions = true },
       onUsernameChange = viewModel::onUsernameChanged,
       onFirstNameChange = viewModel::onFirstNameChanged,
       onLastNameChange = viewModel::onLastNameChanged,
       onHomeAreaChange = viewModel::onHomeAreaChanged,
-      onUseMyLocationClick = onUseMyLocationClick,
+      onUseMyLocationClick = {
+        locationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+        )
+      },
       onHomeLocationChange = viewModel::onHomeLocationChanged,
       onAlertRadiusSelect = viewModel::onAlertRadiusChanged,
       onCreateProfileClick = viewModel::saveProfile,
   )
+
+  if (showPhotoOptions) {
+    PhotoOptionsDialog(
+        hasPhoto = state.photoUri != null,
+        canTakePhoto = remember(context) { CameraPhotoFile.deviceHasCamera(context) },
+        onPickPhoto = {
+          showPhotoOptions = false
+          galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        },
+        onTakePhoto = {
+          showPhotoOptions = false
+          val uri = CameraPhotoFile.newPhotoUri(context)
+          pendingCameraUri = uri
+          try {
+            cameraLauncher.launch(uri)
+          } catch (e: ActivityNotFoundException) {
+            // No camera app: nothing happens, the gallery still works
+            pendingCameraUri = null
+            context.contentResolver.delete(uri, null, null)
+          }
+        },
+        onRemovePhoto = {
+          showPhotoOptions = false
+          viewModel.onPhotoSelected(null)
+        },
+        onDismiss = { showPhotoOptions = false },
+    )
+  }
+}
+
+/** Where the profile photo comes from: the gallery or the camera, or remove the current one. */
+@Composable
+internal fun PhotoOptionsDialog(
+    hasPhoto: Boolean,
+    canTakePhoto: Boolean,
+    onPickPhoto: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onRemovePhoto: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("Profile photo", style = jakarta(18, 24, Bold, SpottedInk)) },
+      text = {
+        Column(Modifier.testTag(PersonalInfoScreenTestTags.PHOTO_OPTIONS)) {
+          PhotoOption(
+              "Choose from gallery",
+              PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY,
+              onPickPhoto,
+          )
+          if (canTakePhoto) {
+            PhotoOption("Take a photo", PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA, onTakePhoto)
+          }
+          if (hasPhoto) {
+            PhotoOption("Remove photo", PersonalInfoScreenTestTags.PHOTO_REMOVE, onRemovePhoto)
+          }
+        }
+      },
+      confirmButton = {},
+      dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+  )
+}
+
+@Composable
+private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit) {
+  TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(testTag)) {
+    Text(text, style = jakarta(15, 20, Bold, SpottedBlue), modifier = Modifier.fillMaxWidth())
+  }
 }

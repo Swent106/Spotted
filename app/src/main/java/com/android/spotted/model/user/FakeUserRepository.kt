@@ -29,4 +29,12 @@ class FakeUserRepository : UserRepository {
     users[user.uid] = user
     return Result.success(Unit)
   }
+
+  override suspend fun deleteUser(uid: String): Result<Unit> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    users.remove(uid)
+    return Result.success(Unit)
+  }
 }

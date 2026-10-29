@@ -3,11 +3,18 @@ package com.android.spotted.ui.personalinfo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
+import com.android.spotted.data.location.AddressRepositoryGeocoder
+import com.android.spotted.data.location.LocationRepositoryProvider
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +27,9 @@ class PersonalInfoViewModel(
     private val user: User?,
     private val userRepository: UserRepository,
     private val authRepository: AuthRepository,
+    private val locationRepository: LocationRepository? = null,
+    private val addressRepository: AddressRepository? = null,
+    private val photoRepository: PhotoRepository? = null,
 ) : ViewModel() {
 
   private val _uiState =
@@ -27,6 +37,38 @@ class PersonalInfoViewModel(
           PersonalInfoUiState(email = user?.email.orEmpty(), isSignedOut = user == null)
       )
   val uiState: StateFlow<PersonalInfoUiState> = _uiState.asStateFlow()
+
+  init {
+    loadExistingProfile()
+  }
+
+  /**
+   * Fills the form with the saved profile, if there is one, so editing it doesn't start from empty
+   * fields. A new user has no profile yet: the form then stays empty.
+   */
+  private fun loadExistingProfile() {
+    val signedInUser = user ?: return
+    viewModelScope.launch {
+      val profile = userRepository.getUser(signedInUser.uid).getOrNull() ?: return@launch
+      // The name is saved as one string: the first word is the first name, the rest the last name
+      val firstName = profile.name.substringBefore(' ')
+      val lastName = profile.name.substringAfter(' ', missingDelimiterValue = "")
+      _uiState.update {
+        it.copy(
+            firstName = firstName,
+            lastName = lastName,
+            name = profile.name,
+            phone = profile.phone,
+            homeArea = profile.homeArea,
+            homeLocation = profile.homeLocation,
+            alertRadiusKm = profile.alertRadiusKm,
+            // Shows the current photo; it is only uploaded again if the user picks another one
+            photoUri = photoRepository?.profilePhotoUrl(signedInUser.uid),
+            isEditing = true,
+        )
+      }
+    }
+  }
 
   fun onNameChanged(name: String) {
     _uiState.update { it.copy(name = name, isSaved = false, errorMessage = null) }
@@ -76,11 +118,41 @@ class PersonalInfoViewModel(
   }
 
   /**
-   * Places the home pin at [location], as tapped on the map picker. Kept in the screen state only
-   * for now: it is not part of the saved profile yet.
+   * Places the home pin at [location], as tapped on the map picker. Saved with the profile: lost
+   * pets are searched around it.
    */
   fun onHomeLocationChanged(location: Location) {
     _uiState.update { it.copy(homeLocation = location, isSaved = false) }
+  }
+
+  /** Shows the photo the user picked or took ([uri]), or removes it when null. */
+  fun onPhotoSelected(uri: String?) {
+    _uiState.update { it.copy(photoUri = uri, isSaved = false) }
+  }
+
+  /**
+   * Places the home pin at the device's current position and writes its neighbourhood and city in
+   * the home area field. The View calls it once the location permission is granted; if no position
+   * is found, the user can still tap the map. If no place name is found, the pin is still placed
+   * and the field is left as it was.
+   */
+  fun useCurrentLocation() {
+    val repository = locationRepository ?: return
+    _uiState.update { it.copy(errorMessage = null) }
+    viewModelScope.launch {
+      val location =
+          repository.getCurrentLocation().getOrElse {
+            _uiState.update { it.copy(errorMessage = LOCATION_UNAVAILABLE) }
+            return@launch
+          }
+      onHomeLocationChanged(location)
+      addressRepository?.areaName(location)?.onSuccess { name -> onHomeAreaChanged(name) }
+    }
+  }
+
+  /** Called by the View when the user refuses the location permission. */
+  fun onLocationPermissionDenied() {
+    _uiState.update { it.copy(errorMessage = LOCATION_PERMISSION_DENIED) }
   }
 
   fun saveProfile() {
@@ -95,10 +167,25 @@ class PersonalInfoViewModel(
             phone = currentState.phone,
             email = signedInUser.email,
             homeArea = currentState.homeArea.trim(),
+            homeLocation = currentState.homeLocation,
+            alertRadiusKm = currentState.alertRadiusKm,
         )
 
     _uiState.update { it.copy(isSaving = true, errorMessage = null) }
     viewModelScope.launch {
+      // A photo just picked or taken is a local URI: upload it before saving the profile
+      val photoUri = currentState.photoUri
+      val repository = photoRepository
+      if (
+          repository != null &&
+              photoUri != null &&
+              photoUri != repository.profilePhotoUrl(signedInUser.uid)
+      ) {
+        repository.uploadProfilePhoto(signedInUser.uid, photoUri).onFailure {
+          _uiState.update { it.copy(isSaving = false, errorMessage = PHOTO_UPLOAD_FAILED) }
+          return@launch
+        }
+      }
       userRepository
           .saveUser(profile)
           .fold(
@@ -152,11 +239,19 @@ class PersonalInfoViewModel(
   }
 
   companion object {
+    const val PHOTO_UPLOAD_FAILED =
+        "Couldn't upload your photo. Try again, or remove it to save without one."
+    const val LOCATION_UNAVAILABLE =
+        "Couldn't find your position. Tap the map to place your home instead."
+    const val LOCATION_PERMISSION_DENIED =
+        "Location permission denied. Tap the map to place your home instead."
+
     val Factory: ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
-          override fun <T : ViewModel> create(modelClass: Class<T>): T {
+          override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
             require(modelClass.isAssignableFrom(PersonalInfoViewModel::class.java))
             val authRepository = AuthRepositoryProvider.authRepository
+            val application = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
 
             return requireNotNull(
                 modelClass.cast(
@@ -164,6 +259,10 @@ class PersonalInfoViewModel(
                         user = authRepository.currentUser.value,
                         userRepository = UserRepositoryFirestore(),
                         authRepository = authRepository,
+                        locationRepository =
+                            application?.let { LocationRepositoryProvider.create(it) },
+                        addressRepository = application?.let { AddressRepositoryGeocoder(it) },
+                        photoRepository = application?.let { PhotoRepositoryFirestore(it) },
                     )
                 )
             )

@@ -88,6 +88,8 @@ class ReportMissingViewModelTest {
 
     override suspend fun getPetsByOwner(ownerId: String) =
         Result.failure<List<Pet>>(Exception("offline"))
+
+    override suspend fun deletePet(id: String) = Result.failure<Unit>(Exception("offline"))
   }
 
   // ===================== Loading pets =====================

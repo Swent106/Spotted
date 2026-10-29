@@ -55,6 +55,20 @@ class AuthRepositoryFirebase(private val firebaseAuth: FirebaseAuth = FirebaseAu
     }
   }
 
+  override suspend fun deleteAccount(): Result<Unit> {
+    val firebaseUser =
+        firebaseAuth.currentUser
+            ?: return Result.failure(IllegalStateException("No signed-in user"))
+    return try {
+      firebaseUser.delete().await()
+      Result.success(Unit)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
   private fun mapFirebaseUser(firebaseUser: FirebaseUser?): User? {
     return firebaseUser?.let {
       // Use email if available, otherwise use a placeholder or handle the lack of email.

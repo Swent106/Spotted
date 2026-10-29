@@ -1,10 +1,10 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.auth.AuthRepositoryFirebase
 import com.android.spotted.model.auth.User
 import com.android.spotted.utils.FakeJwtGenerator
-import com.android.spotted.utils.FirebaseEmulators
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -14,7 +14,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -26,7 +25,6 @@ class AuthRepositoryFirebaseInstrumentedTest {
 
   @Before
   fun setUp() {
-    FirebaseEmulators.configure()
     // Get the real FirebaseAuth instance
     firebaseAuth = FirebaseAuth.getInstance()
 
@@ -110,17 +108,5 @@ class AuthRepositoryFirebaseInstrumentedTest {
     }
 
     assertTrue("StateFlow user should be null after sign-out", isNull)
-  }
-
-  companion object {
-    @JvmStatic
-    @BeforeClass
-    fun configureFirebaseEmulators() {
-      try {
-        FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
-      } catch (e: IllegalStateException) {
-        println("Auth emulator already initialized: ${e.message}")
-      }
-    }
   }
 }

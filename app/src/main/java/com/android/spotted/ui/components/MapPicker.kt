@@ -129,14 +129,15 @@ fun MapPicker(
 private const val METERS_PER_KM = 1000.0
 
 /** Vertical position of the pin's tip in `ic_map_pin`, as a fraction of its height (22 / 24). */
-private const val PIN_TIP_Y = 22f / 24f
+internal const val PIN_TIP_Y = 22f / 24f
 
 /** Zoom level that fits a circle of [radiusKm] in a small map; one level per doubling. */
 internal fun zoomFor(radiusKm: Int): Float = (12.0 - log2(radiusKm.toDouble())).toFloat()
 
 private fun Location.toGeoPoint() = GeoPoint(latitude, longitude)
 
-private fun createMapView(context: Context, onTap: (Location) -> Unit): MapView {
+/** An OpenStreetMap view set up for the app; [onTap] receives each tapped point, when given. */
+internal fun createMapView(context: Context, onTap: ((Location) -> Unit)? = null): MapView {
   Configuration.getInstance().apply {
     // OpenStreetMap's tile servers require an identifying user agent.
     userAgentValue = context.packageName
@@ -148,6 +149,7 @@ private fun createMapView(context: Context, onTap: (Location) -> Unit): MapView 
     setMultiTouchControls(true)
     isTilesScaledToDpi = true
     zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+    if (onTap == null) return@apply
     overlays.add(
         MapEventsOverlay(
             object : MapEventsReceiver {
