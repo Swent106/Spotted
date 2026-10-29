@@ -1,5 +1,7 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.addpets
 
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -8,13 +10,18 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.ui.components.CameraPhotoFile
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -132,7 +139,10 @@ class PetPhotoPickerTest {
    * - Photo Picker: a Uri = photo chosen, null = cancelled.
    * - Camera: true = photo saved, false = cancelled.
    */
-  private class FakeActivityRegistry(private val result: Any?) : ActivityResultRegistry() {
+  private class FakeActivityRegistry(
+      private val result: Any?,
+      private val launchFailure: ActivityNotFoundException? = null,
+  ) : ActivityResultRegistry() {
     val launchedContracts = mutableListOf<ActivityResultContract<*, *>>()
     val launchedInputs = mutableListOf<Any?>()
 
@@ -144,6 +154,7 @@ class PetPhotoPickerTest {
     ) {
       launchedContracts += contract
       launchedInputs += input
+      launchFailure?.let { throw it }
       @Suppress("UNCHECKED_CAST") dispatchResult(requestCode, result as O)
     }
   }
@@ -151,7 +162,11 @@ class PetPhotoPickerTest {
   /** Records every value PetPhotoPicker sends to onPhotoSelected (including null). */
   private val selections = mutableListOf<String?>()
 
-  private fun setPicker(photoUri: String?, registry: FakeActivityRegistry) {
+  private fun setPicker(
+      photoUri: String?,
+      registry: FakeActivityRegistry,
+      onPhotoError: () -> Unit = {},
+  ) {
     val owner =
         object : ActivityResultRegistryOwner {
           override val activityResultRegistry: ActivityResultRegistry = registry
@@ -161,6 +176,7 @@ class PetPhotoPickerTest {
         PetPhotoPicker(
             photoUri = photoUri,
             onPhotoSelected = { selections += it },
+            onPhotoError = onPhotoError,
             // CI emulators may have no camera: force the button so the wiring is always tested.
             canTakePhoto = true,
         )
@@ -191,6 +207,34 @@ class PetPhotoPickerTest {
 
     val request = registry.launchedInputs.single() as PickVisualMediaRequest
     assertEquals(PickVisualMedia.ImageOnly, request.mediaType)
+  }
+
+  @Test
+  fun cancellingThePicker_doesNotReportASelection() {
+    val registry = FakeActivityRegistry(result = null)
+    val owner =
+        object : ActivityResultRegistryOwner {
+          override val activityResultRegistry: ActivityResultRegistry = registry
+        }
+    val selections = mutableListOf<Uri?>()
+
+    composeRule.setContent {
+      CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+        val actions =
+            rememberPhotoPickerActions(
+                onPhotoSelected = { selections += it },
+                onCameraUnavailable = {},
+            )
+        androidx.compose.foundation.layout.Box(
+            Modifier.clickable(onClick = actions.pickFromGallery).testTag("gallery")
+        )
+      }
+    }
+
+    composeRule.onNodeWithTag("gallery").performClick()
+    composeRule.waitForIdle()
+
+    assertTrue(selections.isEmpty())
   }
 
   @Test
@@ -231,6 +275,23 @@ class PetPhotoPickerTest {
     val target = registry.launchedInputs.single() as Uri
     assertEquals("content", target.scheme)
     assertEquals(CameraPhotoFile.authority(context), target.authority)
+  }
+
+  @Test
+  fun cameraUnavailable_notifiesTheScreen() {
+    var errorReported = false
+    val registry =
+        FakeActivityRegistry(
+            result = null,
+            launchFailure = ActivityNotFoundException(),
+        )
+    setPicker(photoUri = null, registry = registry, onPhotoError = { errorReported = true })
+
+    composeRule.onNodeWithTag(PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON).performClick()
+    composeRule.waitForIdle()
+
+    assertTrue(errorReported)
+    assertTrue(selections.isEmpty())
   }
 
   @Test

@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -70,12 +71,38 @@ class LostPetsSectionTest {
   }
 
   @Test
-  fun newestLostPet_isFeatured_whateverTheOrderReceived() {
+  fun firstLostPetOfTheState_isFeatured() {
+    // The ViewModel sorts the alerts newest first: the screen keeps the order it is given
     setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(NALA, MILO))))
 
-    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).assertExists()
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertExists()
-    node(HomeScreenTestTags.seenButton(NALA.id)).assertDoesNotExist()
+    scrollTo(HomeScreenTestTags.seenButton(NALA.id)).assertExists()
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertExists()
+    node(HomeScreenTestTags.seenButton(MILO.id)).assertDoesNotExist()
+  }
+
+  @Test
+  fun refreshingLostPets_keepsTheListAndShowsNoLoader() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO), isLoading = true)))
+
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertIsDisplayed()
+    node(HomeScreenTestTags.ALERTS_LOADER).assertDoesNotExist()
+    node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
+  }
+
+  @Test
+  fun lostPetsErrorAfterARefresh_keepsTheListAndShowsTheErrorBelow() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO), errorMessage = ALERTS_ERROR)))
+
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertTextEquals(ALERTS_ERROR)
+    node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
+  }
+
+  @Test
+  fun oneLostPet_isCountedInTheSingular() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO))))
+
+    node(HomeScreenTestTags.ALERTS_TITLE).assertTextEquals("1 pet missing near you")
   }
 
   @Test

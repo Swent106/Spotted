@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
@@ -50,10 +53,11 @@ object Route {
   const val HOME = "home"
   const val REPORT_MISSING = "report_missing"
   const val ALERT_ID = "alertId"
-  const val ALERT_DETAIL = "alert/{$ALERT_ID}"
-  const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
+  private const val ALERT = "alert"
+  const val ALERT_DETAIL = "$ALERT/{$ALERT_ID}"
   /** Report sighting opened from the Camera tab, for a pet not linked to an alert yet. */
   const val NEW_SIGHTING = "report_sighting"
+  const val REPORT_SIGHTING = "$NEW_SIGHTING/{$ALERT_ID}"
   /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
   const val ADD_PET = "add_pet"
   const val MAP = "map"
@@ -61,13 +65,14 @@ object Route {
   /** The profile form, opened from the Helper profile to change name, area or radius. */
   const val EDIT_PROFILE = "edit_profile"
   const val PET_ID = "petId"
-  const val PET_PROFILE = "pet/{$PET_ID}"
+  private const val PET = "pet"
+  const val PET_PROFILE = "$PET/{$PET_ID}"
 
-  fun petProfile(petId: String) = "pet/$petId"
+  fun petProfile(petId: String) = "$PET/$petId"
 
-  fun alertDetail(alertId: String) = "alert/$alertId"
+  fun alertDetail(alertId: String) = "$ALERT/$alertId"
 
-  fun reportSighting(alertId: String) = "report_sighting/$alertId"
+  fun reportSighting(alertId: String) = "$NEW_SIGHTING/$alertId"
 }
 
 class MainActivity : ComponentActivity() {
@@ -103,18 +108,7 @@ fun SpottedApp(
   val destination by viewModel.uiState.collectAsState()
   val navController = rememberNavController()
 
-  LaunchedEffect(destination) {
-    val targetRoute =
-        when (destination) {
-          StartDestination.SIGNIN -> Route.SIGNIN
-          StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
-          StartDestination.HOME -> Route.HOME
-        }
-    navController.navigate(targetRoute) {
-      popUpTo(0) { inclusive = true }
-      launchSingleTop = true
-    }
-  }
+  StartRouting(destination, navController)
 
   NavHost(
       navController = navController,
@@ -132,6 +126,31 @@ fun SpottedApp(
     }
     addPetsDestination(navController)
     homeDestinations(navController)
+  }
+}
+
+/**
+ * Opens the screen for [destination] whenever it changes, clearing the back stack. The last
+ * destination handled is saved, so recreating the activity (e.g. rotating the phone) keeps the
+ * current screen instead of going back to the start one.
+ */
+@Composable
+fun StartRouting(destination: StartDestination, navController: NavController) {
+  var routedDestination by rememberSaveable { mutableStateOf<StartDestination?>(null) }
+
+  LaunchedEffect(destination) {
+    if (destination == routedDestination) return@LaunchedEffect
+    routedDestination = destination
+    val targetRoute =
+        when (destination) {
+          StartDestination.SIGNIN -> Route.SIGNIN
+          StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
+          StartDestination.HOME -> Route.HOME
+        }
+    navController.navigate(targetRoute) {
+      popUpTo(0) { inclusive = true }
+      launchSingleTop = true
+    }
   }
 }
 
