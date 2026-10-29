@@ -132,6 +132,21 @@ class FakeAlertRepositoryTest {
   }
 
   @Test
+  fun getMyAlerts_overTheLimit_keepsTheNewestOnly() = runTest {
+    val limit = AlertRepository.MY_ALERTS_LIMIT
+    // Published oldest first, so the limit can't keep the newest by insertion order
+    val alerts =
+        (1..limit + 1).map { i ->
+          alert(id = "alert-$i", lostAtMillis = i.toLong(), latitude = 0.0, longitude = 0.0)
+        }
+    alerts.forEach { repository.publishAlert(it) }
+
+    val myAlerts = repository.getMyAlerts("owner-1").getOrThrow()
+
+    assertEquals(alerts.drop(1).reversed(), myAlerts)
+  }
+
+  @Test
   fun getMyAlerts_returnsConfiguredFailure() = runTest {
     val expectedFailure = IllegalStateException("query failed")
     repository.failure = expectedFailure

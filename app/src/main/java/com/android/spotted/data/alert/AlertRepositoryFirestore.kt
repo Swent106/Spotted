@@ -1,11 +1,16 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.alert
 
+import android.util.Log
 import com.android.spotted.model.Location
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.tasks.await
 
 class AlertRepositoryFirestore(
@@ -55,14 +60,17 @@ class AlertRepositoryFirestore(
 
   override suspend fun getMyAlerts(ownerId: String): Result<List<Alert>> {
     return try {
+      // Sorted by Firestore before the limit, so the newest alerts are the ones kept. Needs the
+      // composite index (ownerId, lostAtMillis desc, __name__) of firestore.indexes.json
       val snapshot =
-          db.collection(collectionPath).whereEqualTo("ownerId", ownerId).limit(100).get().await()
-      val alerts =
-          snapshot
-              .toObjects(AlertDto::class.java)
-              .mapNotNull { it.toDomain() }
-              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-      Result.success(alerts)
+          db.collection(collectionPath)
+              .whereEqualTo("ownerId", ownerId)
+              .orderBy("lostAtMillis", Query.Direction.DESCENDING)
+              .orderBy(FieldPath.documentId())
+              .limit(AlertRepository.MY_ALERTS_LIMIT.toLong())
+              .get()
+              .await()
+      Result.success(snapshot.toAlerts())
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
@@ -94,7 +102,10 @@ class AlertRepositoryFirestore(
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
       }
-      Result.failure(e)
+      // Firestore may wrap what the transaction throws: give back the missing alert as it is
+      val missing =
+          generateSequence<Throwable>(e) { it.cause }.firstOrNull { it is NoSuchElementException }
+      Result.failure(missing ?: e)
     }
   }
 
@@ -110,8 +121,7 @@ class AlertRepositoryFirestore(
               .await()
       val alerts =
           snapshot
-              .toObjects(AlertDto::class.java)
-              .mapNotNull { it.toDomain() }
+              .toAlerts()
               .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
       Result.success(alerts)
     } catch (e: Exception) {
@@ -142,7 +152,7 @@ class AlertRepositoryFirestore(
       val snapshot =
           db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100).get().await()
 
-      val alerts = snapshot.toObjects(AlertDto::class.java).mapNotNull { it.toDomain() }
+      val alerts = snapshot.toAlerts()
       // Filter by distance and sort by lostAtMillis (descending) locally
       val nearbyAlerts =
           alerts
@@ -156,5 +166,16 @@ class AlertRepositoryFirestore(
       }
       Result.failure(e)
     }
+  }
+
+  /** The alerts of this snapshot, in order. Documents that aren't valid alerts are logged. */
+  private fun QuerySnapshot.toAlerts(): List<Alert> = documents.mapNotNull { document ->
+    val alert = document.toObject(AlertDto::class.java)?.toDomain()
+    if (alert == null) Log.w(TAG, "Ignoring invalid alert ${document.id}")
+    alert
+  }
+
+  private companion object {
+    const val TAG = "AlertRepositoryFirestore"
   }
 }

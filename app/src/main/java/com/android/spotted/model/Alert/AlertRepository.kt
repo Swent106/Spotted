@@ -11,8 +11,16 @@ interface AlertRepository {
   /** Returns the alert with [id], or null when no such alert exists. */
   suspend fun getAlertById(id: String): Result<Alert?>
 
+  /**
+   * Returns the alerts published by [ownerId], open and closed, newest first (ties broken by
+   * ascending [Alert.id]). At most the [MY_ALERTS_LIMIT] newest ones.
+   */
   suspend fun getMyAlerts(ownerId: String): Result<List<Alert>>
 
+  /**
+   * Closes the alert [alertId] and stamps its closing time. Closing is one-way: an alert already
+   * closed keeps its first closing time. Fails with [NoSuchElementException] if it doesn't exist.
+   */
   suspend fun closeAlert(alertId: String): Result<Unit>
 
   /**
@@ -30,4 +38,9 @@ interface AlertRepository {
 
   /** Deletes every alert published by [ownerId], e.g. when they delete their account. */
   suspend fun deleteAlertsByOwner(ownerId: String): Result<Unit>
+
+  companion object {
+    /** Most alerts [getMyAlerts] returns; also the most the Firestore rules let a query list. */
+    const val MY_ALERTS_LIMIT = 100
+  }
 }

@@ -1,4 +1,5 @@
 rules_version = '2';
+// Portions of this code were generated with the help of Claude (Anthropic).
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -106,9 +107,14 @@ service cloud.firestore {
           && validLocation(d.lastKnownLocation)
           && d.lostAtMillis is int
           && d.status in ['OPEN', 'CLOSED']
-          // Only a closed alert may carry a closing time; the app writes null while open
-          && (!('closedAtMillis' in d) || d.closedAtMillis == null
-              || (d.closedAtMillis is int && d.status == 'CLOSED'))
+          // An open alert has no closing time (the app writes null). A closed one must have one,
+          // after it was lost and not in the future: the time comes from the phone, so a minute
+          // of clock difference with the server is accepted.
+          && (d.status == 'OPEN'
+              ? d.get('closedAtMillis', null) == null
+              : (d.get('closedAtMillis', null) is int
+                  && d.closedAtMillis >= d.lostAtMillis
+                  && d.closedAtMillis <= request.time.toMillis() + 60000))
           && d.petName is string && d.petName.size() > 0 && d.petName.size() <= 100
           && d.petSpecies is string && d.petSpecies.size() <= 50
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null

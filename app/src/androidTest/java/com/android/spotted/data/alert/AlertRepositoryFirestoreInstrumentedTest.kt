@@ -231,7 +231,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
   }
 
   /** Seeds a pet and publishes an open alert for it at [location], owned by the signed-in user. */
-  private suspend fun publishOpenAlert(location: Location): Alert {
+  private suspend fun publishOpenAlert(location: Location, lostAtMillis: Long = 1000L): Alert {
     val ownerId = auth.currentUser!!.uid
     val petId = "pet-${java.util.UUID.randomUUID()}"
     seedPet(petId, ownerId, "Rex")
@@ -241,7 +241,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
             petId = petId,
             ownerId = ownerId,
             lastKnownLocation = location,
-            lostAtMillis = 1000L,
+            lostAtMillis = lostAtMillis,
             petName = "Rex",
             petSpecies = Species.DOG,
         )
@@ -283,9 +283,26 @@ class AlertRepositoryFirestoreInstrumentedTest {
   }
 
   @Test
-  fun closeAlert_returnsFailureWhenAlertDoesNotExist() = runBlocking {
+  fun closeAlert_returnsNoSuchElementWhenAlertDoesNotExist() = runBlocking {
     val result = repository.closeAlert("missing-${java.util.UUID.randomUUID()}")
 
-    assertTrue(result.isFailure)
+    assertTrue(
+        "Expected NoSuchElementException, got ${result.exceptionOrNull()}",
+        result.exceptionOrNull() is NoSuchElementException,
+    )
+  }
+
+  @Test
+  fun getMyAlerts_isSortedByFirestore_newestFirst() = runBlocking {
+    val location = Location(latitude = 46.0, longitude = 6.0)
+    // Published oldest last, so the order can't come from the order of writes
+    val newest = publishOpenAlert(location, lostAtMillis = 3_000L)
+    val oldest = publishOpenAlert(location, lostAtMillis = 1_000L)
+    val middle = publishOpenAlert(location, lostAtMillis = 2_000L)
+
+    val result = repository.getMyAlerts(auth.currentUser!!.uid)
+
+    assertTrue("Query should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    assertEquals(listOf(newest.id, middle.id, oldest.id), result.getOrThrow().map { it.id })
   }
 }

@@ -74,6 +74,7 @@ class ReportMissingContentTest {
     override suspend fun getMyAlerts(ownerId: String) =
         Result.success(published.filter { it.ownerId == ownerId })
 
+    // Not used in this test
     override suspend fun closeAlert(alertId: String): Result<Unit> = Result.success(Unit)
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =

@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -515,6 +516,7 @@ describe("Firestore alert access rules", () => {
     await assertSucceeds(
       updateDoc(doc(db, "alerts", "alert-1"), {
           status: "CLOSED",
+          closedAtMillis: 2000000,
           lastKnownLocation: {
               latitude: 47.0,
               longitude: 7.0
@@ -656,6 +658,84 @@ describe("Firestore alert access rules", () => {
         lastKnownLocation: { latitude: 47.0, longitude: 7.0 },
       })
     );
+  });
+
+  it("close: closing while also changing the ownerId is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { ...closing, ownerId: "owner-2" })
+    );
+  });
+
+  it("close: closing while also renaming the pet is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { ...closing, petName: "Max" }));
+  });
+
+  it("close: closed status without a closing time is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED" }));
+  });
+
+  it("close: closed status with a null closing time is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: null })
+    );
+  });
+
+  it("close: closing time in the future is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), {
+        status: "CLOSED",
+        closedAtMillis: Date.now() + 10 * 60 * 1000,
+      })
+    );
+  });
+
+  it("close: closing time before the pet was lost is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 999999 })
+    );
+  });
+
+  it("update: unknown status value is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { status: "foo" }));
+  });
+
+  it("update: owner can move their open alert", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(
+      updateDoc(doc(db, "alerts", "alert-1"), {
+        lastKnownLocation: { latitude: 47.0, longitude: 7.0 },
+      })
+    );
+  });
+
+  it("update: owner cannot rename the pet of their open alert", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { petName: "Max" }));
   });
 });
 

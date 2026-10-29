@@ -40,6 +40,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
         alerts.values
             .filter { it.ownerId == ownerId }
             .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+            .take(AlertRepository.MY_ALERTS_LIMIT)
     )
   }
 
