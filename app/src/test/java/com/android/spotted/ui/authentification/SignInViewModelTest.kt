@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.authentification
 
 import android.content.Context
@@ -157,7 +158,7 @@ class SignInViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading) // the loader does not spin forever
-        assertEquals("Unexpected error: Missing client id", state.errorMessage)
+        assertEquals(SignInViewModel.UNEXPECTED_ERROR, state.errorMessage)
       }
 
   @Test
@@ -171,7 +172,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Simulated authentication failure in FakeAuthRepository", state.errorMessage)
+        assertEquals(SignInViewModel.SIGN_IN_FAILED, state.errorMessage)
         assertNull(fakeRepo.currentUser.value)
       }
 
@@ -186,12 +187,12 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Sign-in cancelled", state.errorMessage)
+        assertEquals(SignInViewModel.SIGN_IN_CANCELLED, state.errorMessage)
         assertNull(fakeRepo.currentUser.value) // The repository is never called
       }
 
   @Test
-  fun catchGetCredentialException_showsFailedToGetCredentials() =
+  fun catchGetCredentialException_showsNoGoogleAccount() =
       runTest(testDispatcher) {
         // NoCredentialException is an androidx GetCredentialException (no Google account on the
         // device)
@@ -204,7 +205,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Failed to get credentials: No Google account", state.errorMessage)
+        assertEquals(SignInViewModel.NO_GOOGLE_ACCOUNT, state.errorMessage)
       }
 
   @Test
@@ -216,7 +217,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Unexpected error: Boom", state.errorMessage)
+        assertEquals(SignInViewModel.UNEXPECTED_ERROR, state.errorMessage)
       }
 
   // ===================== extractGoogleIdToken =====================
@@ -236,7 +237,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertTrue(state.errorMessage!!.startsWith("Unexpected error: Unexpected credential type"))
+        assertEquals(SignInViewModel.UNEXPECTED_ERROR, state.errorMessage)
         assertNull(fakeRepo.currentUser.value) // The repository is never called
       }
 
@@ -273,6 +274,29 @@ class SignInViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isLoading)
+      }
+
+  // ===================== No raw exception text =====================
+
+  @Test
+  fun exceptionTexts_neverReachTheState() =
+      runTest(testDispatcher) {
+        val secret = "FirebaseAuthException: ERROR_INTERNAL token=abc"
+        val failures =
+            listOf(
+                NoCredentialException(secret),
+                IllegalStateException(secret),
+                GetCredentialCancellationException(secret),
+            )
+
+        for (failure in failures) {
+          viewModel.signIn(context, credentialManagerThrowing(failure))
+          advanceUntilIdle()
+
+          val message = viewModel.uiState.value.errorMessage!!
+          assertFalse("raw text shown for ${failure::class.simpleName}", secret in message)
+          viewModel.clearErrorMsg()
+        }
       }
 
   // ===================== clearErrorMsg =====================

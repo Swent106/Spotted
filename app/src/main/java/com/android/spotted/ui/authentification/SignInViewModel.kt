@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.authentification
 
 import android.content.Context
@@ -8,10 +9,13 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.R
-import com.android.spotted.data.auth.AuthRepositoryFirebase
 import com.android.spotted.model.auth.AuthRepository
+import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlin.coroutines.cancellation.CancellationException
@@ -37,10 +41,14 @@ import kotlinx.coroutines.launch
  *
  * This class was written with the assistance of Claude (Anthropic's AI assistant).
  *
- * @property repository The repository used to perform authentication operations.
+ * Error messages are fixed, user-facing sentences: the exception's own text (Firebase, Credential
+ * Manager) is never shown, since it is technical and may be in English only.
+ *
+ * @property repository The repository used to perform authentication operations. In the app it is
+ *   the shared [AuthRepositoryProvider.authRepository] (see [Factory]), so the whole app follows
+ *   one signed-in user.
  */
-class SignInViewModel(private val repository: AuthRepository = AuthRepositoryFirebase()) :
-    ViewModel() {
+class SignInViewModel(private val repository: AuthRepository) : ViewModel() {
 
   private val _uiState = MutableStateFlow(SignInUiState())
   val uiState: StateFlow<SignInUiState> = _uiState.asStateFlow()
@@ -77,39 +85,23 @@ class SignInViewModel(private val repository: AuthRepository = AuthRepositoryFir
 
         repository.signInWithGoogle(extractGoogleIdToken(credential)).fold({ user ->
           _uiState.update { it.copy(isLoading = false, user = user, errorMessage = null) }
-        }) { failure ->
-          _uiState.update {
-            it.copy(
-                isLoading = false,
-                errorMessage = failure.localizedMessage,
-                user = null,
-            )
-          }
+        }) {
+          showError(SIGN_IN_FAILED)
         }
       } catch (e: CancellationException) {
         throw e
       } catch (e: GetCredentialCancellationException) {
-        _uiState.update {
-          it.copy(isLoading = false, errorMessage = "Sign-in cancelled", user = null)
-        }
+        showError(SIGN_IN_CANCELLED)
       } catch (e: GetCredentialException) {
-        _uiState.update {
-          it.copy(
-              isLoading = false,
-              errorMessage = "Failed to get credentials: ${e.localizedMessage}",
-              user = null,
-          )
-        }
+        showError(NO_GOOGLE_ACCOUNT)
       } catch (e: Exception) {
-        _uiState.update {
-          it.copy(
-              isLoading = false,
-              errorMessage = "Unexpected error: ${e.localizedMessage}",
-              user = null,
-          )
-        }
+        showError(UNEXPECTED_ERROR)
       }
     }
+  }
+
+  private fun showError(message: String) {
+    _uiState.update { it.copy(isLoading = false, errorMessage = message, user = null) }
   }
 
   private fun startLoading(): Boolean {
@@ -134,5 +126,18 @@ class SignInViewModel(private val repository: AuthRepository = AuthRepositoryFir
       return GoogleIdTokenCredential.createFrom(credential.data).idToken
     }
     throw IllegalArgumentException("Unexpected credential type: ${credential.type}")
+  }
+
+  companion object {
+    const val SIGN_IN_CANCELLED = "Sign-in cancelled"
+    const val SIGN_IN_FAILED = "Couldn't sign you in. Please try again."
+    const val NO_GOOGLE_ACCOUNT =
+        "Couldn't reach a Google account on this phone. Add one in Settings, then try again."
+    const val UNEXPECTED_ERROR = "Something went wrong. Please try again."
+
+    /** Builds the ViewModel with the app's single shared [AuthRepository]. */
+    val Factory: ViewModelProvider.Factory = viewModelFactory {
+      initializer { SignInViewModel(AuthRepositoryProvider.authRepository) }
+    }
   }
 }
