@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
 import com.android.spotted.model.Pet.Pet
@@ -31,6 +32,8 @@ data class HomeSection<T>(
  * @property lostPetsNearby open alerts around the search area, newest first, without the user's own
  *   alerts.
  * @property nowMillis time of the last successful load of [lostPetsNearby], for "lost 2 h ago".
+ * @property distanceTexts "600 m away" of each alert of [lostPetsNearby], by alert id: from the
+ *   device position, else from the home. An alert without one shows no distance.
  * @property errorMessage screen-wide error (e.g. not signed in), or null.
  */
 data class HomeUiState(
@@ -45,5 +48,6 @@ data class HomeUiState(
     /** The user's own open alerts, wherever they are: not in "Lost near you", but on the map. */
     val ownLostPets: List<Alert> = emptyList(),
     val nowMillis: Long = 0L,
+    val distanceTexts: Map<String, String> = emptyMap(),
     val errorMessage: String? = null,
 )

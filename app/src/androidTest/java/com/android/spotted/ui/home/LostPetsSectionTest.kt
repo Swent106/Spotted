@@ -153,6 +153,22 @@ class LostPetsSectionTest {
     assertEquals(listOf(MILO.id), seen)
   }
 
+  @Test
+  fun lostPetDistance_isShownOnlyWhenKnown() {
+    setContent(
+        HomeUiState(
+            lostPetsNearby = HomeSection(listOf(MILO, NALA)),
+            distanceTexts = mapOf(MILO.id to "600 m away"),
+        )
+    )
+
+    // The clickable card merges its texts: scroll to the card, then look inside it
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id))
+    node(HomeScreenTestTags.alertDistance(MILO.id)).assertTextEquals("600 m away")
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
+    node(HomeScreenTestTags.alertDistance(NALA.id)).assertDoesNotExist()
+  }
+
   private companion object {
     const val NOW = 1_000_000_000_000L
     const val HOUR = 3_600_000L

@@ -9,15 +9,20 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.AddressRepositoryGeocoder
+import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.distanceKm
+import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
@@ -53,6 +58,8 @@ import kotlinx.coroutines.launch
  * @property now current time in epoch millis; injected so that tests control it.
  * @property addressRepository finds the position of the home area; null searches [searchCenter].
  * @property photoRepository gives where the profile photo is; null leaves the avatar empty.
+ * @property locationRepository gives the device position, for "600 m away"; null measures from the
+ *   home.
  */
 class HomeViewModel(
     private val authRepository: AuthRepository,
@@ -64,6 +71,7 @@ class HomeViewModel(
     private val now: () -> Long = System::currentTimeMillis,
     private val addressRepository: AddressRepository? = null,
     private val photoRepository: PhotoRepository? = null,
+    private val locationRepository: LocationRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HomeUiState())
@@ -123,7 +131,9 @@ class HomeViewModel(
         // The lost pets are searched around the user's home, so the profile comes first
         val profile = loadProfile(uid)
         val radius = profile?.alertRadiusKm?.toDouble() ?: radiusKm
-        loadLostPetsNearby(uid, searchCenterFor(profile), radius)
+        val home = homePositionOf(profile)
+        val alerts = loadLostPetsNearby(uid, home ?: searchCenter, radius)
+        if (alerts != null) loadDistances(uid, alerts, home)
       }
     }
   }
@@ -143,14 +153,26 @@ class HomeViewModel(
     return profile
   }
 
-  /** The home pin; else the place the home area names; else [searchCenter]. */
-  private suspend fun searchCenterFor(profile: UserProfile?): Location {
+  /** The home pin; else the place the home area names; else null. */
+  private suspend fun homePositionOf(profile: UserProfile?): Location? {
     profile?.homeLocation?.let {
       return it
     }
     val homeArea = profile?.homeArea
-    if (homeArea.isNullOrBlank()) return searchCenter
-    return addressRepository?.locate(homeArea)?.getOrNull() ?: searchCenter
+    if (homeArea.isNullOrBlank()) return null
+    return addressRepository?.locate(homeArea)?.getOrNull()
+  }
+
+  /**
+   * Shows how far each of [alerts] is from the device; from [home] when the position can't be read
+   * (permission denied, no fix). Without either, the alerts show no distance.
+   */
+  private suspend fun loadDistances(uid: String, alerts: List<Alert>, home: Location?) {
+    val origin = locationRepository?.getCurrentLocation()?.getOrNull() ?: home
+    val texts =
+        if (origin == null) emptyMap()
+        else alerts.associate { it.id to formatDistance(origin.distanceKm(it.lastKnownLocation)) }
+    updateFor(uid) { it.copy(distanceTexts = texts) }
   }
 
   private suspend fun loadPets(uid: String) {
@@ -158,7 +180,12 @@ class HomeViewModel(
     updateFor(uid) { it.copy(pets = it.pets.after(result, PETS_LOAD_FAILED)) }
   }
 
-  private suspend fun loadLostPetsNearby(uid: String, center: Location, radiusKm: Double) {
+  /** Loads "Lost near you" and returns the alerts, or null if they can't be loaded. */
+  private suspend fun loadLostPetsNearby(
+      uid: String,
+      center: Location,
+      radiusKm: Double,
+  ): List<Alert>? {
     // The user's own lost pets are not "near you" for them: they are loaded apart, for the map
     val result =
         alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
@@ -170,6 +197,7 @@ class HomeViewModel(
           nowMillis = if (result.isSuccess) now() else it.nowMillis,
       )
     }
+    return result.getOrNull()
   }
 
   /** The user's own open alerts, wherever their pet was lost, so the map always shows them. */
@@ -211,6 +239,7 @@ class HomeViewModel(
             alertRepository = AlertRepositoryFirestore(),
             addressRepository = application?.let { AddressRepositoryGeocoder(it) },
             photoRepository = application?.let { PhotoRepositoryFirestore(it) },
+            locationRepository = application?.let { LocationRepositoryProvider.create(it) },
         )
       }
     }
