@@ -5,13 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,11 +15,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
@@ -37,6 +31,8 @@ import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
+import com.android.spotted.ui.alertdetail.AlertDetailScreen
+import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
@@ -185,11 +181,11 @@ fun NavGraphBuilder.addPetsDestination(
 
 /**
  * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
- * missing screen, [addPetContent] Add pets opened from Home, [petProfileContent] one of the user's
- * pets, [reportSightingContent] Report sighting (for an alert, or none from the Camera tab),
- * [mapContent] the Map tab, [profileContent] the Helper profile (Profile tab) and
- * [editProfileContent] the profile form it opens; tests replace them to use hand-built states
- * instead of the real ViewModels.
+ * missing screen, [alertDetailContent] an alert's detail, [addPetContent] Add pets opened from
+ * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
+ * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
+ * profile (Profile tab) and [editProfileContent] the profile form it opens; tests replace them to
+ * use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -208,6 +204,14 @@ fun NavGraphBuilder.homeDestinations(
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       ReportMissingScreen(onBack = onDone, onPublished = onDone)
     },
+    alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
+        { alertId, onReportSighting ->
+          AlertDetailScreen(
+              viewModel = viewModel(factory = AlertDetailViewModel.Factory),
+              alertId = alertId,
+              onReportSighting = onReportSighting,
+          )
+        },
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       AddPetsScreen(onBack = onDone, onDone = onDone, isOnboarding = false)
     },
@@ -268,7 +272,8 @@ fun NavGraphBuilder.homeDestinations(
   }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
   composable(Route.ALERT_DETAIL) { entry ->
-    AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
+    val alertId = entry.arguments?.getString(Route.ALERT_ID).orEmpty()
+    alertDetailContent(alertId) { navController.navigate(Route.reportSighting(alertId)) }
   }
   composable(Route.REPORT_SIGHTING) { entry ->
     reportSightingContent(entry.arguments?.getString(Route.ALERT_ID)) {
@@ -289,18 +294,3 @@ data class HomeNavigation(
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
 )
-
-/** Shown until the Alert detail screen exists (S2-09). */
-@Composable
-fun AlertDetailScreenPlaceholder(alertId: String) {
-  Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-  ) {
-    Text(
-        text = "Alert $alertId",
-        modifier = Modifier.semantics { testTag = "alert_detail_screen" },
-    )
-  }
-}

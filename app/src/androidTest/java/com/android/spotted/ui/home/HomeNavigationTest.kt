@@ -1,5 +1,8 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -58,6 +61,18 @@ class HomeNavigationTest {
             reportMissingContent = {
               Text("Report missing", Modifier.testTag(REPORT_MISSING_SCREEN))
             },
+            // Same for Alert detail: its id and its "Report a sighting" action are what matter
+            alertDetailContent = { alertId, onReportSighting ->
+              Column {
+                Text("Alert $alertId", Modifier.testTag(ALERT_DETAIL_SCREEN))
+                Button(
+                    onClick = onReportSighting,
+                    modifier = Modifier.testTag(ALERT_DETAIL_REPORT_SIGHTING),
+                ) {
+                  Text("Report a sighting")
+                }
+              }
+            },
             addPetContent = { Text("Add pets", Modifier.testTag(ADD_PETS_SCREEN)) },
             reportSightingContent = { alertId, _ ->
               Text(
@@ -106,6 +121,18 @@ class HomeNavigationTest {
   }
 
   @Test
+  fun reportSighting_fromAlertDetail_opensReportSightingForThatAlert() {
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
+
+    node(ALERT_DETAIL_REPORT_SIGHTING).performClick()
+
+    node(REPORT_SIGHTING_SCREEN)
+        .assertIsDisplayed()
+        .assertTextEquals("Report a sighting of ${NALA.id}")
+    assertEquals(Route.REPORT_SIGHTING, navController.currentDestination?.route)
+  }
+
+  @Test
   fun cameraTab_opensReportSightingWithoutAlert() {
     node(HomeScreenTestTags.TAB_CAMERA).performClick()
 
@@ -149,6 +176,7 @@ class HomeNavigationTest {
 
   private companion object {
     const val ALERT_DETAIL_SCREEN = "alert_detail_screen"
+    const val ALERT_DETAIL_REPORT_SIGHTING = "alert_detail_report_sighting"
     const val REPORT_SIGHTING_SCREEN = "report_sighting_screen"
     const val REPORT_MISSING_SCREEN = "report_missing_screen"
     const val ADD_PETS_SCREEN = "add_pets_screen"

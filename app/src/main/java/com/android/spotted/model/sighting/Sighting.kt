@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.sighting
 
 import com.android.spotted.model.Location
@@ -16,6 +17,7 @@ import com.android.spotted.model.Pet.Species
  * @property species Species of the pet that was seen.
  * @property photoUrl Download URL of the photo, if the passerby took one.
  * @property alertId Id of the lost-pet alert this sighting is linked to, if any.
+ * @property status What the owner of the linked alert decided about this sighting.
  */
 data class Sighting(
     val id: String,
@@ -25,4 +27,21 @@ data class Sighting(
     val species: Species,
     val photoUrl: String? = null,
     val alertId: String? = null,
+    val status: SightingStatus = SightingStatus.PENDING,
 )
+
+/**
+ * The owner's decision about a [Sighting] linked to their alert.
+ *
+ * Only the owner of the linked alert may change it, with [SightingRepository.setSightingStatus].
+ */
+enum class SightingStatus {
+  /** Not reviewed yet by the owner. Every sighting starts like this. */
+  PENDING,
+
+  /** The owner recognised their pet: the sighting counts for the likely area. */
+  CONFIRMED,
+
+  /** The owner says it is not their pet: the sighting is ignored. */
+  DISMISSED,
+}
