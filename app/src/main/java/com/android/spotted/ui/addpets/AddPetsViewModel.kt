@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.addpets
 
 import androidx.lifecycle.ViewModel
@@ -5,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.android.spotted.R
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Pet.Behavior
@@ -48,6 +50,12 @@ class AddPetsViewModel(
 
   fun onPhotoChanged(photoUri: String?) {
     _uiState.update { it.copy(photoUri = photoUri, errorMessage = null) }
+  }
+
+  fun onPhotoPickerError() {
+    _uiState.update {
+      it.copy(errorMessage = AddPetsMessage.Resource(R.string.photo_camera_unavailable))
+    }
   }
 
   fun onDescriptionChanged(description: String) {
@@ -121,7 +129,12 @@ class AddPetsViewModel(
     }
     val ownerId = user?.uid
     if (ownerId == null) {
-      _uiState.update { it.copy(needsSignIn = true, errorMessage = NOT_SIGNED_IN_MESSAGE) }
+      _uiState.update {
+        it.copy(
+            needsSignIn = true,
+            errorMessage = AddPetsMessage.Resource(R.string.add_pets_not_signed_in),
+        )
+      }
       return
     }
 
@@ -153,26 +166,30 @@ class AddPetsViewModel(
                   AddPetsUiState(
                       addedPets = it.addedPets + pet,
                       isDone = finishAfterSaving,
-                      errorMessage = if (photoFailed) PHOTO_ERROR_MESSAGE else null,
+                      errorMessage =
+                          if (photoFailed) {
+                            AddPetsMessage.Resource(R.string.add_pets_photo_upload_error)
+                          } else {
+                            null
+                          },
                   )
                 }
               },
-              onFailure = { failure -> showError(failure, SAVE_ERROR_MESSAGE) },
+              onFailure = { failure -> showError(failure) },
           )
     }
   }
 
-  private fun showError(failure: Throwable, fallback: String) {
+  private fun showError(failure: Throwable) {
     _uiState.update {
-      it.copy(isSaving = false, errorMessage = failure.localizedMessage ?: fallback)
+      it.copy(
+          isSaving = false,
+          errorMessage = AddPetsMessage.Resource(R.string.add_pets_save_error),
+      )
     }
   }
 
   companion object {
-    const val NOT_SIGNED_IN_MESSAGE = "You need to be signed in to add a pet"
-    const val PHOTO_ERROR_MESSAGE = "The photo couldn't be uploaded: the pet was saved without it"
-    const val SAVE_ERROR_MESSAGE = "Unable to save the pet"
-
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
         val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!

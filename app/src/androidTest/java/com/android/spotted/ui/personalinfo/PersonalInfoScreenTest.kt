@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.personalinfo
 
 import android.net.Uri
@@ -23,10 +24,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.R
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.user.FakeUserRepository
-import com.android.spotted.ui.addpets.CameraPhotoFile
+import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
@@ -440,5 +442,24 @@ class PersonalInfoScreenTest {
     composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).performClick()
 
     assertTrue(removed)
+  }
+
+  @Test
+  fun photoOptions_cameraUnavailable_showsGalleryFallback() {
+    composeTestRule.setContent {
+      PhotoOptionsDialog(
+          hasPhoto = false,
+          canTakePhoto = true,
+          cameraError = true,
+          onPickPhoto = {},
+          onTakePhoto = {},
+          onRemovePhoto = {},
+          onDismiss = {},
+      )
+    }
+
+    composeTestRule
+        .onNodeWithText(context().getString(R.string.photo_camera_unavailable))
+        .assertIsDisplayed()
   }
 }
