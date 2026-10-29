@@ -10,8 +10,8 @@ service cloud.firestore {
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
     // behaviors, and note; existing pet authorization rules are unchanged.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
-    // and optional photoUrl, alertId and status; only the reporter may change
-    // them, except status, which only the owner of the linked alert may change.
+    // and optional photoUrl, alertId and status; only the reporter may change or
+    // delete them, until the owner of the linked alert reviews the status.
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -186,12 +186,22 @@ service cloud.firestore {
           && request.resource.data.reporterId == request.auth.uid
           && statusOf(request.resource.data) == 'PENDING';
 
-      // The author may change their sighting, but it stays theirs and they cannot review it.
+      // Once linked to an alert, a sighting stays on it (it may still be linked later).
+      function alertIdKept() {
+        let savedAlertId = resource.data.get('alertId', null);
+        return savedAlertId == null
+          || request.resource.data.get('alertId', null) == savedAlertId;
+      }
+
+      // The author may change their sighting until the alert owner reviews it. It stays theirs,
+      // on the same alert, and they cannot review it themselves.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
+          && statusOf(resource.data) == 'PENDING'
           && validSighting(request.resource.data)
           && request.resource.data.reporterId == resource.data.reporterId
-          && statusOf(request.resource.data) == statusOf(resource.data);
+          && statusOf(request.resource.data) == 'PENDING'
+          && alertIdKept();
 
       // The owner of the linked alert may confirm or dismiss it, and change nothing else.
       // The status stays explicit once reviewed (it cannot be deleted).
@@ -201,8 +211,10 @@ service cloud.firestore {
           && 'status' in request.resource.data
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
 
+      // Once reviewed, the sighting is evidence the owner relies on, so it cannot be deleted.
       allow delete: if request.auth != null
-          && resource.data.reporterId == request.auth.uid;
+          && resource.data.reporterId == request.auth.uid
+          && statusOf(resource.data) == 'PENDING';
     }
 
     // Photos of pets and sightings, saved in base64 by PhotoRepositoryFirestore (no Storage).

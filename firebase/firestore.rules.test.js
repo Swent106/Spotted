@@ -833,14 +833,51 @@ describe("Firestore sighting access rules", () => {
     await assertSucceeds(setDoc(ref, sighting("sighting-1", "user-1", { status: "PENDING" })));
   });
 
-  it("sighting status: reporter can still edit a reviewed sighting without changing its status", async () => {
+  for (const status of ["CONFIRMED", "DISMISSED"]) {
+    it(`sighting status: reporter cannot change or delete a ${status} sighting`, async () => {
+      await seedSighting("sighting-1", "user-1", { status });
+      const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+      // Moving it would change the likely area, or put a reviewed sighting on another alert
+      await assertFails(updateDoc(ref, { location: { latitude: 46.6, longitude: 6.7 } }));
+      await assertFails(updateDoc(ref, { alertId: "alert-2" }));
+      await assertFails(updateDoc(ref, { species: "CAT" }));
+      await assertFails(setDoc(ref, sighting("sighting-1", "user-1", { status })));
+      await assertFails(deleteDoc(ref));
+    });
+  }
+
+  it("sighting status: reporter can edit and delete again after the owner undoes a review", async () => {
+    await seedAlert("alert-1", "owner-1");
     await seedSighting("sighting-1", "user-1", { status: "CONFIRMED" });
+    await assertSucceeds(
+      updateDoc(doc(firestoreForUser("owner-1"), "sightings", "sighting-1"), { status: "PENDING" }),
+    );
     const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
 
     await assertSucceeds(updateDoc(ref, { species: "CAT" }));
-    await assertFails(
-      setDoc(ref, sighting("sighting-1", "user-1", { species: "CAT", status: "PENDING" })),
-    );
+    await assertSucceeds(deleteDoc(ref));
+  });
+
+  it("sighting update: reporter cannot move a pending sighting to another alert", async () => {
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { alertId: "alert-2" }));
+    await assertFails(updateDoc(ref, { alertId: null }));
+    await assertFails(updateDoc(ref, { alertId: deleteField() }));
+  });
+
+  it("sighting update: reporter can link a sighting that had no alert", async () => {
+    await seedSighting("sighting-1", "user-1", { alertId: null });
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const { alertId, ...withoutAlert } = sighting("sighting-2", "user-1");
+      await setDoc(doc(context.firestore(), "sightings", "sighting-2"), withoutAlert);
+    });
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-1"), { alertId: "alert-1" }));
+    await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-2"), { alertId: "alert-1" }));
   });
 
   const boundaryCases = [
