@@ -13,6 +13,7 @@ import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
@@ -159,10 +160,14 @@ class HomeViewModel(
   }
 
   private suspend fun loadLostPetsNearby(uid: String, center: Location, radiusKm: Double) {
-    // The user's own lost pets are not "near you" for them: they are loaded apart, for the map
+    // The user's own lost pets are not "near you" for them: they are loaded apart, for the map.
+    // Sorted here, not in the screen, so the newest alert is featured whatever the repository
+    // returns
     val result =
         alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
-          alerts.filter { it.ownerId != uid }
+          alerts
+              .filter { it.ownerId != uid }
+              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
         }
     updateFor(uid) {
       it.copy(

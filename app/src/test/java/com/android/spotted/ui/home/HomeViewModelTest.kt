@@ -7,6 +7,7 @@ import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.User
@@ -592,5 +593,50 @@ class HomeViewModelTest {
 
         assertEquals(listOf(theirs), viewModel.uiState.value.lostPetsNearby.items)
         assertEquals(listOf(mine), viewModel.uiState.value.ownLostPets)
+      }
+
+  @Test
+  fun lostPets_areSearchedAroundTheDefaultCenter_whenTheHomeAreaIsBlank() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        // No pin and a blank area: the address lookup must not be used, or Zurich would be searched
+        saveProfile(ALICE_PROFILE.copy(homeArea = ""))
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inGeneva)
+
+        val viewModel = viewModelWithAddresses(FakeAddressRepository(location = FAR_AWAY))
+        advanceUntilIdle()
+
+        assertEquals(listOf(inGeneva), viewModel.uiState.value.lostPetsNearby.items)
+      }
+
+  /** Returns the alerts near a place oldest first, the reverse of the repository contract. */
+  private class OldestFirstAlertRepository(private val fake: FakeAlertRepository) :
+      AlertRepository by fake {
+    override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
+        fake.getOpenAlertsNear(center, radiusKm).map { it.reversed() }
+  }
+
+  @Test
+  fun lostPets_areNewestFirst_whateverTheOrderTheRepositoryReturns() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val older = alert("older", lostAtMillis = 1_000)
+        val newer = alert("newer", lostAtMillis = 2_000)
+        publish(older, newer)
+
+        val viewModel =
+            HomeViewModel(
+                authRepository = authRepository,
+                userRepository = userRepository,
+                petRepository = petRepository,
+                alertRepository = OldestFirstAlertRepository(alertRepository),
+                searchCenter = CENTER,
+                radiusKm = RADIUS_KM,
+                now = { NOW },
+            )
+        advanceUntilIdle()
+
+        assertEquals(listOf(newer, older), viewModel.uiState.value.lostPetsNearby.items)
       }
 }
