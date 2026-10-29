@@ -56,7 +56,7 @@ class AlertDetailViewModelTest {
   }
 
   @Test
-  fun loadAlert_found_exposesCopiedAlertDetails() =
+  fun loadAlert_open_exposesAlertDetails() =
       runTest(testDispatcher) {
         val expectedAlert =
             Alert(
@@ -85,6 +85,21 @@ class AlertDetailViewModelTest {
         assertFalse(state.isLoading)
         assertFalse(state.notFound)
         assertNull(state.errorMessage)
+      }
+
+  @Test
+  fun loadAlert_closed_exposesClosedStatus() =
+      runTest(testDispatcher) {
+        val closedAlert =
+            alert("alert-closed").copy(status = AlertStatus.CLOSED, closedAtMillis = 2L)
+        alertRepository.publishAlert(closedAlert)
+        val viewModel = AlertDetailViewModel(alertRepository)
+
+        viewModel.loadAlert(closedAlert.id)
+        advanceUntilIdle()
+
+        assertEquals(AlertStatus.CLOSED, viewModel.uiState.value.alert?.status)
+        assertEquals(2L, viewModel.uiState.value.alert?.closedAtMillis)
       }
 
   @Test
