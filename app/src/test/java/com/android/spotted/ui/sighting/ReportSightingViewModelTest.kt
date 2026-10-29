@@ -10,8 +10,10 @@ import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
+import com.android.spotted.model.sighting.SightingStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -103,6 +105,12 @@ class ReportSightingViewModelTest {
 
           override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
               Result.success(emptyList())
+
+          override fun observeSightingsForAlert(alertId: String) =
+              flowOf(Result.success(emptyList<Sighting>()))
+
+          override suspend fun setSightingStatus(sightingId: String, status: SightingStatus) =
+              Result.success(Unit)
         }
     assertEquals("id", innerRepo.getNewId())
     assertTrue(
@@ -313,6 +321,12 @@ class ReportSightingViewModelTest {
 
           override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
               Result.success(emptyList())
+
+          override fun observeSightingsForAlert(alertId: String) =
+              flowOf(Result.success(emptyList<Sighting>()))
+
+          override suspend fun setSightingStatus(sightingId: String, status: SightingStatus) =
+              Result.success(Unit)
         }
     val vm =
         ReportSightingViewModel(

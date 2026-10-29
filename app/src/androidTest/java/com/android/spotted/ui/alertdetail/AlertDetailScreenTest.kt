@@ -135,4 +135,25 @@ class AlertDetailScreenTest {
     }
     composeTestRule.onNodeWithText("Dog").assertIsDisplayed()
   }
+
+  @Test
+  fun distance_isShownOnlyWhenKnown() {
+    val alert =
+        Alert(
+            id = "alert-3",
+            petId = "pet-3",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Nala",
+            petSpecies = Species.DOG,
+        )
+    val state = mutableStateOf(AlertDetailUiState(alert = alert, distanceText = "600 m away"))
+    composeTestRule.setContent { AlertDetailContent(state = state.value) }
+
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.DISTANCE).assertTextEquals("600 m away")
+
+    composeTestRule.runOnIdle { state.value = AlertDetailUiState(alert = alert) }
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.DISTANCE).assertDoesNotExist()
+  }
 }
