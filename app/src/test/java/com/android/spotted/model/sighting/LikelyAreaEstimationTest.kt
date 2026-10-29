@@ -113,14 +113,16 @@ class LikelyAreaEstimationTest {
 
   @Test
   fun sightingsYearsOld_doNotBreakTheCentre() {
-    // Ten years is so many half-lives that its weight rounds to 0; the centre must stay a number
-    val ancient = sighting(Location(46.40, 6.50), seenAtMillis = NOW - 10 * 365 * 24 * HOUR)
-    val recent = sighting(LAUSANNE, seenAtMillis = NOW)
+    // Ten years is so many half-lives that weights relative to now would all round to 0 and the
+    // centre would be NaN; relative to the newest sighting, both weigh 1
+    val tenYearsAgo = NOW - 10 * 365 * 24 * HOUR
+    val north = sighting(Location(46.52, 6.60), seenAtMillis = tenYearsAgo)
+    val south = sighting(Location(46.50, 6.60), seenAtMillis = tenYearsAgo)
 
-    val center = estimateLikelyArea(listOf(ancient, recent), Species.CAT, NOW)!!.center
+    val center = estimateLikelyArea(listOf(north, south), Species.CAT, NOW)!!.center
 
-    assertEquals(LAUSANNE.latitude, center.latitude, DELTA_DEGREES)
-    assertEquals(LAUSANNE.longitude, center.longitude, DELTA_DEGREES)
+    assertEquals(46.51, center.latitude, DELTA_DEGREES)
+    assertEquals(6.60, center.longitude, DELTA_DEGREES)
   }
 
   private fun sighting(

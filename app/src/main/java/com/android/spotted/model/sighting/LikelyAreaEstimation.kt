@@ -31,24 +31,24 @@ import kotlin.math.pow
  *   ignored.
  * - An old confirmed sighting far away keeps the area large until the owner dismisses it.
  *
- * @param confirmed the alert's sightings; those that are not confirmed are ignored.
+ * @param sightings the alert's sightings; those that are not confirmed are ignored.
  * @param species species of the lost pet, which sets how far it may roam.
  * @param nowMillis the current time (epoch millis). A sighting dated after it (a phone with a wrong
  *   clock) counts as seen now.
  * @return the likely area, or null if no sighting is confirmed.
  */
-fun estimateLikelyArea(confirmed: List<Sighting>, species: Species, nowMillis: Long): LikelyArea? {
-  val sightings = confirmed.filter { it.status == SightingStatus.CONFIRMED }
-  if (sightings.isEmpty()) return null
+fun estimateLikelyArea(sightings: List<Sighting>, species: Species, nowMillis: Long): LikelyArea? {
+  val confirmed = sightings.filter { it.status == SightingStatus.CONFIRMED }
+  if (confirmed.isEmpty()) return null
 
   // Weights are relative to the newest sighting rather than to now: the centre is the same (a
   // common factor cancels out), and the newest weight is always 1, so very old sightings cannot
   // make every weight round down to 0
-  val newestSeenAt = sightings.maxOf { it.seenAtMillis }
-  val weights = sightings.map {
+  val newestSeenAt = confirmed.maxOf { it.seenAtMillis }
+  val weights = confirmed.map {
     0.5.pow((newestSeenAt - it.seenAtMillis) / RECENCY_HALF_LIFE_MILLIS)
   }
-  val weighted = sightings.map { it.location }.zip(weights)
+  val weighted = confirmed.map { it.location }.zip(weights)
   val totalWeight = weights.sum()
   val center =
       Location(
@@ -63,7 +63,7 @@ fun estimateLikelyArea(confirmed: List<Sighting>, species: Species, nowMillis: L
   val roamingMeters =
       min(range.baseMeters + range.metersPerHour * hoursSinceLastSeen, range.maxMeters)
   val farthestSightingMeters =
-      sightings.maxOf { center.distanceKm(it.location) } * METERS_PER_KILOMETER
+      confirmed.maxOf { center.distanceKm(it.location) } * METERS_PER_KILOMETER
 
   return LikelyArea(center = center, radiusMeters = max(roamingMeters, farthestSightingMeters))
 }
