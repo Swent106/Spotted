@@ -88,11 +88,8 @@ internal fun LazyListScope.lostPetsSection(
         }
   }
 
-  // The newest alert is highlighted, like Milo in Figma. Sorted here so that the featured card
-  // does not depend on the order the repository returns
-  val newestFirst =
-      lostPets.items.sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-  itemsIndexed(newestFirst, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
+  // The first alert is the newest (HomeViewModel sorts them): it is highlighted, like Milo in Figma
+  itemsIndexed(lostPets.items, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
     AlertCard(
         alert,
         featured = index == 0,

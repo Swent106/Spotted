@@ -180,16 +180,21 @@ class HomeViewModel(
     updateFor(uid) { it.copy(pets = it.pets.after(result, PETS_LOAD_FAILED)) }
   }
 
+
   /** Loads "Lost near you" and returns the alerts, or null if they can't be loaded. */
   private suspend fun loadLostPetsNearby(
       uid: String,
       center: Location,
       radiusKm: Double,
   ): List<Alert>? {
-    // The user's own lost pets are not "near you" for them: they are loaded apart, for the map
+    // The user's own lost pets are not "near you" for them: they are loaded apart, for the map.
+    // Sorted here, not in the screen, so the newest alert is featured whatever the repository
+    // returns
     val result =
         alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
-          alerts.filter { it.ownerId != uid }
+          alerts
+              .filter { it.ownerId != uid }
+              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
         }
     updateFor(uid) {
       it.copy(
