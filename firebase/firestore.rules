@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 rules_version = '2';
 // Portions of this code were generated with the help of Claude (Anthropic).
 
@@ -10,7 +11,8 @@ service cloud.firestore {
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
     // behaviors, and note; existing pet authorization rules are unchanged.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
-    // and optional photoUrl and alertId; only the reporter may change them.
+    // and optional photoUrl, alertId and status; only the reporter may change or
+    // delete them, until the owner of the linked alert reviews the status.
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -156,11 +158,13 @@ service cloud.firestore {
       }
 
       // Full schema of a sighting document (matches SightingRepositoryFirestore).
-      // species must be a name of the Species enum.
+      // species and status must be names of the Species and SightingStatus enums.
       function validSighting(d) {
         return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
           && d.keys().hasOnly([
-                'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId'])
+                'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
+                'status'])
+          && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED']
           && d.id == sightingId
           && d.reporterId is string
           && validSightingLocation(d.location)
@@ -175,18 +179,54 @@ service cloud.firestore {
       allow get: if request.auth != null;
       allow list: if request.auth != null && request.query.limit <= 100;
 
+      // Sightings saved before the status existed have none: they count as PENDING.
+      function statusOf(d) {
+        return d.get('status', 'PENDING');
+      }
+
+      // True if the signed-in user owns the alert the existing sighting is linked to.
+      function ownsLinkedAlert() {
+        let alertId = resource.data.get('alertId', null);
+        let alertPath = /databases/$(database)/documents/alerts/$(alertId);
+        return alertId is string
+          && exists(alertPath)
+          && get(alertPath).data.ownerId == request.auth.uid;
+      }
+
       allow create: if request.auth != null
           && validSighting(request.resource.data)
-          && request.resource.data.reporterId == request.auth.uid;
+          && request.resource.data.reporterId == request.auth.uid
+          && statusOf(request.resource.data) == 'PENDING';
 
-      // Only the author may change their sighting, and it stays theirs.
+      // Once linked to an alert, a sighting stays on it (it may still be linked later).
+      function alertIdKept() {
+        let savedAlertId = resource.data.get('alertId', null);
+        return savedAlertId == null
+          || request.resource.data.get('alertId', null) == savedAlertId;
+      }
+
+      // The author may change their sighting until the alert owner reviews it. It stays theirs,
+      // on the same alert, and they cannot review it themselves.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
+          && statusOf(resource.data) == 'PENDING'
           && validSighting(request.resource.data)
-          && request.resource.data.reporterId == resource.data.reporterId;
+          && request.resource.data.reporterId == resource.data.reporterId
+          && statusOf(request.resource.data) == 'PENDING'
+          && alertIdKept();
 
+      // The owner of the linked alert may confirm or dismiss it, and change nothing else.
+      // The status stays explicit once reviewed (it cannot be deleted).
+      allow update: if request.auth != null
+          && ownsLinkedAlert()
+          && validSighting(request.resource.data)
+          && 'status' in request.resource.data
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+
+      // Once reviewed, the sighting is evidence the owner relies on, so it cannot be deleted.
       allow delete: if request.auth != null
-          && resource.data.reporterId == request.auth.uid;
+          && resource.data.reporterId == request.auth.uid
+          && statusOf(resource.data) == 'PENDING';
     }
 
     // Photos of pets and sightings, saved in base64 by PhotoRepositoryFirestore (no Storage).
