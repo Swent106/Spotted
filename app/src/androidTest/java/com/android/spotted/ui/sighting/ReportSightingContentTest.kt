@@ -19,6 +19,8 @@ import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
+import com.android.spotted.model.sighting.SightingStatus
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -225,6 +227,12 @@ class ReportSightingContentTest {
 
           override suspend fun getSightingsForAlert(alertId: String): Result<List<Sighting>> =
               Result.success(emptyList())
+
+          override fun observeSightingsForAlert(alertId: String) =
+              flowOf(Result.success(emptyList<Sighting>()))
+
+          override suspend fun setSightingStatus(sightingId: String, status: SightingStatus) =
+              Result.success(Unit)
         }
     val photoRepo = FakePhotoRepository()
     val authRepo = FakeAuthRepository()
@@ -326,6 +334,12 @@ class ReportSightingContentTest {
 
     override suspend fun getSightingsForAlert(alertId: String) =
         Result.success(sightings.filter { it.alertId == alertId })
+
+    override fun observeSightingsForAlert(alertId: String) =
+        flowOf(Result.success(sightings.filter { it.alertId == alertId }))
+
+    override suspend fun setSightingStatus(sightingId: String, status: SightingStatus) =
+        Result.success(Unit)
   }
 
   private companion object {

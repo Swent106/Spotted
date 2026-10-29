@@ -35,11 +35,11 @@ class PetPhotoPickerTest {
   private fun setContent(photoUri: String?, canTakePhoto: Boolean = true) {
     composeRule.setContent {
       PetPhotoPickerContent(
-        photoUri = photoUri,
-        onPickPhoto = { pickCalls++ },
-        onTakePhoto = { takeCalls++ },
-        onRemovePhoto = { removeCalls++ },
-        canTakePhoto = canTakePhoto,
+          photoUri = photoUri,
+          onPickPhoto = { pickCalls++ },
+          onTakePhoto = { takeCalls++ },
+          onRemovePhoto = { removeCalls++ },
+          canTakePhoto = canTakePhoto,
       )
     }
   }
@@ -137,10 +137,10 @@ class PetPhotoPickerTest {
     val launchedInputs = mutableListOf<Any?>()
 
     override fun <I, O> onLaunch(
-      requestCode: Int,
-      contract: ActivityResultContract<I, O>,
-      input: I,
-      options: ActivityOptionsCompat?,
+        requestCode: Int,
+        contract: ActivityResultContract<I, O>,
+        input: I,
+        options: ActivityOptionsCompat?,
     ) {
       launchedContracts += contract
       launchedInputs += input
@@ -153,16 +153,16 @@ class PetPhotoPickerTest {
 
   private fun setPicker(photoUri: String?, registry: FakeActivityRegistry) {
     val owner =
-      object : ActivityResultRegistryOwner {
-        override val activityResultRegistry: ActivityResultRegistry = registry
-      }
+        object : ActivityResultRegistryOwner {
+          override val activityResultRegistry: ActivityResultRegistry = registry
+        }
     composeRule.setContent {
       CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
         PetPhotoPicker(
-          photoUri = photoUri,
-          onPhotoSelected = { selections += it },
-          // CI emulators may have no camera: force the button so the wiring is always tested.
-          canTakePhoto = true,
+            photoUri = photoUri,
+            onPhotoSelected = { selections += it },
+            // CI emulators may have no camera: force the button so the wiring is always tested.
+            canTakePhoto = true,
         )
       }
     }

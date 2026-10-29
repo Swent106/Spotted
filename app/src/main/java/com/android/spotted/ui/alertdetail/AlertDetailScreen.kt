@@ -68,6 +68,7 @@ object AlertDetailTestTags {
   const val LOST_AT = "alertDetail_lostAt"
   const val MAP = "alertDetail_map"
   const val LOCATION = "alertDetail_location"
+  const val DISTANCE = "alertDetail_distance"
   const val ALLERGIES = "alertDetail_allergies"
   const val ALLERGY_PREFIX = "alertDetail_allergy_"
   const val BEHAVIORS = "alertDetail_behaviors"
@@ -148,6 +149,7 @@ fun AlertDetailContent(
     state.alert != null ->
         AlertDetails(
             alert = state.alert,
+            distanceText = state.distanceText,
             onReportSighting = onReportSighting,
             onBack = onBack,
             onShare = { onShare(state.alert) },
@@ -159,6 +161,7 @@ fun AlertDetailContent(
 @Composable
 private fun AlertDetails(
     alert: Alert,
+    distanceText: String?,
     onReportSighting: () -> Unit,
     onBack: () -> Unit,
     onShare: () -> Unit,
@@ -179,7 +182,7 @@ private fun AlertDetails(
                 .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-      PetSummary(alert)
+      PetSummary(alert, distanceText)
       PetWarnings(alert)
       LastSeenArea(alert.lastKnownLocation)
     }
@@ -270,7 +273,7 @@ private fun HeaderCircleButton(symbol: String? = null, onClick: () -> Unit, tag:
 }
 
 @Composable
-private fun PetSummary(alert: Alert) {
+private fun PetSummary(alert: Alert, distanceText: String?) {
   Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text(
@@ -294,6 +297,13 @@ private fun PetSummary(alert: Alert) {
         style = jakarta(12, 17f, 600, 0xFFC92C2C),
         modifier = Modifier.testTag(AlertDetailTestTags.LOST_AT),
     )
+    if (distanceText != null) {
+      Text(
+          distanceText,
+          style = jakarta(12, 17f, 600, 0xFF626975),
+          modifier = Modifier.testTag(AlertDetailTestTags.DISTANCE),
+      )
+    }
   }
 }
 

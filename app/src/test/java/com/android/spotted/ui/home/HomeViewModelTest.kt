@@ -11,8 +11,12 @@ import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.formatDistance
+import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -486,6 +490,7 @@ class HomeViewModelTest {
     val CENTER = Location(latitude = 46.2044, longitude = 6.1432)
     val NEARBY = Location(latitude = 46.2050, longitude = 6.1440)
     val FAR_AWAY = Location(latitude = 47.3769, longitude = 8.5417) // Zurich
+    val DEVICE = Location(latitude = 46.2100, longitude = 6.1432) // About 600 m from CENTER
 
     val ALICE = User(uid = "alice", email = "alice@example.com")
     val BOB = User(uid = "bob", email = "bob@example.com")
@@ -638,5 +643,95 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(newer, older), viewModel.uiState.value.lostPetsNearby.items)
+      }
+  // ===================== Distance to each lost pet =====================
+
+  private fun viewModelWithLocation(
+      locationRepository: FakeLocationRepository,
+      addressRepository: FakeAddressRepository? = null,
+  ) =
+      HomeViewModel(
+          authRepository = authRepository,
+          userRepository = userRepository,
+          petRepository = petRepository,
+          alertRepository = alertRepository,
+          searchCenter = CENTER,
+          radiusKm = RADIUS_KM,
+          now = { NOW },
+          addressRepository = addressRepository,
+          locationRepository = locationRepository,
+      )
+
+  @Test
+  fun distance_isMeasuredFromTheDevicePosition() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE.copy(homeLocation = CENTER))
+        publish(alert("geneva", location = NEARBY))
+
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = DEVICE))
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("geneva" to formatDistance(DEVICE.distanceKm(NEARBY))),
+            viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun distance_permissionDenied_isMeasuredFromTheHomePin() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE.copy(homeLocation = CENTER))
+        publish(alert("geneva", location = NEARBY))
+        val locationRepository =
+            FakeLocationRepository(location = DEVICE).apply {
+              failure = LocationException.PermissionDenied()
+            }
+
+        val viewModel = viewModelWithLocation(locationRepository)
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("geneva" to formatDistance(CENTER.distanceKm(NEARBY))),
+            viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun distance_noFix_isMeasuredFromTheHomeArea_whenThereIsNoPin() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+        val inZurich = alert("zurich", location = Location(47.3800, 8.5417))
+        publish(inZurich)
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+
+        val viewModel =
+            viewModelWithLocation(locationRepository, FakeAddressRepository(location = FAR_AWAY))
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("zurich" to formatDistance(FAR_AWAY.distanceKm(inZurich.lastKnownLocation))),
+            viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun distance_noPositionAndNoHome_showsTheLostPetsWithoutDistance() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inGeneva)
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+
+        val viewModel = viewModelWithLocation(locationRepository)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(inGeneva), state.lostPetsNearby.items)
+        assertTrue(state.distanceTexts.isEmpty())
       }
 }

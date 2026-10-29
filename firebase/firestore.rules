@@ -1,4 +1,6 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 rules_version = '2';
+// Portions of this code were generated with the help of Claude (Anthropic).
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -9,7 +11,8 @@ service cloud.firestore {
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
     // behaviors, and note; existing pet authorization rules are unchanged.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
-    // and optional photoUrl and alertId; only the reporter may change them.
+    // and optional photoUrl, alertId and status; only the reporter may change or
+    // delete them, until the owner of the linked alert reviews the status.
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -98,14 +101,22 @@ service cloud.firestore {
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
                 'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
           && d.keys().hasOnly([
-                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
-                'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
+                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
           && validLocation(d.lastKnownLocation)
           && d.lostAtMillis is int
           && d.status in ['OPEN', 'CLOSED']
+          // An open alert has no closing time (the app writes null). A closed one must have one,
+          // after it was lost and not in the future: the time comes from the phone, so a minute
+          // of clock difference with the server is accepted.
+          && (d.status == 'OPEN'
+              ? d.get('closedAtMillis', null) == null
+              : (d.get('closedAtMillis', null) is int
+                  && d.closedAtMillis >= d.lostAtMillis
+                  && d.closedAtMillis <= request.time.toMillis() + 60000))
           && d.petName is string && d.petName.size() > 0 && d.petName.size() <= 100
           && d.petSpecies is string && d.petSpecies.size() <= 50
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
@@ -123,12 +134,15 @@ service cloud.firestore {
           && request.resource.data.status == 'OPEN'
           && ownsPet(request.resource.data.petId);
 
-      // The owner may only close the alert or move it; identity fields are immutable.
+      // The owner may only close an open alert or move it; identity fields are immutable.
+      // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
+      // field existed count as open.
       allow update: if request.auth != null
           && resource.data.ownerId == request.auth.uid
+          && resource.data.get('status', 'OPEN') == 'OPEN'
           && validAlert(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'lastKnownLocation']);
+               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis']);
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
@@ -144,11 +158,13 @@ service cloud.firestore {
       }
 
       // Full schema of a sighting document (matches SightingRepositoryFirestore).
-      // species must be a name of the Species enum.
+      // species and status must be names of the Species and SightingStatus enums.
       function validSighting(d) {
         return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
           && d.keys().hasOnly([
-                'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId'])
+                'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
+                'status'])
+          && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED']
           && d.id == sightingId
           && d.reporterId is string
           && validSightingLocation(d.location)
@@ -163,18 +179,54 @@ service cloud.firestore {
       allow get: if request.auth != null;
       allow list: if request.auth != null && request.query.limit <= 100;
 
+      // Sightings saved before the status existed have none: they count as PENDING.
+      function statusOf(d) {
+        return d.get('status', 'PENDING');
+      }
+
+      // True if the signed-in user owns the alert the existing sighting is linked to.
+      function ownsLinkedAlert() {
+        let alertId = resource.data.get('alertId', null);
+        let alertPath = /databases/$(database)/documents/alerts/$(alertId);
+        return alertId is string
+          && exists(alertPath)
+          && get(alertPath).data.ownerId == request.auth.uid;
+      }
+
       allow create: if request.auth != null
           && validSighting(request.resource.data)
-          && request.resource.data.reporterId == request.auth.uid;
+          && request.resource.data.reporterId == request.auth.uid
+          && statusOf(request.resource.data) == 'PENDING';
 
-      // Only the author may change their sighting, and it stays theirs.
+      // Once linked to an alert, a sighting stays on it (it may still be linked later).
+      function alertIdKept() {
+        let savedAlertId = resource.data.get('alertId', null);
+        return savedAlertId == null
+          || request.resource.data.get('alertId', null) == savedAlertId;
+      }
+
+      // The author may change their sighting until the alert owner reviews it. It stays theirs,
+      // on the same alert, and they cannot review it themselves.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
+          && statusOf(resource.data) == 'PENDING'
           && validSighting(request.resource.data)
-          && request.resource.data.reporterId == resource.data.reporterId;
+          && request.resource.data.reporterId == resource.data.reporterId
+          && statusOf(request.resource.data) == 'PENDING'
+          && alertIdKept();
 
+      // The owner of the linked alert may confirm or dismiss it, and change nothing else.
+      // The status stays explicit once reviewed (it cannot be deleted).
+      allow update: if request.auth != null
+          && ownsLinkedAlert()
+          && validSighting(request.resource.data)
+          && 'status' in request.resource.data
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+
+      // Once reviewed, the sighting is evidence the owner relies on, so it cannot be deleted.
       allow delete: if request.auth != null
-          && resource.data.reporterId == request.auth.uid;
+          && resource.data.reporterId == request.auth.uid
+          && statusOf(resource.data) == 'PENDING';
     }
 
     // Photos of pets and sightings, saved in base64 by PhotoRepositoryFirestore (no Storage).
