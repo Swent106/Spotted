@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -267,6 +268,85 @@ class AlertDetailViewModelTest {
         assertEquals(expectedAlert, state.alert)
         assertNull(state.distanceText)
         assertNull(state.errorMessage)
+      }
+
+  /** Loads "alert-1" and returns the distance shown. */
+  private fun TestScope.distanceShownBy(viewModel: AlertDetailViewModel): String? {
+    runBlocking { alertRepository.publishAlert(alert("alert-1")) }
+    viewModel.loadAlert("alert-1")
+    advanceUntilIdle()
+    return viewModel.uiState.value.distanceText
+  }
+
+  private fun noFix() = FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+
+  @Test
+  fun distance_withoutLocationRepository_isMeasuredFromTheHomePin() =
+      runTest(testDispatcher) {
+        signInWithHome(home)
+        val viewModel =
+            AlertDetailViewModel(
+                alertRepository = alertRepository,
+                authRepository = authRepository,
+                userRepository = userRepository,
+            )
+
+        assertEquals(formatDistance(home.distanceKm(alertLocation)), distanceShownBy(viewModel))
+      }
+
+  @Test
+  fun distance_noFixAndNotSignedIn_isNotShown() =
+      runTest(testDispatcher) { assertNull(distanceShownBy(viewModelWithLocation(noFix()))) }
+
+  @Test
+  fun distance_noFixAndNoUserRepositories_isNotShown() =
+      runTest(testDispatcher) {
+        signInWithHome(home)
+        val viewModel =
+            AlertDetailViewModel(alertRepository = alertRepository, locationRepository = noFix())
+
+        assertNull(distanceShownBy(viewModel))
+      }
+
+  @Test
+  fun distance_noFixAndNoUserRepository_isNotShown() =
+      runTest(testDispatcher) {
+        signInWithHome(home)
+        val viewModel =
+            AlertDetailViewModel(
+                alertRepository = alertRepository,
+                locationRepository = noFix(),
+                authRepository = authRepository,
+            )
+
+        assertNull(distanceShownBy(viewModel))
+      }
+
+  @Test
+  fun distance_noFixAndProfileNotFound_isNotShown() =
+      runTest(testDispatcher) {
+        signInWithHome(home)
+        userRepository.failure = Exception("offline")
+
+        assertNull(distanceShownBy(viewModelWithLocation(noFix())))
+      }
+
+  @Test
+  fun distance_noFixAndNoAddressRepository_isNotShown_whenThereIsNoPin() =
+      runTest(testDispatcher) {
+        signInWithHome(homeLocation = null, homeArea = "Plainpalais, Geneva")
+
+        assertNull(distanceShownBy(viewModelWithLocation(noFix())))
+      }
+
+  @Test
+  fun distance_noFixAndHomeAreaNotFound_isNotShown() =
+      runTest(testDispatcher) {
+        signInWithHome(homeLocation = null, homeArea = "Nowhere")
+        val addressRepository =
+            FakeAddressRepository().apply { failure = NoSuchElementException("unknown place") }
+
+        assertNull(distanceShownBy(viewModelWithLocation(noFix(), addressRepository)))
       }
 
   @Test
