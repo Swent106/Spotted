@@ -10,13 +10,18 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.ui.components.CameraPhotoFile
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -202,6 +207,34 @@ class PetPhotoPickerTest {
 
     val request = registry.launchedInputs.single() as PickVisualMediaRequest
     assertEquals(PickVisualMedia.ImageOnly, request.mediaType)
+  }
+
+  @Test
+  fun cancellingThePicker_doesNotReportASelection() {
+    val registry = FakeActivityRegistry(result = null)
+    val owner =
+        object : ActivityResultRegistryOwner {
+          override val activityResultRegistry: ActivityResultRegistry = registry
+        }
+    val selections = mutableListOf<Uri?>()
+
+    composeRule.setContent {
+      CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+        val actions =
+            rememberPhotoPickerActions(
+                onPhotoSelected = { selections += it },
+                onCameraUnavailable = {},
+            )
+        androidx.compose.foundation.layout.Box(
+            Modifier.clickable(onClick = actions.pickFromGallery).testTag("gallery")
+        )
+      }
+    }
+
+    composeRule.onNodeWithTag("gallery").performClick()
+    composeRule.waitForIdle()
+
+    assertTrue(selections.isEmpty())
   }
 
   @Test

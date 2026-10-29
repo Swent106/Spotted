@@ -24,10 +24,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.R
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.user.FakeUserRepository
-import com.android.spotted.ui.addpets.CameraPhotoFile
+import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
@@ -458,7 +459,7 @@ class PersonalInfoScreenTest {
     }
 
     composeTestRule
-        .onNodeWithText("Unable to open the camera. Choose a photo from your gallery instead.")
+        .onNodeWithText(context().getString(R.string.photo_camera_unavailable))
         .assertIsDisplayed()
   }
 }

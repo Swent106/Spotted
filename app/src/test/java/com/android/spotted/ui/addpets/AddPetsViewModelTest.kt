@@ -248,7 +248,10 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     val state = viewModel.uiState.value
-    assertEquals(AddPetsMessage.Text("Denied"), state.errorMessage)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error),
+        state.errorMessage,
+    )
     assertEquals("Rex", state.name)
     assertTrue(state.addedPets.isEmpty())
     assertFalse(state.isSaving)
@@ -304,7 +307,10 @@ class AddPetsViewModelTest {
     fillForm(name = "Rex", species = Species.DOG)
     viewModel.savePet()
     advanceUntilIdle()
-    assertEquals(AddPetsMessage.Text("Denied"), viewModel.uiState.value.errorMessage)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error),
+        viewModel.uiState.value.errorMessage,
+    )
 
     viewModel.onNameChanged("Rex")
 
@@ -372,7 +378,10 @@ class AddPetsViewModelTest {
     advanceUntilIdle()
 
     assertFalse(viewModel.uiState.value.isDone)
-    assertEquals(AddPetsMessage.Text("Denied"), viewModel.uiState.value.errorMessage)
+    assertEquals(
+        AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error),
+        viewModel.uiState.value.errorMessage,
+    )
   }
 
   private fun fillForm(name: String, species: Species) {

@@ -18,6 +18,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.R
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepositoryLocal
@@ -185,13 +187,6 @@ class AddPetsScreenTest {
   }
 
   @Test
-  fun errorMessage_isShown() {
-    setContent(completeForm.copy(errorMessage = AddPetsMessage.Text("Unable to save the pet")))
-
-    node(AddPetsScreenTestTags.ERROR_MESSAGE).assertTextEquals("Unable to save the pet")
-  }
-
-  @Test
   fun localizedErrorMessage_isShown() {
     setContent(
         completeForm.copy(
@@ -199,7 +194,9 @@ class AddPetsScreenTest {
         )
     )
 
-    node(AddPetsScreenTestTags.ERROR_MESSAGE).assertTextEquals("Unable to save the pet")
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    node(AddPetsScreenTestTags.ERROR_MESSAGE)
+        .assertTextEquals(context.getString(R.string.add_pets_save_error))
   }
 
   @Test

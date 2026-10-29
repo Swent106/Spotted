@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
-import com.android.spotted.ui.addpets.rememberPhotoPickerActions
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 

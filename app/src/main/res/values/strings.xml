@@ -36,13 +36,11 @@
     <string name="photo_camera_unavailable">Unable to open the camera. Choose a photo from your gallery instead.</string>
     <string name="pet_photo_description">Pet photo</string>
     <string name="pet_photo_upload">Upload a photo</string>
-    <string name="pet_photo_take">Take a photo</string>
-    <string name="pet_photo_change">Change photo</string>
-    <string name="pet_photo_remove">Remove photo</string>
+    <string name="photo_take">Take a photo</string>
+    <string name="photo_change">Change photo</string>
+    <string name="photo_remove">Remove photo</string>
     <string name="profile_photo_title">Profile photo</string>
     <string name="profile_photo_choose_gallery">Choose from gallery</string>
-    <string name="profile_photo_remove">Remove photo</string>
-    <string name="profile_photo_change_accessibility">Change photo</string>
     <string name="profile_photo_description">Profile photo</string>
     <string name="profile_photo_change_optional">Change photo (optional)</string>
     <string name="cancel">Cancel</string>

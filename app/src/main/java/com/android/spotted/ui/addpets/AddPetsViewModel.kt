@@ -184,9 +184,7 @@ class AddPetsViewModel(
     _uiState.update {
       it.copy(
           isSaving = false,
-          errorMessage =
-              failure.localizedMessage?.let(AddPetsMessage::Text)
-                  ?: AddPetsMessage.Resource(R.string.add_pets_save_error),
+          errorMessage = AddPetsMessage.Resource(R.string.add_pets_save_error),
       )
     }
   }

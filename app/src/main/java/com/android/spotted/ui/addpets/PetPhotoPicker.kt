@@ -1,12 +1,6 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.addpets
 
-import android.content.ActivityNotFoundException
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
-import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,12 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +27,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.ui.components.CameraPhotoFile
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.SpottedButtonBorder
 import com.android.spotted.ui.theme.SpottedInputBackground
 import com.android.spotted.ui.theme.jakarta
@@ -48,52 +39,6 @@ object PetPhotoPickerTestTags {
   const val PREVIEW = "pet_photo_preview"
   const val CHANGE_BUTTON = "pet_photo_change_button"
   const val REMOVE_BUTTON = "pet_photo_remove_button"
-}
-
-internal data class PhotoPickerActions(
-    val pickFromGallery: () -> Unit,
-    val takePhoto: () -> Unit,
-)
-
-/** Shared gallery and camera launchers used by pet, profile, and sighting photos. */
-@Composable
-internal fun rememberPhotoPickerActions(
-    onPhotoSelected: (Uri?) -> Unit,
-    onCameraUnavailable: () -> Unit,
-): PhotoPickerActions {
-  val context = LocalContext.current
-  val currentOnPhotoSelected by rememberUpdatedState(onPhotoSelected)
-  val galleryLauncher =
-      rememberLauncherForActivityResult(PickVisualMedia()) { uri -> currentOnPhotoSelected(uri) }
-
-  var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-  val cameraLauncher =
-      rememberLauncherForActivityResult(TakePicture()) { saved ->
-        val uri = pendingCameraUri ?: return@rememberLauncherForActivityResult
-        pendingCameraUri = null
-        if (saved) {
-          currentOnPhotoSelected(uri)
-        } else {
-          context.contentResolver.delete(uri, null, null)
-        }
-      }
-
-  return PhotoPickerActions(
-      pickFromGallery = {
-        galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
-      },
-      takePhoto = {
-        val uri = CameraPhotoFile.newPhotoUri(context)
-        pendingCameraUri = uri
-        try {
-          cameraLauncher.launch(uri)
-        } catch (e: ActivityNotFoundException) {
-          pendingCameraUri = null
-          context.contentResolver.delete(uri, null, null)
-          onCameraUnavailable()
-        }
-      },
-  )
 }
 
 /**
@@ -184,26 +129,26 @@ fun PetPhotoPickerContent(
         )
         if (canTakePhoto) {
           PhotoButton(
-              stringResource(R.string.pet_photo_take),
+              stringResource(R.string.photo_take),
               PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
               onTakePhoto,
           )
         }
       } else {
         PhotoButton(
-            stringResource(R.string.pet_photo_change),
+            stringResource(R.string.photo_change),
             PetPhotoPickerTestTags.CHANGE_BUTTON,
             onPickPhoto,
         )
         if (canTakePhoto) {
           PhotoButton(
-              stringResource(R.string.pet_photo_take),
+              stringResource(R.string.photo_take),
               PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
               onTakePhoto,
           )
         }
         PhotoButton(
-            stringResource(R.string.pet_photo_remove),
+            stringResource(R.string.photo_remove),
             PetPhotoPickerTestTags.REMOVE_BUTTON,
             onRemovePhoto,
         )

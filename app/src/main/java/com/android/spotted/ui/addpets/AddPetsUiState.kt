@@ -8,8 +8,6 @@ import com.android.spotted.model.Pet.Species
 
 sealed interface AddPetsMessage {
   data class Resource(val id: Int, val arguments: List<Any> = emptyList()) : AddPetsMessage
-
-  data class Text(val value: String) : AddPetsMessage
 }
 
 data class AddPetsUiState(

@@ -66,9 +66,9 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import com.android.spotted.R
 import com.android.spotted.model.Location
-import com.android.spotted.ui.addpets.CameraPhotoFile
-import com.android.spotted.ui.addpets.rememberPhotoPickerActions
+import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedAvatarBackground
 import com.android.spotted.ui.theme.SpottedBlue
@@ -241,7 +241,7 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
     Box(
         Modifier.size(96.dp)
             .clickable(
-                onClickLabel = stringResource(R.string.profile_photo_change_accessibility),
+                onClickLabel = stringResource(R.string.photo_change),
                 onClick = onChangePhotoClick,
             )
             .testTag(PersonalInfoScreenTestTags.AVATAR)
@@ -501,6 +501,7 @@ fun PersonalInfoScreen(
   val context = LocalContext.current
 
   var showPhotoOptions by rememberSaveable { mutableStateOf(false) }
+  // Keep the failure local to this dialog so it can stay open and offer gallery recovery.
   var cameraError by rememberSaveable { mutableStateOf(false) }
   val photoPickerActions =
       rememberPhotoPickerActions(
@@ -613,14 +614,14 @@ internal fun PhotoOptionsDialog(
           )
           if (canTakePhoto) {
             PhotoOption(
-                stringResource(R.string.pet_photo_take),
+                stringResource(R.string.photo_take),
                 PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA,
                 onTakePhoto,
             )
           }
           if (hasPhoto) {
             PhotoOption(
-                stringResource(R.string.profile_photo_remove),
+                stringResource(R.string.photo_remove),
                 PersonalInfoScreenTestTags.PHOTO_REMOVE,
                 onRemovePhoto,
             )

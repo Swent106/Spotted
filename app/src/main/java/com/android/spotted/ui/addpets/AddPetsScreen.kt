@@ -316,7 +316,6 @@ private fun SectionLabel(resourceId: Int) {
 private fun AddPetsMessage.resolve(): String =
     when (this) {
       is AddPetsMessage.Resource -> stringResource(id, *arguments.toTypedArray())
-      is AddPetsMessage.Text -> value
     }
 
 @Composable
