@@ -162,7 +162,9 @@ class LostPetsSectionTest {
         )
     )
 
-    scrollTo(HomeScreenTestTags.alertDistance(MILO.id)).assertTextEquals("600 m away")
+    // The clickable card merges its texts: scroll to the card, then look inside it
+    scrollTo(HomeScreenTestTags.alertCard(MILO.id))
+    node(HomeScreenTestTags.alertDistance(MILO.id)).assertTextEquals("600 m away")
     scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
     node(HomeScreenTestTags.alertDistance(NALA.id)).assertDoesNotExist()
   }
