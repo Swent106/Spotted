@@ -19,8 +19,8 @@ data class Pet(
     val name: String,
     val species: Species,
     val breed: String = "",
-    val photoUrl: String? = null, // optionnel
+    val photoUrl: String? = null, // optional
     val allergies: List<String> = emptyList(),
     val behaviors: Set<Behavior> = emptySet(),
-    val note: String = "", // texte libre
+    val note: String = "", // free text
 )
