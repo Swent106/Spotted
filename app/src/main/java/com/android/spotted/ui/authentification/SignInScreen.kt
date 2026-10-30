@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.authentification
 
 import androidx.compose.foundation.BorderStroke
@@ -333,7 +334,7 @@ private fun SignInContentErrorPreview() {
  */
 @Composable
 fun SignInScreen(
-    viewModel: SignInViewModel = viewModel(),
+    viewModel: SignInViewModel = viewModel(factory = SignInViewModel.Factory),
     credentialManager: CredentialManager? = null,
     onSignedIn: () -> Unit = {},
 ) {

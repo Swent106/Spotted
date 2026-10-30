@@ -14,10 +14,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -29,7 +32,7 @@ class AlertDetailScreenTest {
   @get:Rule val composeTestRule = createComposeRule()
 
   @Test
-  fun foundState_showsPetDetailsHighlightedNeedsAndReportAction() {
+  fun openAlert_showsPetDetailsHighlightedNeedsAndReportAction() {
     var reportClicked = false
     val alert =
         Alert(
@@ -85,6 +88,31 @@ class AlertDetailScreenTest {
         .assertIsDisplayed()
         .performClick()
     assertTrue(reportClicked)
+  }
+
+  @Test
+  fun closedAlert_showsFoundMessageAndHidesReportAction() {
+    val alert =
+        Alert(
+            id = "alert-closed",
+            petId = "pet-milo",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5197, 6.6323),
+            lostAtMillis = 1_700_000_000_000L,
+            closedAtMillis = 1_700_000_100_000L,
+            status = AlertStatus.CLOSED,
+            petName = "Milo",
+            petSpecies = Species.DOG,
+        )
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+    composeTestRule.setContent { AlertDetailContent(state = AlertDetailUiState(alert = alert)) }
+
+    composeTestRule
+        .onNodeWithTag(AlertDetailTestTags.FOUND_MESSAGE)
+        .assertIsDisplayed()
+        .assertTextEquals(context.getString(R.string.alert_detail_found_message, "Milo"))
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.REPORT_SIGHTING).assertDoesNotExist()
   }
 
   @Test

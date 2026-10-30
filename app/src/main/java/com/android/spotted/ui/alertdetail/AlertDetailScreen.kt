@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,6 +54,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 
@@ -73,6 +75,7 @@ object AlertDetailTestTags {
   const val ALLERGY_PREFIX = "alertDetail_allergy_"
   const val BEHAVIORS = "alertDetail_behaviors"
   const val BEHAVIOR_PREFIX = "alertDetail_behavior_"
+  const val FOUND_MESSAGE = "alertDetail_foundMessage"
   const val REPORT_SIGHTING = "alertDetail_reportSighting"
   const val BACK = "alertDetail_back"
   const val SHARE = "alertDetail_share"
@@ -182,11 +185,20 @@ private fun AlertDetails(
                 .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+      if (alert.status == AlertStatus.CLOSED) {
+        Text(
+            text = stringResource(R.string.alert_detail_found_message, alert.petName),
+            style = jakarta(16, 22f, 700, 0xFF1B5BD7),
+            modifier = Modifier.testTag(AlertDetailTestTags.FOUND_MESSAGE),
+        )
+      }
       PetSummary(alert, distanceText)
       PetWarnings(alert)
       LastSeenArea(alert.lastKnownLocation)
     }
-    ReportSightingBar(onClick = onReportSighting)
+    if (alert.status == AlertStatus.OPEN) {
+      ReportSightingBar(onClick = onReportSighting)
+    }
   }
 }
 
@@ -225,21 +237,23 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
       HeaderCircleButton(onClick = onBack, tag = AlertDetailTestTags.BACK)
       HeaderCircleButton("↗", onClick = onShare, tag = AlertDetailTestTags.SHARE)
     }
-    Row(
-        modifier =
-            Modifier.align(Alignment.BottomStart)
-                .padding(start = 20.dp, bottom = 30.dp)
-                .clip(RoundedCornerShape(50.dp))
-                .background(Color(0xFFC92C2C))
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
-      Spacer(Modifier.width(6.dp))
-      Text(
-          "Missing · ${timeSinceLost(alert.lostAtMillis).removeSuffix(" ago")}",
-          style = jakarta(11, 14f, 700, 0xFFFFFFFF),
-      )
+    if (alert.status == AlertStatus.OPEN) {
+      Row(
+          modifier =
+              Modifier.align(Alignment.BottomStart)
+                  .padding(start = 20.dp, bottom = 30.dp)
+                  .clip(RoundedCornerShape(50.dp))
+                  .background(Color(0xFFC92C2C))
+                  .padding(horizontal = 10.dp, vertical = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "Missing · ${timeSinceLost(alert.lostAtMillis).removeSuffix(" ago")}",
+            style = jakarta(11, 14f, 700, 0xFFFFFFFF),
+        )
+      }
     }
   }
 }

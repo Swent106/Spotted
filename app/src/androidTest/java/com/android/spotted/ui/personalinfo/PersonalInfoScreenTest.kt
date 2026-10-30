@@ -26,12 +26,13 @@ import androidx.compose.ui.test.performTextInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.model.Location
+import com.android.spotted.R
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.location.AddressRepository
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.user.FakeUserRepository
-import com.android.spotted.ui.addpets.CameraPhotoFile
+import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.MapPickerTestTags
 import org.junit.Assert.assertEquals
@@ -521,6 +522,12 @@ class PersonalInfoScreenTest {
       PhotoOptionsDialog(
           hasPhoto = false,
           canTakePhoto = false,
+  fun photoOptions_cameraUnavailable_showsGalleryFallback() {
+    composeTestRule.setContent {
+      PhotoOptionsDialog(
+          hasPhoto = false,
+          canTakePhoto = true,
+          cameraError = true,
           onPickPhoto = {},
           onTakePhoto = {},
           onRemovePhoto = {},
