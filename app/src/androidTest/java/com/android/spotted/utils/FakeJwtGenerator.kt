@@ -15,7 +15,7 @@ object FakeJwtGenerator {
   fun createFakeGoogleIdToken(
       name: String = "Test User",
       email: String = "test@example.com",
-      sub: String = counter.toString()
+      sub: String = counter.toString(),
   ): String {
     val header = JSONObject(mapOf("alg" to "none"))
     val payload =

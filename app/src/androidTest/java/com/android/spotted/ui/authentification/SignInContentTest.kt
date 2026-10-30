@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.authentification
 
 import androidx.compose.ui.test.assertIsDisplayed
@@ -44,6 +45,18 @@ class SignInContentTest {
     setContent(SignInUiState(isLoading = true))
 
     composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
+  fun loadingStateWithError_showsErrorAndHidesSignInButton() {
+    setContent(SignInUiState(isLoading = true, errorMessage = "Try again"))
+
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).performScrollTo().assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE)
+        .performScrollTo()
+        .assertTextEquals("Try again")
     composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertDoesNotExist()
   }
 

@@ -1,10 +1,13 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.profile
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -50,6 +53,24 @@ class HelperProfileContentTest {
     composeTestRule
         .onNodeWithTag(HelperProfileTestTags.PETS_BROUGHT_HOME)
         .assertTextEquals("4 pets brought home")
+  }
+
+  @Test
+  fun blankAreaAndSingularCount_useTheirSingularLabels() {
+    setContent(HelperProfileUiState(name = "Rayen", homeArea = "  ", petsBroughtHome = 1))
+
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.AREA).assertTextEquals("Helping out nearby")
+    composeTestRule
+        .onNodeWithTag(HelperProfileTestTags.PETS_BROUGHT_HOME)
+        .assertTextEquals("1 pet brought home")
+    composeTestRule.onNodeWithText("Name, home area and alerts").assertExists()
+  }
+
+  @Test
+  fun leavingState_disablesAccountAction() {
+    setContent(HelperProfileUiState(isLeaving = true))
+
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.ACCOUNT_BUTTON).assertIsNotEnabled()
   }
 
   @Test
@@ -110,5 +131,21 @@ class HelperProfileContentTest {
 
     assertEquals(1, signOuts)
     assertEquals(1, deletions)
+  }
+
+  @Test
+  fun accountOptions_cancelCallsDismiss() {
+    var dismissals = 0
+    composeTestRule.setContent {
+      AccountOptionsDialog(
+          onSignOut = {},
+          onDeleteAccount = {},
+          onDismiss = { dismissals++ },
+      )
+    }
+
+    composeTestRule.onNodeWithText("Cancel").performClick()
+
+    assertEquals(1, dismissals)
   }
 }

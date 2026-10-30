@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.map
 
 import androidx.compose.ui.test.assertIsDisplayed
@@ -32,6 +33,17 @@ class AlertsMapContentTest {
 
     composeTestRule.onNodeWithTag(AlertsMapTestTags.MAP).assertIsDisplayed()
     composeTestRule.onNodeWithTag(AlertsMapTestTags.EMPTY).assertDoesNotExist()
+  }
+
+  @Test
+  fun alertWithUnavailablePhoto_stillShowsTheMapWithoutEmptyMessage() {
+    composeTestRule.setContent {
+      AlertsMapContent(alerts = listOf(NALA.copy(petPhotoUrl = "unknown://photo")))
+    }
+
+    composeTestRule.onNodeWithTag(AlertsMapTestTags.MAP).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(AlertsMapTestTags.EMPTY).assertDoesNotExist()
+    composeTestRule.waitForIdle()
   }
 
   @Test
