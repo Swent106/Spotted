@@ -419,6 +419,126 @@ class HomeViewModelTest {
         assertEquals(listOf(REX), viewModel.uiState.value.pets.items)
       }
 
+  // ===================== My missing pets =====================
+
+  /** [FakeAlertRepository] whose open alerts of an owner can't be loaded. */
+  private class FailingOwnAlertsRepository(private val fake: FakeAlertRepository) :
+      AlertRepository by fake {
+    override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> =
+        Result.failure(Exception("offline"))
+  }
+
+  private fun lunaMissing(status: AlertStatus = AlertStatus.OPEN) =
+      alert("luna-alert", ownerId = ALICE.uid, status = status).copy(petId = LUNA.id)
+
+  @Test
+  fun myMissingPets_none_whenTheUserHasNoOpenAlert() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
+  @Test
+  fun myMissingPets_openAlert_marksThePetMissing() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        val missing = lunaMissing()
+        publish(missing)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(missing), viewModel.uiState.value.ownLostPets)
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+      }
+
+  @Test
+  fun myMissingPets_closedAlert_isNotShown() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        publish(lunaMissing(status = AlertStatus.CLOSED))
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
+  @Test
+  fun myMissingPets_afterMarkFound_petIsSafeAgain() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        val missing = lunaMissing()
+        publish(missing)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+
+        alertRepository.closeAlert(missing.id)
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
+  @Test
+  fun myMissingPets_error_doesNotHideTheOtherSections() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        val theirs = alert("theirs")
+        publish(theirs)
+
+        val viewModel =
+            HomeViewModel(
+                authRepository = authRepository,
+                userRepository = userRepository,
+                petRepository = petRepository,
+                alertRepository = FailingOwnAlertsRepository(alertRepository),
+                searchCenter = CENTER,
+                radiusKm = RADIUS_KM,
+                now = { NOW },
+            )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.ownLostPets.isEmpty())
+        assertEquals(listOf(LUNA), state.pets.items)
+        assertNull(state.pets.errorMessage)
+        assertEquals(listOf(theirs), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertNull(state.errorMessage)
+      }
+
+  @Test
+  fun myMissingPets_switchingUser_neverShowsThePreviousUsersAlerts() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA, REX)
+        publish(lunaMissing())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+
+        signIn(BOB)
+        runCurrent() // Bob's alerts are still loading
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
   // ===================== Refresh =====================
 
   @Test
