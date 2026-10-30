@@ -50,4 +50,8 @@ data class HomeUiState(
     val nowMillis: Long = 0L,
     val distanceTexts: Map<String, String> = emptyMap(),
     val errorMessage: String? = null,
-)
+) {
+  /** Ids of the user's pets with an open alert: those are missing, the others are safe. */
+  val missingPetIds: Set<String>
+    get() = ownLostPets.mapTo(mutableSetOf()) { it.petId }
+}
