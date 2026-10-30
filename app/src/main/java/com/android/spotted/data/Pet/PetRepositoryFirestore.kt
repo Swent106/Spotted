@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.Pet
 
 import com.android.spotted.model.Pet.Behavior
@@ -78,16 +79,21 @@ class PetRepositoryFirestore(
     var behaviors: List<String> = emptyList()
     var note: String = ""
 
+    // The rules don't check species and behaviors, so a value this version doesn't know (e.g.
+    // added by a newer app) is read as OTHER or skipped: it must not hide all of the owner's pets
     fun toPet(id: String): Pet =
         Pet(
             id = id,
             ownerId = ownerId,
             name = name,
-            species = Species.valueOf(species),
+            species = Species.entries.firstOrNull { it.name == species } ?: Species.OTHER,
             breed = breed,
             photoUrl = photoUrl,
             allergies = allergies,
-            behaviors = behaviors.map(Behavior::valueOf).toSet(),
+            behaviors =
+                behaviors.mapNotNullTo(mutableSetOf()) { name ->
+                  Behavior.entries.firstOrNull { it.name == name }
+                },
             note = note,
         )
 
