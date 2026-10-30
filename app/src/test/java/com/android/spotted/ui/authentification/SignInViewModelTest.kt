@@ -7,7 +7,10 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.PasswordCredential
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialInterruptedException
 import androidx.credentials.exceptions.NoCredentialException
+import androidx.lifecycle.viewmodel.MutableCreationExtras
+import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -25,6 +28,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -39,6 +43,7 @@ import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verifyBlocking
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -209,6 +214,22 @@ class SignInViewModelTest {
       }
 
   @Test
+  fun otherGetCredentialException_showsSignInFailed_notNoGoogleAccount() =
+      runTest(testDispatcher) {
+        // An interrupted request says nothing about the accounts on the device
+        viewModel.signIn(
+            context,
+            credentialManagerThrowing(GetCredentialInterruptedException("Interrupted")),
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertNull(state.user)
+        assertEquals(SignInViewModel.SIGN_IN_FAILED, state.errorMessage)
+      }
+
+  @Test
   fun catchGenericException_showsUnexpectedError() =
       runTest(testDispatcher) {
         viewModel.signIn(context, credentialManagerThrowing(IllegalStateException("Boom")))
@@ -275,6 +296,23 @@ class SignInViewModelTest {
 
         assertFalse(viewModel.uiState.value.isLoading)
       }
+
+  // ===================== Factory =====================
+
+  @Test
+  fun factory_usesTheSharedAuthRepository() {
+    // The shared repository reads the mocked Firebase user when it is first created
+    whenever(fakeFirebaseUser.uid).thenReturn("uid")
+
+    val created =
+        SignInViewModel.Factory.create(SignInViewModel::class.java, MutableCreationExtras())
+
+    // The repository is private: read it to check it is the app-wide instance, not a new one
+    // (before #197, each SignInViewModel built its own AuthRepositoryFirebase)
+    val field = SignInViewModel::class.java.getDeclaredField("repository")
+    field.isAccessible = true
+    assertSame(AuthRepositoryProvider.authRepository, field.get(created))
+  }
 
   // ===================== No raw exception text =====================
 

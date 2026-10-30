@@ -2,12 +2,14 @@
 package com.android.spotted.ui.authentification
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -85,22 +87,27 @@ class SignInViewModel(private val repository: AuthRepository) : ViewModel() {
 
         repository.signInWithGoogle(extractGoogleIdToken(credential)).fold({ user ->
           _uiState.update { it.copy(isLoading = false, user = user, errorMessage = null) }
-        }) {
-          showError(SIGN_IN_FAILED)
+        }) { failure ->
+          showError(SIGN_IN_FAILED, failure)
         }
       } catch (e: CancellationException) {
         throw e
       } catch (e: GetCredentialCancellationException) {
-        showError(SIGN_IN_CANCELLED)
+        showError(SIGN_IN_CANCELLED, e)
+      } catch (e: NoCredentialException) {
+        showError(NO_GOOGLE_ACCOUNT, e)
       } catch (e: GetCredentialException) {
-        showError(NO_GOOGLE_ACCOUNT)
+        // Interrupted, unknown or configuration errors: the user may well have a Google account
+        showError(SIGN_IN_FAILED, e)
       } catch (e: Exception) {
-        showError(UNEXPECTED_ERROR)
+        showError(UNEXPECTED_ERROR, e)
       }
     }
   }
 
-  private fun showError(message: String) {
+  /** Shows [message] to the user; [cause] is only logged, its text never reaches the screen. */
+  private fun showError(message: String, cause: Throwable) {
+    Log.w(TAG, "Sign-in failed: $message", cause)
     _uiState.update { it.copy(isLoading = false, errorMessage = message, user = null) }
   }
 
@@ -129,6 +136,8 @@ class SignInViewModel(private val repository: AuthRepository) : ViewModel() {
   }
 
   companion object {
+    private const val TAG = "SignInViewModel"
+
     const val SIGN_IN_CANCELLED = "Sign-in cancelled"
     const val SIGN_IN_FAILED = "Couldn't sign you in. Please try again."
     const val NO_GOOGLE_ACCOUNT =
