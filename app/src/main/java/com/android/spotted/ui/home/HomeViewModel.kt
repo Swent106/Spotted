@@ -180,7 +180,6 @@ class HomeViewModel(
     updateFor(uid) { it.copy(pets = it.pets.after(result, PETS_LOAD_FAILED)) }
   }
 
-
   /** Loads "Lost near you" and returns the alerts, or null if they can't be loaded. */
   private suspend fun loadLostPetsNearby(
       uid: String,

@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -1114,6 +1115,73 @@ describe("Firestore sighting access rules", () => {
       }
     });
   }
+
+  describe("pet tag access rules", () => {
+    const tag = (tagId, petId, ownerId, extra = {}) => ({ tagId, petId, ownerId, linkedAtMillis: 1000, ...extra });
+    const seedTag = (id, petId, ownerId) =>
+      testEnvironment.withSecurityRulesDisabled((context) =>
+        setDoc(doc(context.firestore(), "petTags", id), tag(id, petId, ownerId)),
+      );
+
+    it("allows signed-in reads and denies anonymous reads", async () => {
+      await seedTag("A1B2C3D4", "pet-1", "owner-1");
+
+      await assertSucceeds(getDoc(doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4")));
+      await assertSucceeds(getDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4")));
+      await assertFails(getDoc(doc(firestoreForUser(null), "petTags", "A1B2C3D4")));
+    });
+
+    it("allows only pet owners to create tags with the exact schema", async () => {
+      await seedPet("pet-1", "owner-1");
+      for (const [uid, ownerId, allowed] of [
+        ["owner-1", "owner-1", true],
+        ["owner-2", "owner-2", false],
+        [null, "owner-1", false],
+      ]) {
+        const id = uid === "owner-1" ? "A1B2C3D4" : uid === "owner-2" ? "B1B2C3D4" : "C1B2C3D4";
+        const operation = setDoc(
+          doc(firestoreForUser(uid), "petTags", id),
+          tag(id, "pet-1", ownerId),
+        );
+        await (allowed ? assertSucceeds(operation) : assertFails(operation));
+      }
+      await assertFails(
+        setDoc(
+          doc(firestoreForUser("owner-1"), "petTags", "D1B2C3D4"),
+          tag("D1B2C3D4", "pet-1", "owner-1", { extraField: true }),
+        ),
+      );
+    });
+
+    it("lets owners move tags only between their own pets and keeps schema strict", async () => {
+      await seedPet("pet-1", "owner-1");
+      await seedPet("pet-2", "owner-1");
+      await seedPet("pet-3", "owner-2");
+      await seedTag("A1B2C3D4", "pet-1", "owner-1");
+      const ref = doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4");
+
+      await assertSucceeds(setDoc(ref, tag("A1B2C3D4", "pet-2", "owner-1")));
+      await assertFails(setDoc(ref, tag("A1B2C3D4", "pet-3", "owner-1")));
+      await assertFails(setDoc(ref, tag("A1B2C3D4", "pet-2", "owner-1", { extraField: true }))); //extraField is a member of the extras ellipse
+      await assertFails(
+        setDoc(
+          doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4"),
+          tag("A1B2C3D4", "pet-3", "owner-2"),
+        ),
+      );
+    });
+
+    it("allows only the pet owner to delete a tag", async () => {
+      await seedPet("pet-1", "owner-1");
+      for (const id of ["A1B2C3D4", "B1B2C3D4", "C1B2C3D4"]) {
+        await seedTag(id, "pet-1", "owner-1");
+      }
+
+      await assertFails(deleteDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4")));
+      await assertFails(deleteDoc(doc(firestoreForUser(null), "petTags", "B1B2C3D4")));
+      await assertSucceeds(deleteDoc(doc(firestoreForUser("owner-1"), "petTags", "C1B2C3D4")));
+    });
+  });
 });
 
 describe("Firestore photo access rules", () => {
