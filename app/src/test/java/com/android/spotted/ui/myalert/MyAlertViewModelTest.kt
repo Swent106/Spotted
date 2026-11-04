@@ -231,6 +231,73 @@ class MyAlertViewModelTest {
       }
 
   @Test
+  fun sightingsFailureWithMessage_isClearedBySuccessfulEmission() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        alertRepository.publishAlert(alert)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        sightingRepository.emitObservationFailure(IllegalStateException("permission denied"))
+        advanceUntilIdle()
+        assertEquals("permission denied", viewModel.uiState.value.errorMessage)
+
+        val sighting = sighting(status = SightingStatus.PENDING)
+        sightingRepository.emitObservationSuccess(listOf(sighting))
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.errorMessage)
+        assertEquals(listOf(sighting), viewModel.uiState.value.sightings)
+      }
+
+  @Test
+  fun sightingsFailureWithoutMessage_isClearedBySuccessfulEmission() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        alertRepository.publishAlert(alert)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        sightingRepository.emitObservationFailure(IllegalStateException())
+        advanceUntilIdle()
+        assertEquals(
+            MyAlertViewModel.SIGHTINGS_LOAD_FAILED,
+            viewModel.uiState.value.errorMessage,
+        )
+
+        val sighting = sighting(status = SightingStatus.PENDING)
+        sightingRepository.emitObservationSuccess(listOf(sighting))
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.errorMessage)
+        assertEquals(listOf(sighting), viewModel.uiState.value.sightings)
+      }
+
+  @Test
+  fun sightingsRecovery_doesNotClearStatusUpdateError() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        sightingRepository.statusFailure = IllegalStateException("offline")
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+        assertEquals("offline", viewModel.uiState.value.errorMessage)
+
+        sightingRepository.emitObservationSuccess(listOf(sighting))
+        advanceUntilIdle()
+
+        assertEquals("offline", viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
   fun markFoundFailure_showsErrorAndStaysOpen() =
       runTest(testDispatcher) {
         signIn()
@@ -286,8 +353,7 @@ class MyAlertViewModelTest {
   fun closedAlert_setsIsClosedOnLoad() =
       runTest(testDispatcher) {
         signIn()
-        val alert =
-            alert().copy(status = AlertStatus.CLOSED, closedAtMillis = NOW - 1)
+        val alert = alert().copy(status = AlertStatus.CLOSED, closedAtMillis = NOW - 1)
         alertRepository.publishAlert(alert)
         val viewModel = viewModel(alert.id)
 
@@ -301,8 +367,7 @@ class MyAlertViewModelTest {
   fun closedAlert_ignoresConfirmDismissAndMarkFound() =
       runTest(testDispatcher) {
         signIn()
-        val alert =
-            alert().copy(status = AlertStatus.CLOSED, closedAtMillis = NOW - 1)
+        val alert = alert().copy(status = AlertStatus.CLOSED, closedAtMillis = NOW - 1)
         val sighting = sighting(status = SightingStatus.PENDING)
         alertRepository.publishAlert(alert)
         sightingRepository.reportSighting(sighting)

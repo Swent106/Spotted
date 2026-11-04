@@ -32,6 +32,8 @@ class MyAlertViewModel(
 
   private val _uiState = MutableStateFlow(MyAlertUiState())
   val uiState: StateFlow<MyAlertUiState> = _uiState.asStateFlow()
+  // Tracks the stream error so a successful snapshot clears only that error, not action errors.
+  private var sightingsError: String? = null
 
   init {
     loadAlert()
@@ -83,15 +85,15 @@ class MyAlertViewModel(
                 it.copy(
                     sightings = sightings,
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
-                    errorMessage =
-                        if (it.errorMessage == SIGHTINGS_LOAD_FAILED) null else it.errorMessage,
+                    errorMessage = if (it.errorMessage == sightingsError) null else it.errorMessage,
                 )
               }
+              sightingsError = null
             },
             onFailure = { failure ->
-              _uiState.update {
-                it.copy(errorMessage = failure.localizedMessage ?: SIGHTINGS_LOAD_FAILED)
-              }
+              val message = failure.localizedMessage ?: SIGHTINGS_LOAD_FAILED
+              sightingsError = message
+              _uiState.update { it.copy(errorMessage = message) }
             },
         )
       }
