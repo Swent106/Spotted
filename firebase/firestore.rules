@@ -1,5 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 rules_version = '2';
+// Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -100,14 +102,22 @@ service cloud.firestore {
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
                 'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
           && d.keys().hasOnly([
-                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'status',
-                'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+                'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
+                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
           && validLocation(d.lastKnownLocation)
           && d.lostAtMillis is int
           && d.status in ['OPEN', 'CLOSED']
+          // An open alert has no closing time (the app writes null). A closed one must have one,
+          // after it was lost and not in the future: the time comes from the phone, so a minute
+          // of clock difference with the server is accepted.
+          && (d.status == 'OPEN'
+              ? d.get('closedAtMillis', null) == null
+              : (d.get('closedAtMillis', null) is int
+                  && d.closedAtMillis >= d.lostAtMillis
+                  && d.closedAtMillis <= request.time.toMillis() + 60000))
           && d.petName is string && d.petName.size() > 0 && d.petName.size() <= 100
           && d.petSpecies is string && d.petSpecies.size() <= 50
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
@@ -125,12 +135,15 @@ service cloud.firestore {
           && request.resource.data.status == 'OPEN'
           && ownsPet(request.resource.data.petId);
 
-      // The owner may only close the alert or move it; identity fields are immutable.
+      // The owner may only close an open alert or move it; identity fields are immutable.
+      // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
+      // field existed count as open.
       allow update: if request.auth != null
           && resource.data.ownerId == request.auth.uid
+          && resource.data.get('status', 'OPEN') == 'OPEN'
           && validAlert(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'lastKnownLocation']);
+               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis']);
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
@@ -228,6 +241,48 @@ service cloud.firestore {
           && request.resource.data.data is string
           && (resource == null || resource.data.ownerId == request.auth.uid);
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
+
+    // petTags/{tagId}: tagId (uppercase hex UID), petId, ownerId and
+    // linkedAtMillis are required. The four-field schema is strict.
+    match /petTags/{tagId} {
+      function ownsPet(petId) {
+        let petPath = /databases/$(database)/documents/pets/$(petId);
+        return isAuthenticated()
+          && exists(petPath)
+          && get(petPath).data.ownerId == request.auth.uid;
+      }
+
+      function isValidPetTag(data) {
+        return data.keys().hasAll(['tagId', 'petId', 'ownerId', 'linkedAtMillis'])
+          && data.keys().hasOnly(['tagId', 'petId', 'ownerId', 'linkedAtMillis'])
+          && data.tagId == tagId
+          && data.tagId is string
+          && data.tagId.matches('^[0-9A-F]{1,32}$')
+          && data.petId is string
+          && data.petId.size() > 0
+          && data.petId.size() <= 128
+          && data.ownerId is string
+          && data.ownerId.size() > 0
+          && data.ownerId.size() <= 128
+          && data.linkedAtMillis is int
+          && data.linkedAtMillis >=0; //copilot told me this doesn't prevent buffer overflow because:Firestore integers are bounded 64-bit values, and Kotlin reads this field as a Long
+      }
+
+      // Known UID lookups are allowed for signed-in users; collection queries are owner-scoped.
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      allow create: if isAuthenticated()
+          && isValidPetTag(request.resource.data)
+          && request.resource.data.ownerId == request.auth.uid
+          && ownsPet(request.resource.data.petId);
+      allow update: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && isValidPetTag(request.resource.data)
+          && request.resource.data.ownerId == resource.data.ownerId
+          && ownsPet(request.resource.data.petId);
+      allow delete: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid;
     }
 
     match /{document=**} {

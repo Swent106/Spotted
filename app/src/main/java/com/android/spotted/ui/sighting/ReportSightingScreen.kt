@@ -1,8 +1,8 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.sighting
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 
@@ -73,11 +75,8 @@ fun ReportSightingContent(
     onNoMatchSelected: () -> Unit = {},
     onSubmitClick: () -> Unit = {},
 ) {
-  val photoPickerLauncher =
-      rememberLauncherForActivityResult(
-          contract = ActivityResultContracts.PickVisualMedia(),
-          onResult = { uri -> onPhotoSelected(uri) },
-      )
+  val photoPickerActions =
+      rememberPhotoPickerActions(onPhotoSelected = onPhotoSelected, onCameraUnavailable = {})
 
   Column(
       modifier =
@@ -120,11 +119,7 @@ fun ReportSightingContent(
 
       // Retake / Add Photo Button in top right
       Button(
-          onClick = {
-            photoPickerLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
-          },
+          onClick = { photoPickerActions.pickFromGallery() },
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14161A)),
           shape = RoundedCornerShape(20.dp),
           modifier =
@@ -133,7 +128,10 @@ fun ReportSightingContent(
                   .testTag(ReportSightingScreenTestTags.PHOTO_BUTTON),
       ) {
         Text(
-            if (state.photoUri != null) "Retake" else "Add Photo",
+            stringResource(
+                if (state.photoUri != null) R.string.sighting_photo_retake
+                else R.string.sighting_photo_add
+            ),
             style = jakarta(13, 16f, 600, 0xFFFFFFFF),
         )
       }

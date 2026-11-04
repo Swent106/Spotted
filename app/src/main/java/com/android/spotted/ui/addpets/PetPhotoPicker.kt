@@ -1,12 +1,6 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.addpets
 
-import android.content.ActivityNotFoundException
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
-import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,11 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,9 +22,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.android.spotted.R
+import com.android.spotted.ui.components.CameraPhotoFile
+import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.SpottedButtonBorder
 import com.android.spotted.ui.theme.SpottedInputBackground
 import com.android.spotted.ui.theme.jakarta
@@ -66,47 +60,20 @@ object PetPhotoPickerTestTags {
 fun PetPhotoPicker(
     photoUri: String?,
     onPhotoSelected: (String?) -> Unit,
+    onPhotoError: () -> Unit,
     modifier: Modifier = Modifier,
     canTakePhoto: Boolean = rememberDeviceHasCamera(),
 ) {
-  val context = LocalContext.current
-
-  val galleryLauncher =
-      rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
-        // uri is null when the user closes the picker without choosing: keep the current photo.
-        if (uri != null) onPhotoSelected(uri.toString())
-      }
-
-  // File the camera app is writing to. Saved so it survives rotation, and the app being killed
-  // while the camera app is in front.
-  var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-
-  val cameraLauncher =
-      rememberLauncherForActivityResult(TakePicture()) { saved ->
-        val uri = pendingCameraUri ?: return@rememberLauncherForActivityResult
-        pendingCameraUri = null
-        if (saved) {
-          onPhotoSelected(uri.toString())
-        } else {
-          // Cancelled: keep the current photo and delete the empty file.
-          context.contentResolver.delete(uri, null, null)
-        }
-      }
+  val actions =
+      rememberPhotoPickerActions(
+          onPhotoSelected = { uri -> uri?.let { onPhotoSelected(it.toString()) } },
+          onCameraUnavailable = onPhotoError,
+      )
 
   PetPhotoPickerContent(
       photoUri = photoUri,
-      onPickPhoto = { galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
-      onTakePhoto = {
-        val uri = CameraPhotoFile.newPhotoUri(context)
-        pendingCameraUri = uri
-        try {
-          cameraLauncher.launch(uri)
-        } catch (e: ActivityNotFoundException) {
-          // No camera app installed: nothing happens, the gallery option still works.
-          pendingCameraUri = null
-          context.contentResolver.delete(uri, null, null)
-        }
-      },
+      onPickPhoto = actions.pickFromGallery,
+      onTakePhoto = actions.takePhoto,
       onRemovePhoto = { onPhotoSelected(null) },
       canTakePhoto = canTakePhoto,
       modifier = modifier,
@@ -144,7 +111,7 @@ fun PetPhotoPickerContent(
       if (photoUri != null) {
         AsyncImage(
             model = photoUri,
-            contentDescription = "Pet photo",
+            contentDescription = stringResource(R.string.pet_photo_description),
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(84.dp).testTag(PetPhotoPickerTestTags.PREVIEW),
         )
@@ -155,16 +122,36 @@ fun PetPhotoPickerContent(
         modifier = Modifier.weight(1f),
     ) {
       if (photoUri == null) {
-        PhotoButton("Upload a photo", PetPhotoPickerTestTags.ADD_BUTTON, onPickPhoto)
+        PhotoButton(
+            stringResource(R.string.pet_photo_upload),
+            PetPhotoPickerTestTags.ADD_BUTTON,
+            onPickPhoto,
+        )
         if (canTakePhoto) {
-          PhotoButton("Take a photo", PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON, onTakePhoto)
+          PhotoButton(
+              stringResource(R.string.photo_take),
+              PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
+              onTakePhoto,
+          )
         }
       } else {
-        PhotoButton("Change photo", PetPhotoPickerTestTags.CHANGE_BUTTON, onPickPhoto)
+        PhotoButton(
+            stringResource(R.string.photo_change),
+            PetPhotoPickerTestTags.CHANGE_BUTTON,
+            onPickPhoto,
+        )
         if (canTakePhoto) {
-          PhotoButton("Take a photo", PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON, onTakePhoto)
+          PhotoButton(
+              stringResource(R.string.photo_take),
+              PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
+              onTakePhoto,
+          )
         }
-        PhotoButton("Remove photo", PetPhotoPickerTestTags.REMOVE_BUTTON, onRemovePhoto)
+        PhotoButton(
+            stringResource(R.string.photo_remove),
+            PetPhotoPickerTestTags.REMOVE_BUTTON,
+            onRemovePhoto,
+        )
       }
     }
   }

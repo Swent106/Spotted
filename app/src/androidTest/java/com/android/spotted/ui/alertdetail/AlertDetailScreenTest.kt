@@ -12,10 +12,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -27,7 +30,7 @@ class AlertDetailScreenTest {
   @get:Rule val composeTestRule = createComposeRule()
 
   @Test
-  fun foundState_showsPetDetailsHighlightedNeedsAndReportAction() {
+  fun openAlert_showsPetDetailsHighlightedNeedsAndReportAction() {
     var reportClicked = false
     val alert =
         Alert(
@@ -86,6 +89,31 @@ class AlertDetailScreenTest {
   }
 
   @Test
+  fun closedAlert_showsFoundMessageAndHidesReportAction() {
+    val alert =
+        Alert(
+            id = "alert-closed",
+            petId = "pet-milo",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5197, 6.6323),
+            lostAtMillis = 1_700_000_000_000L,
+            closedAtMillis = 1_700_000_100_000L,
+            status = AlertStatus.CLOSED,
+            petName = "Milo",
+            petSpecies = Species.DOG,
+        )
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+    composeTestRule.setContent { AlertDetailContent(state = AlertDetailUiState(alert = alert)) }
+
+    composeTestRule
+        .onNodeWithTag(AlertDetailTestTags.FOUND_MESSAGE)
+        .assertIsDisplayed()
+        .assertTextEquals(context.getString(R.string.alert_detail_found_message, "Milo"))
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.REPORT_SIGHTING).assertDoesNotExist()
+  }
+
+  @Test
   fun errorState_showsFailureMessage() {
     composeTestRule.setContent {
       AlertDetailContent(state = AlertDetailUiState(errorMessage = "Couldn't load the alert."))
@@ -134,5 +162,26 @@ class AlertDetailScreenTest {
       state.value = AlertDetailUiState(alert = alert.copy(petSpecies = Species.DOG))
     }
     composeTestRule.onNodeWithText("Dog").assertIsDisplayed()
+  }
+
+  @Test
+  fun distance_isShownOnlyWhenKnown() {
+    val alert =
+        Alert(
+            id = "alert-3",
+            petId = "pet-3",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Nala",
+            petSpecies = Species.DOG,
+        )
+    val state = mutableStateOf(AlertDetailUiState(alert = alert, distanceText = "600 m away"))
+    composeTestRule.setContent { AlertDetailContent(state = state.value) }
+
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.DISTANCE).assertTextEquals("600 m away")
+
+    composeTestRule.runOnIdle { state.value = AlertDetailUiState(alert = alert) }
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.DISTANCE).assertDoesNotExist()
   }
 }

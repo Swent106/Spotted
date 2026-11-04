@@ -103,6 +103,8 @@ object HomeScreenTestTags {
 
   fun alertCard(alertId: String) = "home_alert_$alertId"
 
+  fun alertDistance(alertId: String) = "home_alertDistance_$alertId"
+
   fun seenButton(alertId: String) = "home_seenButton_$alertId"
 }
 

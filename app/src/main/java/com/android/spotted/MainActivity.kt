@@ -1,25 +1,23 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
@@ -33,6 +31,8 @@ import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
+import com.android.spotted.ui.alertdetail.AlertDetailScreen
+import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
@@ -53,10 +53,11 @@ object Route {
   const val HOME = "home"
   const val REPORT_MISSING = "report_missing"
   const val ALERT_ID = "alertId"
-  const val ALERT_DETAIL = "alert/{$ALERT_ID}"
-  const val REPORT_SIGHTING = "report_sighting/{$ALERT_ID}"
+  private const val ALERT = "alert"
+  const val ALERT_DETAIL = "$ALERT/{$ALERT_ID}"
   /** Report sighting opened from the Camera tab, for a pet not linked to an alert yet. */
   const val NEW_SIGHTING = "report_sighting"
+  const val REPORT_SIGHTING = "$NEW_SIGHTING/{$ALERT_ID}"
   /** Add pets opened from Home: not an onboarding step, it goes back to Home when done. */
   const val ADD_PET = "add_pet"
   const val MAP = "map"
@@ -64,13 +65,14 @@ object Route {
   /** The profile form, opened from the Helper profile to change name, area or radius. */
   const val EDIT_PROFILE = "edit_profile"
   const val PET_ID = "petId"
-  const val PET_PROFILE = "pet/{$PET_ID}"
+  private const val PET = "pet"
+  const val PET_PROFILE = "$PET/{$PET_ID}"
 
-  fun petProfile(petId: String) = "pet/$petId"
+  fun petProfile(petId: String) = "$PET/$petId"
 
-  fun alertDetail(alertId: String) = "alert/$alertId"
+  fun alertDetail(alertId: String) = "$ALERT/$alertId"
 
-  fun reportSighting(alertId: String) = "report_sighting/$alertId"
+  fun reportSighting(alertId: String) = "$NEW_SIGHTING/$alertId"
 }
 
 class MainActivity : ComponentActivity() {
@@ -106,18 +108,7 @@ fun SpottedApp(
   val destination by viewModel.uiState.collectAsState()
   val navController = rememberNavController()
 
-  LaunchedEffect(destination) {
-    val targetRoute =
-        when (destination) {
-          StartDestination.SIGNIN -> Route.SIGNIN
-          StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
-          StartDestination.HOME -> Route.HOME
-        }
-    navController.navigate(targetRoute) {
-      popUpTo(0) { inclusive = true }
-      launchSingleTop = true
-    }
-  }
+  StartRouting(destination, navController)
 
   NavHost(
       navController = navController,
@@ -135,6 +126,31 @@ fun SpottedApp(
     }
     addPetsDestination(navController)
     homeDestinations(navController)
+  }
+}
+
+/**
+ * Opens the screen for [destination] whenever it changes, clearing the back stack. The last
+ * destination handled is saved, so recreating the activity (e.g. rotating the phone) keeps the
+ * current screen instead of going back to the start one.
+ */
+@Composable
+fun StartRouting(destination: StartDestination, navController: NavController) {
+  var routedDestination by rememberSaveable { mutableStateOf<StartDestination?>(null) }
+
+  LaunchedEffect(destination) {
+    if (destination == routedDestination) return@LaunchedEffect
+    routedDestination = destination
+    val targetRoute =
+        when (destination) {
+          StartDestination.SIGNIN -> Route.SIGNIN
+          StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
+          StartDestination.HOME -> Route.HOME
+        }
+    navController.navigate(targetRoute) {
+      popUpTo(0) { inclusive = true }
+      launchSingleTop = true
+    }
   }
 }
 
@@ -165,11 +181,11 @@ fun NavGraphBuilder.addPetsDestination(
 
 /**
  * Home and the screens it opens. [homeContent] draws Home, [reportMissingContent] the Report
- * missing screen, [addPetContent] Add pets opened from Home, [petProfileContent] one of the user's
- * pets, [reportSightingContent] Report sighting (for an alert, or none from the Camera tab),
- * [mapContent] the Map tab, [profileContent] the Helper profile (Profile tab) and
- * [editProfileContent] the profile form it opens; tests replace them to use hand-built states
- * instead of the real ViewModels.
+ * missing screen, [alertDetailContent] an alert's detail, [addPetContent] Add pets opened from
+ * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
+ * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
+ * profile (Profile tab) and [editProfileContent] the profile form it opens; tests replace them to
+ * use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -188,6 +204,14 @@ fun NavGraphBuilder.homeDestinations(
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       ReportMissingScreen(onBack = onDone, onPublished = onDone)
     },
+    alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
+        { alertId, onReportSighting ->
+          AlertDetailScreen(
+              viewModel = viewModel(factory = AlertDetailViewModel.Factory),
+              alertId = alertId,
+              onReportSighting = onReportSighting,
+          )
+        },
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       AddPetsScreen(onBack = onDone, onDone = onDone, isOnboarding = false)
     },
@@ -248,7 +272,8 @@ fun NavGraphBuilder.homeDestinations(
   }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
   composable(Route.ALERT_DETAIL) { entry ->
-    AlertDetailScreenPlaceholder(entry.arguments?.getString(Route.ALERT_ID).orEmpty())
+    val alertId = entry.arguments?.getString(Route.ALERT_ID).orEmpty()
+    alertDetailContent(alertId) { navController.navigate(Route.reportSighting(alertId)) }
   }
   composable(Route.REPORT_SIGHTING) { entry ->
     reportSightingContent(entry.arguments?.getString(Route.ALERT_ID)) {
@@ -269,18 +294,3 @@ data class HomeNavigation(
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
 )
-
-/** Shown until the Alert detail screen exists (S2-09). */
-@Composable
-fun AlertDetailScreenPlaceholder(alertId: String) {
-  Column(
-      modifier = Modifier.fillMaxSize().padding(16.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-  ) {
-    Text(
-        text = "Alert $alertId",
-        modifier = Modifier.semantics { testTag = "alert_detail_screen" },
-    )
-  }
-}

@@ -15,6 +15,7 @@ data class Alert(
     val ownerId: String,
     val lastKnownLocation: Location,
     val lostAtMillis: Long,
+    val closedAtMillis: Long? = null,
     val status: AlertStatus = AlertStatus.OPEN,
     val petName: String,
     val petSpecies: Species,

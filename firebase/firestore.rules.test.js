@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -516,6 +517,7 @@ describe("Firestore alert access rules", () => {
     await assertSucceeds(
       updateDoc(doc(db, "alerts", "alert-1"), {
           status: "CLOSED",
+          closedAtMillis: 2000000,
           lastKnownLocation: {
               latitude: 47.0,
               longitude: 7.0
@@ -535,6 +537,206 @@ describe("Firestore alert access rules", () => {
 
     const db = firestoreForUser("owner-2");
     await assertFails(deleteDoc(doc(db, "alerts", "alert-1")));
+  });
+
+  function alertData(overrides = {}) {
+    return {
+      id: "alert-1",
+      ownerId: "owner-1",
+      petId: "pet-1",
+      lostAtMillis: 1000000,
+      closedAtMillis: null,
+      status: "OPEN",
+      petName: "Rex",
+      petSpecies: "DOG",
+      petAllergies: [],
+      petBehaviors: [],
+      lastKnownLocation: { latitude: 46.5, longitude: 6.6 },
+      ...overrides,
+    };
+  }
+
+  async function seedAlert(overrides = {}) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "alerts", "alert-1"), alertData(overrides));
+    });
+  }
+
+  const closing = { status: "CLOSED", closedAtMillis: 2000000 };
+
+  it("create: alert with a null closedAtMillis, as the app writes it, is allowed", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(setDoc(doc(db, "alerts", "alert-1"), alertData()));
+  });
+
+  it("create: alert that is already closed is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(setDoc(doc(db, "alerts", "alert-1"), alertData(closing)));
+  });
+
+  it("close: owner is allowed to close their open alert", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(updateDoc(doc(db, "alerts", "alert-1"), closing));
+  });
+
+  it("close: another user is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-2");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), closing));
+  });
+
+  it("close: anonymous user is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser(null);
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), closing));
+  });
+
+  it("close: owner can close a legacy alert stored without a status", async () => {
+    const { status, ...legacyAlert } = alertData();
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "alerts", "alert-1"), legacyAlert);
+    });
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(updateDoc(doc(db, "alerts", "alert-1"), closing));
+  });
+
+  it("update: open alert cannot carry a closing time", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { closedAtMillis: 2000000 }));
+  });
+
+  it("update: owner cannot change the ownerId", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { ownerId: "owner-2" }));
+  });
+
+  it("reopen: owner is denied to reopen a closed alert", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "OPEN", closedAtMillis: null })
+    );
+  });
+
+  it("reopen: another user is denied to reopen a closed alert", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-2");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "OPEN", closedAtMillis: null })
+    );
+  });
+
+  it("reopen: anonymous user is denied to reopen a closed alert", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser(null);
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "OPEN", closedAtMillis: null })
+    );
+  });
+
+  it("update: owner cannot move a closed alert", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), {
+        lastKnownLocation: { latitude: 47.0, longitude: 7.0 },
+      })
+    );
+  });
+
+  it("close: closing while also changing the ownerId is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { ...closing, ownerId: "owner-2" })
+    );
+  });
+
+  it("close: closing while also renaming the pet is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { ...closing, petName: "Max" }));
+  });
+
+  it("close: closed status without a closing time is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED" }));
+  });
+
+  it("close: closed status with a null closing time is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: null })
+    );
+  });
+
+  it("close: closing time in the future is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), {
+        status: "CLOSED",
+        closedAtMillis: Date.now() + 10 * 60 * 1000,
+      })
+    );
+  });
+
+  it("close: closing time before the pet was lost is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 999999 })
+    );
+  });
+
+  it("update: unknown status value is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { status: "foo" }));
+  });
+
+  it("update: owner can move their open alert", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(
+      updateDoc(doc(db, "alerts", "alert-1"), {
+        lastKnownLocation: { latitude: 47.0, longitude: 7.0 },
+      })
+    );
+  });
+
+  it("update: owner cannot rename the pet of their open alert", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { petName: "Max" }));
   });
 });
 
@@ -913,6 +1115,98 @@ describe("Firestore sighting access rules", () => {
       }
     });
   }
+
+  describe("pet tag access rules", () => {
+    const tag = (tagId, petId, ownerId, extra = {}) => ({ tagId, petId, ownerId, linkedAtMillis: 1000, ...extra });
+    const seedPet = (id, ownerId) =>
+      testEnvironment.withSecurityRulesDisabled((context) =>
+        setDoc(doc(context.firestore(), "pets", id), { ownerId }),
+      );
+    const seedTag = (id, petId, ownerId) =>
+      testEnvironment.withSecurityRulesDisabled((context) =>
+        setDoc(doc(context.firestore(), "petTags", id), tag(id, petId, ownerId)),
+      );
+
+    it("allows signed-in reads and denies anonymous reads", async () => {
+      await seedTag("A1B2C3D4", "pet-1", "owner-1");
+
+      await assertSucceeds(getDoc(doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4")));
+      await assertSucceeds(getDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4")));
+      await assertFails(getDoc(doc(firestoreForUser(null), "petTags", "A1B2C3D4")));
+    });
+
+    it("allows only owner-constrained tag queries", async () => {
+      await seedTag("A1B2C3D4", "pet-1", "owner-1");
+      const ownerTags = query(
+        collection(firestoreForUser("owner-1"), "petTags"),
+        where("ownerId", "==", "owner-1"),
+      );
+
+      await assertSucceeds(getDocs(ownerTags));
+      await assertFails(getDocs(collection(firestoreForUser("owner-1"), "petTags")));
+      await assertFails(
+        getDocs(
+          query(
+            collection(firestoreForUser("owner-1"), "petTags"),
+            where("ownerId", "==", "owner-2"),
+          ),
+        ),
+      );
+    });
+
+    it("allows only pet owners to create tags with the exact schema", async () => {
+      await seedPet("pet-1", "owner-1");
+      for (const [uid, ownerId, allowed] of [
+        ["owner-1", "owner-1", true],
+        ["owner-2", "owner-2", false],
+        [null, "owner-1", false],
+      ]) {
+        const id = uid === "owner-1" ? "A1B2C3D4" : uid === "owner-2" ? "B1B2C3D4" : "C1B2C3D4";
+        const operation = setDoc(
+          doc(firestoreForUser(uid), "petTags", id),
+          tag(id, "pet-1", ownerId),
+        );
+        await (allowed ? assertSucceeds(operation) : assertFails(operation));
+      }
+      await assertFails(
+        setDoc(
+          doc(firestoreForUser("owner-1"), "petTags", "D1B2C3D4"),
+          tag("D1B2C3D4", "pet-1", "owner-1", { extraField: true }),
+        ),
+      );
+    });
+
+    it("lets owners move tags only between their own pets and keeps schema strict", async () => {
+      await seedPet("pet-1", "owner-1");
+      await seedPet("pet-2", "owner-1");
+      await seedPet("pet-3", "owner-2");
+      await seedTag("A1B2C3D4", "pet-1", "owner-1");
+      const ref = doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4");
+
+      await assertSucceeds(setDoc(ref, tag("A1B2C3D4", "pet-2", "owner-1")));
+      await assertFails(setDoc(ref, tag("A1B2C3D4", "pet-3", "owner-1")));
+      await assertFails(setDoc(ref, tag("A1B2C3D4", "pet-2", "owner-1", { extraField: true }))); //extraField is a member of the extras ellipse
+      await assertFails(
+        setDoc(
+          doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4"),
+          tag("A1B2C3D4", "pet-3", "owner-2"),
+        ),
+      );
+    });
+
+    it("allows only the pet owner to delete a tag", async () => {
+      await seedPet("pet-1", "owner-1");
+      for (const id of ["A1B2C3D4", "B1B2C3D4", "C1B2C3D4", "D1B2C3D4"]) {
+        await seedTag(id, "pet-1", "owner-1");
+      }
+
+      await assertFails(deleteDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4")));
+      await assertFails(deleteDoc(doc(firestoreForUser(null), "petTags", "B1B2C3D4")));
+      await assertSucceeds(deleteDoc(doc(firestoreForUser("owner-1"), "petTags", "C1B2C3D4")));
+      await assertSucceeds(deleteDoc(doc(firestoreForUser("owner-1"), "pets", "pet-1")));
+      await assertSucceeds(deleteDoc(doc(firestoreForUser("owner-1"), "petTags", "D1B2C3D4")));
+    });
+  });
 });
 
 describe("Firestore photo access rules", () => {

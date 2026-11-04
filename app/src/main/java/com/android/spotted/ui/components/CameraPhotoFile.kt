@@ -1,4 +1,5 @@
-package com.android.spotted.ui.addpets
+// Portions of this code were generated with the help of Copilot.
+package com.android.spotted.ui.components
 
 import android.content.Context
 import android.content.pm.PackageManager

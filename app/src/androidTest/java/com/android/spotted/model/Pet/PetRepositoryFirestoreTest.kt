@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.Pet
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -92,29 +93,56 @@ class PetRepositoryFirestoreTest {
   }
 
   @Test
-  fun getPet_whenStoredPetHasInvalidSpecies_returnsFailure() = runTest {
+  fun getPet_whenStoredPetHasUnknownSpeciesAndBehavior_readsOtherAndSkipsTheBehavior() = runTest {
     val id = repository.getNewId()
     insertedPetIds += id
-    withContext(Dispatchers.IO) {
-      Tasks.await(
-          firestore
-              .collection("pets")
-              .document(id)
-              .set(
-                  mapOf(
-                      "ownerId" to currentUserId(),
-                      "name" to "Milo",
-                      "species" to "UNKNOWN_SPECIES",
-                  )
-              )
-      )
-    }
+    writeRawPet(
+        id,
+        species = "UNKNOWN_SPECIES",
+        behaviors = listOf(Behavior.FEARFUL_OF_STRANGERS.name, "UNKNOWN_BEHAVIOR"),
+    )
 
-    val result = repository.getPet(id)
+    val pet = repository.getPet(id).getOrThrow()
 
-    assertTrue(result.isFailure)
-    assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+    assertEquals(Species.OTHER, pet.species)
+    assertEquals(setOf(Behavior.FEARFUL_OF_STRANGERS), pet.behaviors)
   }
+
+  @Test
+  fun getPetsByOwner_whenOnePetHasUnknownSpecies_stillReturnsAllPets() = runTest {
+    val ownerId = currentUserId()
+    val knownPet = pet(id = repository.getNewId(), ownerId = ownerId, name = "Known")
+    val unknownId = repository.getNewId()
+    insertedPetIds += listOf(knownPet.id, unknownId)
+    repository.addPet(knownPet).getOrThrow()
+    writeRawPet(unknownId, species = "UNKNOWN_SPECIES")
+
+    val foundPets = repository.getPetsByOwner(ownerId).getOrThrow()
+
+    assertEquals(setOf(knownPet.id, unknownId), foundPets.map { it.id }.toSet())
+  }
+
+  /** Writes a pet document directly, bypassing the repository, as another app version could. */
+  private suspend fun writeRawPet(
+      id: String,
+      species: String,
+      behaviors: List<String> = emptyList(),
+  ) =
+      withContext(Dispatchers.IO) {
+        Tasks.await(
+            firestore
+                .collection("pets")
+                .document(id)
+                .set(
+                    mapOf(
+                        "ownerId" to currentUserId(),
+                        "name" to "Milo",
+                        "species" to species,
+                        "behaviors" to behaviors,
+                    )
+                )
+        )
+      }
 
   @Test
   fun getPetsByOwner_returnsOnlyThatOwnersPets() = runTest {

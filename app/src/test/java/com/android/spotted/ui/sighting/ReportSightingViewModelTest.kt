@@ -1,8 +1,10 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
@@ -376,5 +378,74 @@ class ReportSightingViewModelTest {
     assertEquals(Species.CAT, state.selectedSpecies)
     assertEquals(listOf("Milo"), state.nearbyAlerts.map { it.petName })
     assertTrue(state.canSubmit)
+  }
+
+  @Test
+  fun nearbyAlerts_onlyListsOpenAlerts() = runTest {
+    val alertRepository = FakeAlertRepository()
+    listOf(
+            Alert(
+                id = "alert-open",
+                petId = "pet-open",
+                ownerId = "owner",
+                lastKnownLocation = Location(46.52, 6.63),
+                lostAtMillis = 2L,
+                petName = "Milo",
+                petSpecies = Species.CAT,
+            ),
+            Alert(
+                id = "alert-closed",
+                petId = "pet-closed",
+                ownerId = "owner",
+                lastKnownLocation = Location(46.52, 6.63),
+                lostAtMillis = 1L,
+                closedAtMillis = 3L,
+                status = AlertStatus.CLOSED,
+                petName = "Luna",
+                petSpecies = Species.DOG,
+            ),
+        )
+        .forEach { alertRepository.publishAlert(it) }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(Location(46.52, 6.63))
+
+    assertEquals(listOf("alert-open"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+  }
+
+  @Test
+  fun preselectAlert_closedAlertDoesNotAddOrSelectIt() = runTest {
+    val alertRepository = FakeAlertRepository()
+    alertRepository.publishAlert(
+        Alert(
+            id = "alert-closed",
+            petId = "pet-closed",
+            ownerId = "owner",
+            lastKnownLocation = Location(46.52, 6.63),
+            lostAtMillis = 1L,
+            closedAtMillis = 3L,
+            status = AlertStatus.CLOSED,
+            petName = "Luna",
+            petSpecies = Species.DOG,
+        )
+    )
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.preselectAlert("alert-closed")
+
+    assertNull(vm.uiState.value.selectedAlertId)
+    assertTrue(vm.uiState.value.nearbyAlerts.isEmpty())
   }
 }

@@ -7,11 +7,16 @@ import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.formatDistance
+import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -414,6 +419,126 @@ class HomeViewModelTest {
         assertEquals(listOf(REX), viewModel.uiState.value.pets.items)
       }
 
+  // ===================== My missing pets =====================
+
+  /** [FakeAlertRepository] whose open alerts of an owner can't be loaded. */
+  private class FailingOwnAlertsRepository(private val fake: FakeAlertRepository) :
+      AlertRepository by fake {
+    override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> =
+        Result.failure(Exception("offline"))
+  }
+
+  private fun lunaMissing(status: AlertStatus = AlertStatus.OPEN) =
+      alert("luna-alert", ownerId = ALICE.uid, status = status).copy(petId = LUNA.id)
+
+  @Test
+  fun myMissingPets_none_whenTheUserHasNoOpenAlert() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
+  @Test
+  fun myMissingPets_openAlert_marksThePetMissing() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        val missing = lunaMissing()
+        publish(missing)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(missing), viewModel.uiState.value.ownLostPets)
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+      }
+
+  @Test
+  fun myMissingPets_closedAlert_isNotShown() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        publish(lunaMissing(status = AlertStatus.CLOSED))
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
+  @Test
+  fun myMissingPets_afterMarkFound_petIsSafeAgain() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        val missing = lunaMissing()
+        publish(missing)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+
+        alertRepository.closeAlert(missing.id)
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
+  @Test
+  fun myMissingPets_error_doesNotHideTheOtherSections() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA)
+        val theirs = alert("theirs")
+        publish(theirs)
+
+        val viewModel =
+            HomeViewModel(
+                authRepository = authRepository,
+                userRepository = userRepository,
+                petRepository = petRepository,
+                alertRepository = FailingOwnAlertsRepository(alertRepository),
+                searchCenter = CENTER,
+                radiusKm = RADIUS_KM,
+                now = { NOW },
+            )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.ownLostPets.isEmpty())
+        assertEquals(listOf(LUNA), state.pets.items)
+        assertNull(state.pets.errorMessage)
+        assertEquals(listOf(theirs), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertNull(state.errorMessage)
+      }
+
+  @Test
+  fun myMissingPets_switchingUser_neverShowsThePreviousUsersAlerts() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        addPets(LUNA, REX)
+        publish(lunaMissing())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+
+        signIn(BOB)
+        runCurrent() // Bob's alerts are still loading
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
+        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+      }
+
   // ===================== Refresh =====================
 
   @Test
@@ -485,6 +610,7 @@ class HomeViewModelTest {
     val CENTER = Location(latitude = 46.2044, longitude = 6.1432)
     val NEARBY = Location(latitude = 46.2050, longitude = 6.1440)
     val FAR_AWAY = Location(latitude = 47.3769, longitude = 8.5417) // Zurich
+    val DEVICE = Location(latitude = 46.2100, longitude = 6.1432) // About 600 m from CENTER
 
     val ALICE = User(uid = "alice", email = "alice@example.com")
     val BOB = User(uid = "bob", email = "bob@example.com")
@@ -592,5 +718,141 @@ class HomeViewModelTest {
 
         assertEquals(listOf(theirs), viewModel.uiState.value.lostPetsNearby.items)
         assertEquals(listOf(mine), viewModel.uiState.value.ownLostPets)
+      }
+
+  @Test
+  fun lostPets_areSearchedAroundTheDefaultCenter_whenTheHomeAreaIsBlank() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        // No pin and a blank area: the address lookup must not be used, or Zurich would be searched
+        saveProfile(ALICE_PROFILE.copy(homeArea = ""))
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inGeneva)
+
+        val viewModel = viewModelWithAddresses(FakeAddressRepository(location = FAR_AWAY))
+        advanceUntilIdle()
+
+        assertEquals(listOf(inGeneva), viewModel.uiState.value.lostPetsNearby.items)
+      }
+
+  /** Returns the alerts near a place oldest first, the reverse of the repository contract. */
+  private class OldestFirstAlertRepository(private val fake: FakeAlertRepository) :
+      AlertRepository by fake {
+    override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
+        fake.getOpenAlertsNear(center, radiusKm).map { it.reversed() }
+  }
+
+  @Test
+  fun lostPets_areNewestFirst_whateverTheOrderTheRepositoryReturns() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val older = alert("older", lostAtMillis = 1_000)
+        val newer = alert("newer", lostAtMillis = 2_000)
+        publish(older, newer)
+
+        val viewModel =
+            HomeViewModel(
+                authRepository = authRepository,
+                userRepository = userRepository,
+                petRepository = petRepository,
+                alertRepository = OldestFirstAlertRepository(alertRepository),
+                searchCenter = CENTER,
+                radiusKm = RADIUS_KM,
+                now = { NOW },
+            )
+        advanceUntilIdle()
+
+        assertEquals(listOf(newer, older), viewModel.uiState.value.lostPetsNearby.items)
+      }
+
+  // ===================== Distance to each lost pet =====================
+
+  private fun viewModelWithLocation(
+      locationRepository: FakeLocationRepository,
+      addressRepository: FakeAddressRepository? = null,
+  ) =
+      HomeViewModel(
+          authRepository = authRepository,
+          userRepository = userRepository,
+          petRepository = petRepository,
+          alertRepository = alertRepository,
+          searchCenter = CENTER,
+          radiusKm = RADIUS_KM,
+          now = { NOW },
+          addressRepository = addressRepository,
+          locationRepository = locationRepository,
+      )
+
+  @Test
+  fun distance_isMeasuredFromTheDevicePosition() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE.copy(homeLocation = CENTER))
+        publish(alert("geneva", location = NEARBY))
+
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = DEVICE))
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("geneva" to formatDistance(DEVICE.distanceKm(NEARBY))),
+            viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun distance_permissionDenied_isMeasuredFromTheHomePin() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE.copy(homeLocation = CENTER))
+        publish(alert("geneva", location = NEARBY))
+        val locationRepository =
+            FakeLocationRepository(location = DEVICE).apply {
+              failure = LocationException.PermissionDenied()
+            }
+
+        val viewModel = viewModelWithLocation(locationRepository)
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("geneva" to formatDistance(CENTER.distanceKm(NEARBY))),
+            viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun distance_noFix_isMeasuredFromTheHomeArea_whenThereIsNoPin() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE)
+        val inZurich = alert("zurich", location = Location(47.3800, 8.5417))
+        publish(inZurich)
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+
+        val viewModel =
+            viewModelWithLocation(locationRepository, FakeAddressRepository(location = FAR_AWAY))
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("zurich" to formatDistance(FAR_AWAY.distanceKm(inZurich.lastKnownLocation))),
+            viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun distance_noPositionAndNoHome_showsTheLostPetsWithoutDistance() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val inGeneva = alert("geneva", location = NEARBY)
+        publish(inGeneva)
+        val locationRepository =
+            FakeLocationRepository().apply { failure = LocationException.Unavailable() }
+
+        val viewModel = viewModelWithLocation(locationRepository)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(inGeneva), state.lostPetsNearby.items)
+        assertTrue(state.distanceTexts.isEmpty())
       }
 }

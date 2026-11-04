@@ -88,15 +88,13 @@ internal fun LazyListScope.lostPetsSection(
         }
   }
 
-  // The newest alert is highlighted, like Milo in Figma. Sorted here so that the featured card
-  // does not depend on the order the repository returns
-  val newestFirst =
-      lostPets.items.sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-  itemsIndexed(newestFirst, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
+  // The first alert is the newest (HomeViewModel sorts them): it is highlighted, like Milo in Figma
+  itemsIndexed(lostPets.items, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
     AlertCard(
         alert,
         featured = index == 0,
         state.nowMillis,
+        state.distanceTexts[alert.id],
         onAlertClick,
         onSeenPetClick,
         Modifier.padding(top = if (index == 0) 10.dp else 16.dp),
@@ -147,12 +145,16 @@ private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
   }
 }
 
-/** One lost pet: photo, name, species, time lost; the featured one has "I have seen this pet". */
+/**
+ * One lost pet: photo, name, species, time lost, distance when known; the featured one has "I have
+ * seen this pet".
+ */
 @Composable
 private fun AlertCard(
     alert: Alert,
     featured: Boolean,
     nowMillis: Long,
+    distanceText: String?,
     onAlertClick: (String) -> Unit,
     onSeenPetClick: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -205,6 +207,13 @@ private fun AlertCard(
                     if (featured) SpottedLostRed else SpottedTextSecondary,
                 ),
         )
+        if (distanceText != null) {
+          Text(
+              distanceText,
+              style = jakarta(13, 17f, FontWeight.Medium, SpottedTextSecondary),
+              modifier = Modifier.testTag(HomeScreenTestTags.alertDistance(alert.id)),
+          )
+        }
       }
     }
     if (featured) {

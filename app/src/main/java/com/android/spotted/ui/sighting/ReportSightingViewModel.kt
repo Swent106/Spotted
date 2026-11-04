@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.sighting
 
 import androidx.lifecycle.ViewModel
@@ -12,6 +13,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
+import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.location.LocationRepository
@@ -75,8 +77,14 @@ class ReportSightingViewModel(
       return
     }
     viewModelScope.launch {
-      repository.getAlertById(alertId).getOrNull()?.let { alert -> addAlertOptions(listOf(alert)) }
-      selectAlert(alertId)
+      repository
+          .getAlertById(alertId)
+          .getOrNull()
+          ?.takeIf { it.status == AlertStatus.OPEN }
+          ?.let { alert ->
+            addAlertOptions(listOf(alert))
+            selectAlert(alertId)
+          }
     }
   }
 
@@ -94,7 +102,7 @@ class ReportSightingViewModel(
       val known = state.nearbyAlerts.map { it.alertId }.toSet()
       val added =
           alerts
-              .filter { it.id !in known }
+              .filter { it.status == AlertStatus.OPEN && it.id !in known }
               .map { alert ->
                 NearbyAlertOption(
                     alertId = alert.id,

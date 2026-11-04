@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.authentification
 
 import android.content.Context
@@ -6,7 +7,10 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.PasswordCredential
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialInterruptedException
 import androidx.credentials.exceptions.NoCredentialException
+import androidx.lifecycle.viewmodel.MutableCreationExtras
+import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -24,6 +28,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,6 +43,7 @@ import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verifyBlocking
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -157,7 +163,7 @@ class SignInViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isLoading) // the loader does not spin forever
-        assertEquals("Unexpected error: Missing client id", state.errorMessage)
+        assertEquals(SignInViewModel.UNEXPECTED_ERROR, state.errorMessage)
       }
 
   @Test
@@ -171,7 +177,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Simulated authentication failure in FakeAuthRepository", state.errorMessage)
+        assertEquals(SignInViewModel.SIGN_IN_FAILED, state.errorMessage)
         assertNull(fakeRepo.currentUser.value)
       }
 
@@ -186,12 +192,12 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Sign-in cancelled", state.errorMessage)
+        assertEquals(SignInViewModel.SIGN_IN_CANCELLED, state.errorMessage)
         assertNull(fakeRepo.currentUser.value) // The repository is never called
       }
 
   @Test
-  fun catchGetCredentialException_showsFailedToGetCredentials() =
+  fun catchGetCredentialException_showsNoGoogleAccount() =
       runTest(testDispatcher) {
         // NoCredentialException is an androidx GetCredentialException (no Google account on the
         // device)
@@ -204,7 +210,23 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Failed to get credentials: No Google account", state.errorMessage)
+        assertEquals(SignInViewModel.NO_GOOGLE_ACCOUNT, state.errorMessage)
+      }
+
+  @Test
+  fun otherGetCredentialException_showsSignInFailed_notNoGoogleAccount() =
+      runTest(testDispatcher) {
+        // An interrupted request says nothing about the accounts on the device
+        viewModel.signIn(
+            context,
+            credentialManagerThrowing(GetCredentialInterruptedException("Interrupted")),
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertNull(state.user)
+        assertEquals(SignInViewModel.SIGN_IN_FAILED, state.errorMessage)
       }
 
   @Test
@@ -216,7 +238,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertEquals("Unexpected error: Boom", state.errorMessage)
+        assertEquals(SignInViewModel.UNEXPECTED_ERROR, state.errorMessage)
       }
 
   // ===================== extractGoogleIdToken =====================
@@ -236,7 +258,7 @@ class SignInViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertNull(state.user)
-        assertTrue(state.errorMessage!!.startsWith("Unexpected error: Unexpected credential type"))
+        assertEquals(SignInViewModel.UNEXPECTED_ERROR, state.errorMessage)
         assertNull(fakeRepo.currentUser.value) // The repository is never called
       }
 
@@ -273,6 +295,46 @@ class SignInViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isLoading)
+      }
+
+  // ===================== Factory =====================
+
+  @Test
+  fun factory_usesTheSharedAuthRepository() {
+    // The shared repository reads the mocked Firebase user when it is first created
+    whenever(fakeFirebaseUser.uid).thenReturn("uid")
+
+    val created =
+        SignInViewModel.Factory.create(SignInViewModel::class.java, MutableCreationExtras())
+
+    // The repository is private: read it to check it is the app-wide instance, not a new one
+    // (before #197, each SignInViewModel built its own AuthRepositoryFirebase)
+    val field = SignInViewModel::class.java.getDeclaredField("repository")
+    field.isAccessible = true
+    assertSame(AuthRepositoryProvider.authRepository, field.get(created))
+  }
+
+  // ===================== No raw exception text =====================
+
+  @Test
+  fun exceptionTexts_neverReachTheState() =
+      runTest(testDispatcher) {
+        val secret = "FirebaseAuthException: ERROR_INTERNAL token=abc"
+        val failures =
+            listOf(
+                NoCredentialException(secret),
+                IllegalStateException(secret),
+                GetCredentialCancellationException(secret),
+            )
+
+        for (failure in failures) {
+          viewModel.signIn(context, credentialManagerThrowing(failure))
+          advanceUntilIdle()
+
+          val message = viewModel.uiState.value.errorMessage!!
+          assertFalse("raw text shown for ${failure::class.simpleName}", secret in message)
+          viewModel.clearErrorMsg()
+        }
       }
 
   // ===================== clearErrorMsg =====================

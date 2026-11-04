@@ -16,12 +16,13 @@ internal data class AlertDto(
     val ownerId: String = "",
     val lastKnownLocation: LocationDto = LocationDto(),
     val lostAtMillis: Long = 0L,
+    val closedAtMillis: Long? = null,
     val status: String = AlertStatus.OPEN.name,
     val petName: String = "",
     val petSpecies: String = Species.DOG.name,
     val petPhotoUrl: String? = null,
     val petAllergies: List<String> = emptyList(),
-    val petBehaviors: List<String> = emptyList()
+    val petBehaviors: List<String> = emptyList(),
 ) {
   fun toDomain(): Alert? {
     val alertStatus = runCatching { AlertStatus.valueOf(status) }.getOrNull() ?: return null
@@ -32,6 +33,7 @@ internal data class AlertDto(
         ownerId = ownerId,
         lastKnownLocation = lastKnownLocation.toDomain(),
         lostAtMillis = lostAtMillis,
+        closedAtMillis = closedAtMillis,
         status = alertStatus,
         petName = petName,
         petSpecies = species,
@@ -40,7 +42,8 @@ internal data class AlertDto(
         petBehaviors =
             petBehaviors
                 .mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() }
-                .toSet())
+                .toSet(),
+    )
   }
 }
 
@@ -53,9 +56,11 @@ internal fun Alert.toDto() =
         ownerId = ownerId,
         lastKnownLocation = lastKnownLocation.toDto(),
         lostAtMillis = lostAtMillis,
+        closedAtMillis = closedAtMillis,
         status = status.name,
         petName = petName,
         petSpecies = petSpecies.name,
         petPhotoUrl = petPhotoUrl,
         petAllergies = petAllergies,
-        petBehaviors = petBehaviors.map { it.name })
+        petBehaviors = petBehaviors.map { it.name },
+    )
