@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -273,7 +272,7 @@ private fun PetsBroughtHome(count: Int) {
   ) {
     Text(
         if (count == 1) "1 pet brought home" else "$count pets brought home",
-        style = jakarta(25, 33f, FontWeight.ExtraBold, Color.White),
+        style = jakarta(25, 33f, FontWeight.ExtraBold, SpottedTheme.colors.onAccent),
         modifier = Modifier.testTag(HelperProfileTestTags.PETS_BROUGHT_HOME),
     )
     Text(

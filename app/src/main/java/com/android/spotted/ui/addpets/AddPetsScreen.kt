@@ -38,7 +38,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -419,9 +418,9 @@ private fun AddPetsFooter(
         colors =
             ButtonDefaults.buttonColors(
                 containerColor = SpottedTheme.colors.blue,
-                contentColor = Color.White,
+                contentColor = SpottedTheme.colors.onAccent,
                 disabledContainerColor = SpottedTheme.colors.blue.copy(alpha = 0.4f),
-                disabledContentColor = Color.White,
+                disabledContentColor = SpottedTheme.colors.onAccent,
             ),
         modifier =
             Modifier.weight(1f)
@@ -430,14 +429,14 @@ private fun AddPetsFooter(
     ) {
       if (state.isSaving) {
         CircularProgressIndicator(
-            color = Color.White,
+            color = SpottedTheme.colors.onAccent,
             strokeWidth = 2.dp,
             modifier = Modifier.size(20.dp).testTag(AddPetsScreenTestTags.LOADER),
         )
       } else {
         Text(
             stringResource(R.string.add_pets_save_and_continue),
-            style = jakarta(15, 20f, 700, Color.White),
+            style = jakarta(15, 20f, 700, SpottedTheme.colors.onAccent),
         )
       }
     }

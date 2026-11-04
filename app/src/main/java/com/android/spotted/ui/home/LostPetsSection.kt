@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -234,7 +233,10 @@ private fun AlertCard(
                   .height(50.dp)
                   .testTag(HomeScreenTestTags.seenButton(alert.id)),
       ) {
-        Text("I have seen this pet", style = jakarta(15, 20f, FontWeight.SemiBold, Color.White))
+        Text(
+            "I have seen this pet",
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.onAccent),
+        )
       }
     }
   }

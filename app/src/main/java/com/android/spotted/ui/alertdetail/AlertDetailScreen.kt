@@ -37,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -233,7 +232,7 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
     } else {
       Text(
           "[ PHOTO OF THE PET ]",
-          style = jakarta(13, 18f, 700, Color.White),
+          style = jakarta(13, 18f, 700, SpottedTheme.colors.onAccent),
           modifier =
               Modifier.align(Alignment.Center).testTag(AlertDetailTestTags.PHOTO_PLACEHOLDER),
       )
@@ -256,11 +255,11 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
                   .padding(horizontal = 10.dp, vertical = 6.dp),
           verticalAlignment = Alignment.CenterVertically,
       ) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+        Box(Modifier.size(7.dp).clip(CircleShape).background(SpottedTheme.colors.onAccent))
         Spacer(Modifier.width(6.dp))
         Text(
             "Missing · ${timeSinceLost(alert.lostAtMillis).removeSuffix(" ago")}",
-            style = jakarta(11, 14f, 700, Color.White),
+            style = jakarta(11, 14f, 700, SpottedTheme.colors.onAccent),
         )
       }
     }

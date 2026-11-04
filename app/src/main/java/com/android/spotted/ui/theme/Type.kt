@@ -22,23 +22,10 @@ val PlusJakartaSans =
         Font(R.font.plus_jakarta_sans_extrabold, FontWeight.ExtraBold),
     )
 
-fun jakarta(
-    size: Int,
-    line: Float,
-    weight: Int,
-    color: Long,
-    align: TextAlign = TextAlign.Start,
-) =
-    TextStyle(
-        fontSize = size.sp,
-        lineHeight = line.sp,
-        fontFamily = PlusJakartaSans,
-        fontWeight = FontWeight(weight),
-        color = Color(color),
-        textAlign = align,
-    )
-
-/** Same as the [jakarta] above, with a theme colour, e.g. `SpottedTheme.colors.ink`. */
+/**
+ * A Plus Jakarta Sans text style, with a theme colour such as `SpottedTheme.colors.ink`. There is
+ * no overload taking a hex colour, so text colours always come from the theme.
+ */
 fun jakarta(
     size: Int,
     line: Float,

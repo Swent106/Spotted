@@ -271,7 +271,7 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
                   .background(SpottedTheme.colors.blue)
                   .border(3.dp, SpottedTheme.colors.surface, CircleShape),
       ) {
-        Text("+", style = jakarta(16, 18, FontWeight.ExtraBold, Color.White))
+        Text("+", style = jakarta(16, 18, FontWeight.ExtraBold, SpottedTheme.colors.onAccent))
       }
     }
     Text(
@@ -462,9 +462,9 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
       colors =
           ButtonDefaults.buttonColors(
               containerColor = SpottedTheme.colors.blue,
-              contentColor = Color.White,
+              contentColor = SpottedTheme.colors.onAccent,
               disabledContainerColor = SpottedTheme.colors.blue.copy(alpha = 0.4f),
-              disabledContentColor = Color.White,
+              disabledContentColor = SpottedTheme.colors.onAccent,
           ),
       modifier =
           Modifier.fillMaxWidth()
@@ -473,14 +473,14 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
   ) {
     if (state.isSaving) {
       CircularProgressIndicator(
-          color = Color.White,
+          color = SpottedTheme.colors.onAccent,
           strokeWidth = 2.dp,
           modifier = Modifier.size(20.dp).testTag(PersonalInfoScreenTestTags.LOADER),
       )
     } else {
       Text(
           if (state.isEditing) "Save changes" else "Create profile",
-          style = jakarta(15, 20, Bold, Color.White),
+          style = jakarta(15, 20, Bold, SpottedTheme.colors.onAccent),
       )
     }
   }

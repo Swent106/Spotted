@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -157,12 +156,12 @@ fun ReportMissingContent(
     ) {
       if (state.isPublishing) {
         CircularProgressIndicator(
-            color = Color.White,
+            color = SpottedTheme.colors.onAccent,
             strokeWidth = 2.dp,
             modifier = Modifier.size(20.dp).testTag(ReportMissingScreenTestTags.PUBLISH_LOADER),
         )
       } else {
-        Text("Publish alert", style = jakarta(16, 20f, 700, Color.White))
+        Text("Publish alert", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
       }
     }
   }

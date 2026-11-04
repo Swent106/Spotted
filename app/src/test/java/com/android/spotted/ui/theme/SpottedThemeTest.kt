@@ -39,9 +39,9 @@ class SpottedThemeTest {
     showTheme(darkTheme = false)
 
     assertEquals(LightSpottedColors, colors)
-    assertEquals(SpottedBlue, scheme.primary)
-    assertEquals(SpottedScreenBackground, scheme.background)
-    assertEquals(SpottedInk, scheme.onSurface)
+    assertEquals(LightSpottedColors.blue, scheme.primary)
+    assertEquals(LightSpottedColors.screenBackground, scheme.background)
+    assertEquals(LightSpottedColors.ink, scheme.onSurface)
   }
 
   @Test

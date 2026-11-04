@@ -134,7 +134,7 @@ fun ReportSightingContent(
                 if (state.photoUri != null) R.string.sighting_photo_retake
                 else R.string.sighting_photo_add
             ),
-            style = jakarta(13, 16f, 600, Color.White),
+            style = jakarta(13, 16f, 600, SpottedTheme.colors.onAccent),
         )
       }
 
@@ -344,7 +344,7 @@ fun ReportSightingContent(
         ) {
           Text(
               "Send sighting",
-              style = jakarta(16, 20f, 700, Color.White),
+              style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent),
           )
         }
       }
@@ -431,6 +431,8 @@ private fun LocationPinIcon(modifier: Modifier = Modifier) {
 
 @Composable
 private fun CheckIcon(modifier: Modifier = Modifier) {
+  // Read before drawing: the Canvas lambda is not composable
+  val checkColor = SpottedTheme.colors.onAccent
   Canvas(modifier = modifier) {
     val path =
         Path().apply {
@@ -440,7 +442,7 @@ private fun CheckIcon(modifier: Modifier = Modifier) {
         }
     drawPath(
         path = path,
-        color = Color.White,
+        color = checkColor,
         style = Stroke(width = size.width * 0.2f),
     )
   }
