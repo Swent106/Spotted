@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.profile
 
 import androidx.compose.foundation.Image
@@ -67,6 +68,7 @@ import com.android.spotted.ui.theme.SpottedTextFaint
 import com.android.spotted.ui.theme.SpottedTextLabel
 import com.android.spotted.ui.theme.SpottedTextMuted
 import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import kotlinx.coroutines.launch
 
@@ -410,9 +412,12 @@ internal fun AccountOptionsDialog(
     onDeleteAccount: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+  // Colours from the theme: with fixed light ones, the title was black on the dark dialog
+  val colors = SpottedTheme.colors
   AlertDialog(
       onDismissRequest = onDismiss,
-      title = { Text("Your account", style = jakarta(18, 24f, FontWeight.ExtraBold, SpottedInk)) },
+      containerColor = colors.surface,
+      title = { Text("Your account", style = jakarta(18, 24f, FontWeight.ExtraBold, colors.ink)) },
       text = {
         Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
           TextButton(
@@ -421,7 +426,7 @@ internal fun AccountOptionsDialog(
           ) {
             Text(
                 "Sign out",
-                style = jakarta(15, 20f, FontWeight.SemiBold, SpottedBlue),
+                style = jakarta(15, 20f, FontWeight.SemiBold, colors.blue),
                 modifier = Modifier.fillMaxWidth(),
             )
           }
@@ -430,10 +435,10 @@ internal fun AccountOptionsDialog(
               modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.DELETE_ACCOUNT),
           ) {
             Column(Modifier.fillMaxWidth()) {
-              Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, SpottedError))
+              Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, colors.error))
               Text(
                   "Removes your profile from Spotted. You can sign in again to start over.",
-                  style = jakarta(12, 16f, FontWeight.Medium, SpottedTextSecondary),
+                  style = jakarta(12, 16f, FontWeight.Medium, colors.textSecondary),
               )
             }
           }
