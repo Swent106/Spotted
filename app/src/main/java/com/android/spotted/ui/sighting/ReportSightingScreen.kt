@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.sighting
 
@@ -51,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.components.rememberPhotoPickerActions
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 
@@ -81,7 +83,7 @@ fun ReportSightingContent(
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(Color(0xFFEFEFEF))
+              .background(SpottedTheme.colors.screenBackground)
               .paint(
                   painterResource(R.drawable.background_textures),
                   contentScale = ContentScale.Crop,
@@ -94,7 +96,7 @@ fun ReportSightingContent(
         modifier =
             Modifier.fillMaxWidth()
                 .height(260.dp)
-                .background(Color(0xFF1E2026))
+                .background(SpottedTheme.colors.ink)
                 .testTag(ReportSightingScreenTestTags.PHOTO_AREA),
         contentAlignment = Alignment.Center,
     ) {
@@ -112,7 +114,7 @@ fun ReportSightingContent(
         ) {
           Text(
               "[ PHOTO OF THE ANIMAL ]",
-              style = jakarta(14, 18f, 600, 0xFF8E95A2),
+              style = jakarta(14, 18f, 600, SpottedTheme.colors.textMuted),
           )
         }
       }
@@ -120,7 +122,7 @@ fun ReportSightingContent(
       // Retake / Add Photo Button in top right
       Button(
           onClick = { photoPickerActions.pickFromGallery() },
-          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14161A)),
+          colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.ink),
           shape = RoundedCornerShape(20.dp),
           modifier =
               Modifier.align(Alignment.TopEnd)
@@ -132,7 +134,7 @@ fun ReportSightingContent(
                 if (state.photoUri != null) R.string.sighting_photo_retake
                 else R.string.sighting_photo_add
             ),
-            style = jakarta(13, 16f, 600, 0xFFFFFFFF),
+            style = jakarta(13, 16f, 600, Color.White),
         )
       }
 
@@ -142,12 +144,12 @@ fun ReportSightingContent(
             modifier =
                 Modifier.align(Alignment.BottomStart)
                     .padding(16.dp)
-                    .background(Color.White, RoundedCornerShape(100.dp))
+                    .background(SpottedTheme.colors.surface, RoundedCornerShape(100.dp))
                     .padding(horizontal = 14.dp, vertical = 6.dp),
         ) {
           Text(
               "Looks like a ${species.name.lowercase()} · you can correct this",
-              style = jakarta(12, 16f, 600, 0xFF2C3340),
+              style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
           )
         }
       }
@@ -160,7 +162,7 @@ fun ReportSightingContent(
     ) {
       Text(
           "New sighting",
-          style = jakarta(26, 32f, 800, 0xFF14161A),
+          style = jakarta(26, 32f, 800, SpottedTheme.colors.ink),
       )
 
       // Location Card
@@ -168,14 +170,15 @@ fun ReportSightingContent(
           verticalAlignment = Alignment.CenterVertically,
           modifier =
               Modifier.fillMaxWidth()
-                  .background(Color.White, RoundedCornerShape(16.dp))
+                  .background(SpottedTheme.colors.surface, RoundedCornerShape(16.dp))
                   .clickable { onLocationClick() }
                   .padding(16.dp)
                   .testTag(ReportSightingScreenTestTags.LOCATION_CARD),
       ) {
         Box(
             modifier =
-                Modifier.size(44.dp).background(Color(0xFFE8EEFC), RoundedCornerShape(12.dp)),
+                Modifier.size(44.dp)
+                    .background(SpottedTheme.colors.mapBackground, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
         ) {
           LocationPinIcon(modifier = Modifier.size(20.dp))
@@ -184,19 +187,19 @@ fun ReportSightingContent(
         Column(modifier = Modifier.weight(1f)) {
           Text(
               state.locationAddress,
-              style = jakarta(16, 20f, 700, 0xFF14161A),
+              style = jakarta(16, 20f, 700, SpottedTheme.colors.ink),
           )
           Text(
               state.location?.let { "%.4f, %.4f".format(Locale.US, it.latitude, it.longitude) }
                   ?: "Tap to use your GPS position",
-              style = jakarta(12, 16f, 500, 0xFF5F6672),
+              style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
           )
         }
       }
 
       Text(
           "WHICH PET DID YOU SEE?",
-          style = jakarta(12, 16f, 700, 0xFF8E95A2),
+          style = jakarta(12, 16f, 700, SpottedTheme.colors.textMuted),
           modifier = Modifier.padding(top = 8.dp),
       )
 
@@ -211,17 +214,21 @@ fun ReportSightingContent(
                         border =
                             BorderStroke(
                                 if (isSelected) 2.dp else 1.dp,
-                                if (isSelected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
+                                if (isSelected) SpottedTheme.colors.blue
+                                else SpottedTheme.colors.buttonBorder,
                             ),
                         shape = RoundedCornerShape(16.dp),
                     )
-                    .background(Color.White, RoundedCornerShape(16.dp))
+                    .background(SpottedTheme.colors.surface, RoundedCornerShape(16.dp))
                     .clickable { onAlertSelected(alert.alertId) }
                     .padding(16.dp)
                     .testTag("${ReportSightingScreenTestTags.PET_OPTION_PREFIX}${alert.alertId}"),
         ) {
           Box(
-              modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFF0E0CE)),
+              modifier =
+                  Modifier.size(44.dp)
+                      .clip(CircleShape)
+                      .background(SpottedTheme.colors.featuredPhotoBackground),
               contentAlignment = Alignment.Center,
           ) {
             if (alert.photoUrl != null) {
@@ -232,13 +239,16 @@ fun ReportSightingContent(
                   modifier = Modifier.fillMaxSize(),
               )
             } else {
-              Text(alert.petName.take(1), style = jakarta(18, 22f, 700, 0xFF14161A))
+              Text(alert.petName.take(1), style = jakarta(18, 22f, 700, SpottedTheme.colors.ink))
             }
           }
           Spacer(Modifier.width(12.dp))
           Column(modifier = Modifier.weight(1f)) {
-            Text(alert.petName, style = jakarta(16, 20f, 700, 0xFF14161A))
-            Text(alert.description, style = jakarta(12, 16f, 500, 0xFF5F6672))
+            Text(alert.petName, style = jakarta(16, 20f, 700, SpottedTheme.colors.ink))
+            Text(
+                alert.description,
+                style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
+            )
           }
           RadioSelectionIndicator(isSelected = isSelected)
         }
@@ -253,27 +263,31 @@ fun ReportSightingContent(
                       border =
                           BorderStroke(
                               if (state.isNoMatchingAlertSelected) 2.dp else 1.dp,
-                              if (state.isNoMatchingAlertSelected) Color(0xFF2563EB)
-                              else Color(0xFFE5E7EB),
+                              if (state.isNoMatchingAlertSelected) SpottedTheme.colors.blue
+                              else SpottedTheme.colors.buttonBorder,
                           ),
                       shape = RoundedCornerShape(16.dp),
                   )
-                  .background(Color.White, RoundedCornerShape(16.dp))
+                  .background(SpottedTheme.colors.surface, RoundedCornerShape(16.dp))
                   .clickable { onNoMatchSelected() }
                   .padding(16.dp)
                   .testTag(ReportSightingScreenTestTags.NO_MATCH_OPTION),
       ) {
         Box(
             modifier =
-                Modifier.size(44.dp).background(Color(0xFFF3F4F6), RoundedCornerShape(12.dp)),
+                Modifier.size(44.dp)
+                    .background(SpottedTheme.colors.inputBackground, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
         ) {
-          Text("?", style = jakarta(20, 24f, 700, 0xFF4B5563))
+          Text("?", style = jakarta(20, 24f, 700, SpottedTheme.colors.inkSoft))
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-          Text("No matching alert", style = jakarta(16, 20f, 700, 0xFF14161A))
-          Text("Report it as a stray I saw", style = jakarta(12, 16f, 500, 0xFF5F6672))
+          Text("No matching alert", style = jakarta(16, 20f, 700, SpottedTheme.colors.ink))
+          Text(
+              "Report it as a stray I saw",
+              style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
+          )
         }
         RadioSelectionIndicator(isSelected = state.isNoMatchingAlertSelected)
       }
@@ -284,16 +298,16 @@ fun ReportSightingContent(
             verticalAlignment = Alignment.CenterVertically,
             modifier =
                 Modifier.fillMaxWidth()
-                    .background(Color(0xFFFEF3C7), RoundedCornerShape(12.dp))
+                    .background(SpottedTheme.colors.warningTint, RoundedCornerShape(12.dp))
                     .padding(14.dp),
         ) {
-          Text("⚠", style = jakarta(18, 22f, 700, 0xFFD97706))
+          Text("⚠", style = jakarta(18, 22f, 700, SpottedTheme.colors.warning))
           Spacer(Modifier.width(10.dp))
           Column {
-            Text("You are offline", style = jakarta(13, 18f, 700, 0xFF92400E))
+            Text("You are offline", style = jakarta(13, 18f, 700, SpottedTheme.colors.warning))
             Text(
                 "Saved on your phone, sent when signal is back",
-                style = jakarta(11, 15f, 500, 0xFFB45309),
+                style = jakarta(11, 15f, 500, SpottedTheme.colors.warning),
             )
           }
         }
@@ -310,7 +324,7 @@ fun ReportSightingContent(
                   Modifier.size(36.dp).testTag(ReportSightingScreenTestTags.LOADER).semantics {
                     contentDescription = "Submitting sighting"
                   },
-              color = Color(0xFF2563EB),
+              color = SpottedTheme.colors.blue,
           )
         }
       } else {
@@ -319,8 +333,8 @@ fun ReportSightingContent(
             enabled = state.canSubmit,
             colors =
                 ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF2563EB),
-                    disabledContainerColor = Color(0xFF93C5FD),
+                    containerColor = SpottedTheme.colors.blue,
+                    disabledContainerColor = SpottedTheme.colors.blue.copy(alpha = 0.45f),
                 ),
             shape = RoundedCornerShape(12.dp),
             modifier =
@@ -330,7 +344,7 @@ fun ReportSightingContent(
         ) {
           Text(
               "Send sighting",
-              style = jakarta(16, 20f, 700, 0xFFFFFFFF),
+              style = jakarta(16, 20f, 700, Color.White),
           )
         }
       }
@@ -340,7 +354,7 @@ fun ReportSightingContent(
         Text(
             msg,
             modifier = Modifier.fillMaxWidth().testTag(ReportSightingScreenTestTags.ERROR_MESSAGE),
-            style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
+            style = jakarta(13, 18f, 600, SpottedTheme.colors.error, TextAlign.Center),
         )
       }
     }
@@ -353,12 +367,12 @@ private fun RadioSelectionIndicator(isSelected: Boolean) {
       modifier =
           Modifier.size(24.dp)
               .background(
-                  if (isSelected) Color(0xFF2563EB) else Color.Transparent,
+                  if (isSelected) SpottedTheme.colors.blue else Color.Transparent,
                   CircleShape,
               )
               .border(
                   1.5.dp,
-                  if (isSelected) Color(0xFF2563EB) else Color(0xFF9CA3AF),
+                  if (isSelected) SpottedTheme.colors.blue else SpottedTheme.colors.textMuted,
                   CircleShape,
               ),
       contentAlignment = Alignment.Center,
@@ -371,6 +385,8 @@ private fun RadioSelectionIndicator(isSelected: Boolean) {
 
 @Composable
 private fun LocationPinIcon(modifier: Modifier = Modifier) {
+  // Read before drawing: the Canvas lambda is not composable
+  val pinColor = SpottedTheme.colors.blue
   Canvas(modifier = modifier) {
     val path =
         Path().apply {
@@ -409,7 +425,7 @@ private fun LocationPinIcon(modifier: Modifier = Modifier) {
           )
           close()
         }
-    drawPath(path = path, color = Color(0xFF2563EB))
+    drawPath(path = path, color = pinColor)
   }
 }
 

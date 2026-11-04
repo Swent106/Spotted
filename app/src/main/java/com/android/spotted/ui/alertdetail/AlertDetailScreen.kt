@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of GitHub Copilot.
 package com.android.spotted.ui.alertdetail
 
@@ -55,6 +56,8 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.ui.theme.SpottedIllustration
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 
@@ -172,7 +175,10 @@ private fun AlertDetails(
 ) {
   Column(
       modifier =
-          modifier.fillMaxSize().background(Color(0xFFF5F4F0)).testTag(AlertDetailTestTags.SCREEN),
+          modifier
+              .fillMaxSize()
+              .background(SpottedTheme.colors.screenBackground)
+              .testTag(AlertDetailTestTags.SCREEN),
   ) {
     PetPhotoHeader(alert = alert, onBack = onBack, onShare = onShare)
     Column(
@@ -180,7 +186,7 @@ private fun AlertDetails(
             Modifier.weight(1f)
                 .offset(y = (-18).dp)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
-                .background(Color.White)
+                .background(SpottedTheme.colors.surface)
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -188,7 +194,7 @@ private fun AlertDetails(
       if (alert.status == AlertStatus.CLOSED) {
         Text(
             text = stringResource(R.string.alert_detail_found_message, alert.petName),
-            style = jakarta(16, 22f, 700, 0xFF1B5BD7),
+            style = jakarta(16, 22f, 700, SpottedTheme.colors.blue),
             modifier = Modifier.testTag(AlertDetailTestTags.FOUND_MESSAGE),
         )
       }
@@ -210,7 +216,10 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
               .height(255.dp)
               .background(
                   Brush.verticalGradient(
-                      listOf(Color(0xFFA88D71), Color(0xFFE3B88F)),
+                      listOf(
+                          SpottedIllustration.photoPlaceholderStart,
+                          SpottedIllustration.photoPlaceholderEnd,
+                      ),
                   )
               ),
   ) {
@@ -224,7 +233,7 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
     } else {
       Text(
           "[ PHOTO OF THE PET ]",
-          style = jakarta(13, 18f, 700, 0xFFFFFFFF),
+          style = jakarta(13, 18f, 700, Color.White),
           modifier =
               Modifier.align(Alignment.Center).testTag(AlertDetailTestTags.PHOTO_PLACEHOLDER),
       )
@@ -243,7 +252,7 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
               Modifier.align(Alignment.BottomStart)
                   .padding(start = 20.dp, bottom = 30.dp)
                   .clip(RoundedCornerShape(50.dp))
-                  .background(Color(0xFFC92C2C))
+                  .background(SpottedTheme.colors.lostRed)
                   .padding(horizontal = 10.dp, vertical = 6.dp),
           verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -251,7 +260,7 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
         Spacer(Modifier.width(6.dp))
         Text(
             "Missing · ${timeSinceLost(alert.lostAtMillis).removeSuffix(" ago")}",
-            style = jakarta(11, 14f, 700, 0xFFFFFFFF),
+            style = jakarta(11, 14f, 700, Color.White),
         )
       }
     }
@@ -264,7 +273,7 @@ private fun HeaderCircleButton(symbol: String? = null, onClick: () -> Unit, tag:
       modifier =
           Modifier.size(38.dp)
               .clip(CircleShape)
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .clickable(
                   onClickLabel = if (symbol == null) "Back" else "Share",
                   role = Role.Button,
@@ -277,11 +286,11 @@ private fun HeaderCircleButton(symbol: String? = null, onClick: () -> Unit, tag:
       Icon(
           painter = painterResource(R.drawable.ic_arrow_back),
           contentDescription = "Back",
-          tint = Color(0xFF14161A),
+          tint = SpottedTheme.colors.ink,
           modifier = Modifier.size(20.dp),
       )
     } else {
-      Text(symbol, style = jakarta(22, 26f, 600, 0xFF14161A))
+      Text(symbol, style = jakarta(22, 26f, 600, SpottedTheme.colors.ink))
     }
   }
 }
@@ -292,7 +301,7 @@ private fun PetSummary(alert: Alert, distanceText: String?) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text(
           alert.petName,
-          style = jakarta(24, 29f, 700, 0xFF14161A),
+          style = jakarta(24, 29f, 700, SpottedTheme.colors.ink),
           modifier = Modifier.testTag(AlertDetailTestTags.NAME),
       )
       Spacer(Modifier.width(10.dp))
@@ -300,21 +309,21 @@ private fun PetSummary(alert: Alert, distanceText: String?) {
           alert.petSpecies.displayName(),
           modifier =
               Modifier.clip(RoundedCornerShape(50.dp))
-                  .background(Color(0xFFF0F2F5))
+                  .background(SpottedTheme.colors.inputBackground)
                   .padding(horizontal = 11.dp, vertical = 5.dp)
                   .testTag(AlertDetailTestTags.SPECIES),
-          style = jakarta(11, 15f, 600, 0xFF394150),
+          style = jakarta(11, 15f, 600, SpottedTheme.colors.inkSoft),
       )
     }
     Text(
         "Lost ${timeSinceLost(alert.lostAtMillis)} · ${locationCoordinates(alert.lastKnownLocation)}",
-        style = jakarta(12, 17f, 600, 0xFFC92C2C),
+        style = jakarta(12, 17f, 600, SpottedTheme.colors.lostRed),
         modifier = Modifier.testTag(AlertDetailTestTags.LOST_AT),
     )
     if (distanceText != null) {
       Text(
           distanceText,
-          style = jakarta(12, 17f, 600, 0xFF626975),
+          style = jakarta(12, 17f, 600, SpottedTheme.colors.textSecondary),
           modifier = Modifier.testTag(AlertDetailTestTags.DISTANCE),
       )
     }
@@ -326,7 +335,7 @@ private fun PetWarnings(alert: Alert) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text(
         "IF YOU FIND ${alert.petName.uppercase()}",
-        style = jakarta(11, 14f, 600, 0xFF626975),
+        style = jakarta(11, 14f, 600, SpottedTheme.colors.textSecondary),
     )
     alert.petBehaviors
         .sortedBy { it.displayName() }
@@ -339,7 +348,7 @@ private fun PetWarnings(alert: Alert) {
           )
         }
     if (alert.petBehaviors.isEmpty()) {
-      Text("None listed", style = jakarta(11, 15f, 500, 0xFF69717C))
+      Text("None listed", style = jakarta(11, 15f, 500, SpottedTheme.colors.textSecondary))
     }
     alert.petAllergies.forEachIndexed { index, allergy ->
       WarningCard(
@@ -351,7 +360,7 @@ private fun PetWarnings(alert: Alert) {
       )
     }
     if (alert.petAllergies.isEmpty()) {
-      Text("None listed", style = jakarta(11, 15f, 500, 0xFF69717C))
+      Text("None listed", style = jakarta(11, 15f, 500, SpottedTheme.colors.textSecondary))
     }
   }
 }
@@ -370,7 +379,9 @@ private fun WarningCard(
           modifier
               .fillMaxWidth()
               .clip(RoundedCornerShape(16.dp))
-              .background(if (warning) Color(0xFFFFF2DE) else Color(0xFFFCE9E9))
+              .background(
+                  if (warning) SpottedTheme.colors.warningTint else SpottedTheme.colors.errorTint
+              )
               .padding(horizontal = 13.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -378,7 +389,9 @@ private fun WarningCard(
         modifier =
             Modifier.size(30.dp)
                 .clip(CircleShape)
-                .background(if (warning) Color(0xFFFFFBF5) else Color(0xFFFFF7F7)),
+                .background(
+                    if (warning) SpottedTheme.colors.surface else SpottedTheme.colors.surface
+                ),
         contentAlignment = Alignment.Center,
     ) {
       Text(
@@ -388,7 +401,7 @@ private fun WarningCard(
                   17,
                   20f,
                   700,
-                  if (warning) 0xFF9A5A00 else 0xFFC92C2C,
+                  if (warning) SpottedTheme.colors.warning else SpottedTheme.colors.lostRed,
               ),
       )
     }
@@ -397,7 +410,13 @@ private fun WarningCard(
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             title,
-            style = jakarta(13, 17f, 700, if (warning) 0xFF875000 else 0xFFB82222),
+            style =
+                jakarta(
+                    13,
+                    17f,
+                    700,
+                    if (warning) SpottedTheme.colors.warning else SpottedTheme.colors.lostRed,
+                ),
             modifier =
                 if (emphasis == null && valueTag != null) Modifier.testTag(valueTag) else Modifier,
         )
@@ -405,14 +424,20 @@ private fun WarningCard(
           Spacer(Modifier.width(3.dp))
           Text(
               emphasis,
-              style = jakarta(13, 17f, 700, if (warning) 0xFF875000 else 0xFFB82222),
+              style =
+                  jakarta(
+                      13,
+                      17f,
+                      700,
+                      if (warning) SpottedTheme.colors.warning else SpottedTheme.colors.lostRed,
+                  ),
               modifier = valueTag?.let(Modifier::testTag) ?: Modifier,
           )
         }
       }
       Text(
           detail,
-          style = jakarta(11, 15f, 500, 0xFF69717C),
+          style = jakarta(11, 15f, 500, SpottedTheme.colors.textSecondary),
       )
     }
   }
@@ -421,21 +446,23 @@ private fun WarningCard(
 @Composable
 private fun LastSeenArea(location: Location) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-    Text("LAST SEEN AREA", style = jakarta(11, 14f, 600, 0xFF626975))
+    Text("LAST SEEN AREA", style = jakarta(11, 14f, 600, SpottedTheme.colors.textSecondary))
     Box(
         modifier =
             Modifier.fillMaxWidth()
                 .height(144.dp)
                 .clip(RoundedCornerShape(17.dp))
-                .background(Color(0xFFE8EAE4))
+                .background(SpottedTheme.colors.mapBackground)
                 .testTag(AlertDetailTestTags.MAP),
     ) {
+      // Read before drawing: the Canvas lambda is not composable
+      val areaColor = SpottedTheme.colors.error
       Canvas(Modifier.fillMaxSize()) {
         val center = Offset(size.width * 0.5f, size.height * 0.43f)
         drawCircle(
             brush =
                 Brush.radialGradient(
-                    colors = listOf(Color(0x55D93025), Color(0x00D93025)),
+                    colors = listOf(areaColor.copy(alpha = 0.33f), areaColor.copy(alpha = 0f)),
                     center = center,
                     radius = size.minDimension * 0.4f,
                 ),
@@ -443,7 +470,7 @@ private fun LastSeenArea(location: Location) {
             center = center,
         )
         drawCircle(
-            color = Color(0xFFD93025),
+            color = areaColor,
             radius = 12.dp.toPx(),
             center = center,
             style = Stroke(width = 2.dp.toPx()),
@@ -452,23 +479,23 @@ private fun LastSeenArea(location: Location) {
       Text(
           "[ MAP ]",
           modifier = Modifier.align(Alignment.TopStart).padding(11.dp),
-          style = jakarta(9, 12f, 700, 0xFF626975),
+          style = jakarta(9, 12f, 700, SpottedTheme.colors.textSecondary),
       )
       Column(
           modifier =
               Modifier.align(Alignment.BottomCenter)
                   .fillMaxWidth()
-                  .background(Color(0xFFF5F6F7).copy(alpha = 0.96f))
+                  .background(SpottedTheme.colors.inputBackground.copy(alpha = 0.96f))
                   .padding(horizontal = 13.dp, vertical = 9.dp),
           verticalArrangement = Arrangement.spacedBy(2.dp),
       ) {
         Text(
             "Around last known location",
-            style = jakarta(12, 16f, 700, 0xFF14161A),
+            style = jakarta(12, 16f, 700, SpottedTheme.colors.ink),
         )
         Text(
             locationCoordinates(location),
-            style = jakarta(10, 14f, 500, 0xFF626975),
+            style = jakarta(10, 14f, 500, SpottedTheme.colors.textSecondary),
             modifier = Modifier.testTag(AlertDetailTestTags.LOCATION),
         )
       }
@@ -481,7 +508,7 @@ private fun ReportSightingBar(onClick: () -> Unit) {
   Box(
       modifier =
           Modifier.fillMaxWidth()
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(horizontal = 20.dp, vertical = 12.dp),
   ) {
     Button(
@@ -489,7 +516,7 @@ private fun ReportSightingBar(onClick: () -> Unit) {
         modifier =
             Modifier.fillMaxWidth().height(48.dp).testTag(AlertDetailTestTags.REPORT_SIGHTING),
         shape = RoundedCornerShape(13.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5BD7)),
+        colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
     ) {
       Text("I have seen this pet", fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
