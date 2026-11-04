@@ -52,22 +52,6 @@ import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.home.TabBar
 import com.android.spotted.ui.home.TabIndex
-import com.android.spotted.ui.theme.SpottedBadgeEarned
-import com.android.spotted.ui.theme.SpottedBadgeLocked
-import com.android.spotted.ui.theme.SpottedBadgeLockedIcon
-import com.android.spotted.ui.theme.SpottedBlue
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedLogoutRed
-import com.android.spotted.ui.theme.SpottedProfileAvatar
-import com.android.spotted.ui.theme.SpottedProfileBackground
-import com.android.spotted.ui.theme.SpottedProfileInitial
-import com.android.spotted.ui.theme.SpottedRankYou
-import com.android.spotted.ui.theme.SpottedStatText
-import com.android.spotted.ui.theme.SpottedTextFaint
-import com.android.spotted.ui.theme.SpottedTextLabel
-import com.android.spotted.ui.theme.SpottedTextMuted
-import com.android.spotted.ui.theme.SpottedTextSecondary
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import kotlinx.coroutines.launch
@@ -150,7 +134,7 @@ fun HelperProfileContent(
 ) {
   Box(
       Modifier.fillMaxSize()
-          .background(SpottedProfileBackground)
+          .background(SpottedTheme.colors.profileBackground)
           .testTag(HelperProfileTestTags.SCREEN)
   ) {
     Image(
@@ -172,7 +156,7 @@ fun HelperProfileContent(
         state.errorMessage?.let { message ->
           Text(
               message,
-              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
+              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTheme.colors.error),
               modifier = Modifier.testTag(HelperProfileTestTags.ERROR),
           )
         }
@@ -206,14 +190,18 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
                 // Leaves room for the account button on the right
                 .padding(end = 56.dp)
                 .clip(RoundedCornerShape(19.dp))
-                .background(Color.White)
+                .background(SpottedTheme.colors.surface)
                 .padding(end = 16.dp),
     ) {
       Box(
           contentAlignment = Alignment.Center,
-          modifier = Modifier.size(56.dp).clip(CircleShape).background(SpottedProfileAvatar),
+          modifier =
+              Modifier.size(56.dp).clip(CircleShape).background(SpottedTheme.colors.profileAvatar),
       ) {
-        Text(state.initial, style = jakarta(22, 29f, FontWeight.ExtraBold, SpottedProfileInitial))
+        Text(
+            state.initial,
+            style = jakarta(22, 29f, FontWeight.ExtraBold, SpottedTheme.colors.profileInitial),
+        )
         // Covers the initial once loaded; if there is no photo, the initial stays visible
         state.photoUrl?.let { url ->
           AsyncImage(
@@ -227,14 +215,14 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
       Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             state.name,
-            style = jakarta(22, 29f, FontWeight.ExtraBold, SpottedInk),
+            style = jakarta(22, 29f, FontWeight.ExtraBold, SpottedTheme.colors.ink),
             maxLines = 1,
             modifier = Modifier.testTag(HelperProfileTestTags.NAME),
         )
         Text(
             if (state.homeArea.isBlank()) "Helping out nearby"
             else "Helping out in ${state.homeArea}",
-            style = jakarta(10, 17f, FontWeight.Medium, SpottedTextSecondary),
+            style = jakarta(10, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
             maxLines = 1,
             modifier = Modifier.testTag(HelperProfileTestTags.AREA),
         )
@@ -260,7 +248,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
               Modifier.width(36.dp)
                   .height(21.dp)
                   .clip(RoundedCornerShape(10.dp))
-                  .background(SpottedLogoutRed),
+                  .background(SpottedTheme.colors.logoutRed),
       ) {
         Image(
             painterResource(R.drawable.ic_logout),
@@ -280,7 +268,7 @@ private fun PetsBroughtHome(count: Int) {
       modifier =
           Modifier.fillMaxWidth()
               .clip(RoundedCornerShape(22.dp))
-              .background(SpottedBlue)
+              .background(SpottedTheme.colors.blue)
               .padding(18.dp),
   ) {
     Text(
@@ -290,14 +278,17 @@ private fun PetsBroughtHome(count: Int) {
     )
     Text(
         "Thanks to sightings you reported and their owners confirmed",
-        style = jakarta(13, 17f, FontWeight.Medium, SpottedStatText),
+        style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.statText),
     )
   }
 }
 
 @Composable
 private fun SectionLabel(text: String) {
-  Text(text, style = jakarta(11, 14f, FontWeight.SemiBold, SpottedTextLabel, spacing = 0.66f))
+  Text(
+      text,
+      style = jakarta(11, 14f, FontWeight.SemiBold, SpottedTheme.colors.textLabel, spacing = 0.66f),
+  )
 }
 
 @Composable
@@ -319,7 +310,7 @@ private fun RowScope.Badge(label: String, icon: Int, earned: Boolean) {
       modifier =
           Modifier.weight(1f)
               .clip(RoundedCornerShape(18.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(vertical = 14.dp)
               .testTag(HelperProfileTestTags.badge(label)),
   ) {
@@ -328,18 +319,30 @@ private fun RowScope.Badge(label: String, icon: Int, earned: Boolean) {
         modifier =
             Modifier.size(44.dp)
                 .clip(CircleShape)
-                .background(if (earned) SpottedBadgeEarned else SpottedBadgeLocked),
+                .background(
+                    if (earned) SpottedTheme.colors.badgeEarned else SpottedTheme.colors.badgeLocked
+                ),
     ) {
       Image(
           painterResource(icon),
           contentDescription = null,
-          colorFilter = if (earned) null else ColorFilter.tint(SpottedBadgeLockedIcon),
+          // Tinted from the theme: the drawables' own blue is too dark on the dark badge
+          colorFilter =
+              ColorFilter.tint(
+                  if (earned) SpottedTheme.colors.rankYou else SpottedTheme.colors.badgeLockedIcon
+              ),
           modifier = Modifier.size(22.dp),
       )
     }
     Text(
         label,
-        style = jakarta(12, 16f, FontWeight.SemiBold, if (earned) SpottedInk else SpottedTextMuted),
+        style =
+            jakarta(
+                12,
+                16f,
+                FontWeight.SemiBold,
+                if (earned) SpottedTheme.colors.ink else SpottedTheme.colors.textMuted,
+            ),
     )
   }
 }
@@ -351,7 +354,7 @@ private fun Leaderboard(petsBroughtHome: Int) {
       modifier =
           Modifier.fillMaxWidth()
               .clip(RoundedCornerShape(18.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(horizontal = 16.dp, vertical = 6.dp),
   ) {
     Row(
@@ -359,15 +362,15 @@ private fun Leaderboard(petsBroughtHome: Int) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
     ) {
-      Text("1", style = jakarta(13, 17f, FontWeight.ExtraBold, SpottedRankYou))
+      Text("1", style = jakarta(13, 17f, FontWeight.ExtraBold, SpottedTheme.colors.rankYou))
       Text(
           "You",
-          style = jakarta(15, 20f, FontWeight.ExtraBold, SpottedInk),
+          style = jakarta(15, 20f, FontWeight.ExtraBold, SpottedTheme.colors.ink),
           modifier = Modifier.weight(1f),
       )
       Text(
           if (petsBroughtHome == 1) "1 pet" else "$petsBroughtHome pets",
-          style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTextSecondary),
+          style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTheme.colors.textSecondary),
       )
     }
   }
@@ -382,7 +385,7 @@ private fun EditProfile(state: HelperProfileUiState, onClick: () -> Unit) {
       modifier =
           Modifier.fillMaxWidth()
               .clip(RoundedCornerShape(18.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .clickable(onClickLabel = "Edit your profile", role = Role.Button, onClick = onClick)
               .padding(horizontal = 16.dp, vertical = 14.dp)
               .testTag(HelperProfileTestTags.EDIT_PROFILE),
@@ -393,15 +396,18 @@ private fun EditProfile(state: HelperProfileUiState, onClick: () -> Unit) {
         modifier = Modifier.size(22.dp),
     )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
-      Text("Edit your profile", style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk))
+      Text(
+          "Edit your profile",
+          style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
+      )
       Text(
           if (state.homeArea.isBlank()) "Name, home area and alerts"
           else "${state.homeArea} · alerts within ${state.alertRadiusKm} km",
-          style = jakarta(12, 16f, FontWeight.Medium, SpottedTextSecondary),
+          style = jakarta(12, 16f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
           maxLines = 1,
       )
     }
-    Text(">", style = jakarta(16, 21f, FontWeight.SemiBold, SpottedTextFaint))
+    Text(">", style = jakarta(16, 21f, FontWeight.SemiBold, SpottedTheme.colors.textFaint))
   }
 }
 

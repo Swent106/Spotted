@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.personalinfo
 
@@ -70,16 +71,7 @@ import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
 import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.PlusJakartaSans
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedBlue
-import com.android.spotted.ui.theme.SpottedBlueTint
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedInkSoft
-import com.android.spotted.ui.theme.SpottedInputBackground
-import com.android.spotted.ui.theme.SpottedScreenBackground
-import com.android.spotted.ui.theme.SpottedTextLabel
-import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.theme.SpottedTheme
 
 /** Test tags used by UI tests to find the elements of the Personal Info screen. */
 object PersonalInfoScreenTestTags {
@@ -123,9 +115,13 @@ private fun jakarta(
         textAlign = align,
     )
 
-private val labelStyle = jakarta(11, 15, Bold, SpottedTextLabel)
-private val inputStyle = jakarta(14, 18, FontWeight.SemiBold, SpottedInk)
-private val placeholderStyle = jakarta(14, 18, FontWeight.Medium, SpottedTextLabel)
+// Getters, so they follow the light or dark palette of the current theme
+private val labelStyle: TextStyle
+  @Composable get() = jakarta(11, 15, Bold, SpottedTheme.colors.textLabel)
+private val inputStyle: TextStyle
+  @Composable get() = jakarta(14, 18, FontWeight.SemiBold, SpottedTheme.colors.ink)
+private val placeholderStyle: TextStyle
+  @Composable get() = jakarta(14, 18, FontWeight.Medium, SpottedTheme.colors.textLabel)
 
 // Height of the home map, from the Figma design.
 private val MapPickerHeight = 118.dp
@@ -152,7 +148,7 @@ fun PersonalInfoContent(
 ) {
   Box(
       Modifier.fillMaxSize()
-          .background(SpottedScreenBackground)
+          .background(SpottedTheme.colors.screenBackground)
           .testTag(PersonalInfoScreenTestTags.SCREEN)
   ) {
     Image(
@@ -184,7 +180,8 @@ fun PersonalInfoContent(
           Text(
               message,
               Modifier.fillMaxWidth().testTag(PersonalInfoScreenTestTags.ERROR_MESSAGE),
-              style = jakarta(13, 18, FontWeight.SemiBold, SpottedError, TextAlign.Center),
+              style =
+                  jakarta(13, 18, FontWeight.SemiBold, SpottedTheme.colors.error, TextAlign.Center),
           )
         }
       }
@@ -206,26 +203,26 @@ private fun Header(isEditing: Boolean, onBackClick: () -> Unit) {
         modifier =
             Modifier.size(40.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color.White)
+                .background(SpottedTheme.colors.surface)
                 .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBackClick)
                 .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
     ) {
       Icon(
           painterResource(R.drawable.ic_arrow_back),
           contentDescription = "Back",
-          tint = SpottedInk,
+          tint = SpottedTheme.colors.ink,
           modifier = Modifier.size(20.dp),
       )
     }
     Column(Modifier.weight(1f)) {
       Text(
           if (isEditing) "Edit your profile" else "Create your profile",
-          style = jakarta(23, 31, FontWeight.ExtraBold, SpottedInk),
+          style = jakarta(23, 31, FontWeight.ExtraBold, SpottedTheme.colors.ink),
       )
       Text(
           if (isEditing) "Changes are saved to your profile"
           else "Step 1 of 2 · tell the community who you are",
-          style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
+          style = jakarta(12, 16, FontWeight.Medium, SpottedTheme.colors.textSecondary),
       )
     }
   }
@@ -249,8 +246,8 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
       Box(
           Modifier.size(96.dp)
               .clip(CircleShape)
-              .background(SpottedAvatarBackground)
-              .border(4.dp, Color.White, CircleShape)
+              .background(SpottedTheme.colors.avatarBackground)
+              .border(4.dp, SpottedTheme.colors.surface, CircleShape)
       ) {
         if (photoUri != null) {
           AsyncImage(
@@ -271,15 +268,15 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
               Modifier.offset(68.dp, 66.dp)
                   .size(30.dp)
                   .clip(CircleShape)
-                  .background(SpottedBlue)
-                  .border(3.dp, Color.White, CircleShape),
+                  .background(SpottedTheme.colors.blue)
+                  .border(3.dp, SpottedTheme.colors.surface, CircleShape),
       ) {
         Text("+", style = jakarta(16, 18, FontWeight.ExtraBold, Color.White))
       }
     }
     Text(
         stringResource(R.string.profile_photo_change_optional),
-        style = jakarta(12, 16, Bold, SpottedBlue),
+        style = jakarta(12, 16, Bold, SpottedTheme.colors.blue),
         modifier =
             Modifier.clickable(role = Role.Button, onClick = onChangePhotoClick)
                 .testTag(PersonalInfoScreenTestTags.CHANGE_PHOTO),
@@ -347,7 +344,7 @@ private fun HomeLocationCard(
     ) {
       Text(
           "Use my location",
-          style = jakarta(12, 16, Bold, SpottedBlue),
+          style = jakarta(12, 16, Bold, SpottedTheme.colors.blue),
           modifier =
               Modifier.padding(start = 8.dp)
                   .clickable(role = Role.Button, onClick = onUseMyLocationClick)
@@ -356,7 +353,7 @@ private fun HomeLocationCard(
     }
     Text(
         "Used to alert you about pets missing near your home.",
-        style = jakarta(12, 16, FontWeight.Medium, SpottedTextSecondary),
+        style = jakarta(12, 16, FontWeight.Medium, SpottedTheme.colors.textSecondary),
     )
     MapPicker(
         location = state.homeLocation,
@@ -385,8 +382,14 @@ private fun RowScope.RadiusChip(radiusKm: Int, selected: Boolean, onSelect: (Int
       modifier =
           Modifier.weight(1f)
               .clip(shape)
-              .background(if (selected) SpottedBlueTint else SpottedInputBackground)
-              .then(if (selected) Modifier.border(1.5.dp, SpottedBlue, shape) else Modifier)
+              .background(
+                  if (selected) SpottedTheme.colors.blueTint
+                  else SpottedTheme.colors.inputBackground
+              )
+              .then(
+                  if (selected) Modifier.border(1.5.dp, SpottedTheme.colors.blue, shape)
+                  else Modifier
+              )
               .selectable(selected = selected, role = Role.RadioButton) { onSelect(radiusKm) }
               .padding(vertical = 7.dp)
               .testTag(PersonalInfoScreenTestTags.radiusChip(radiusKm)),
@@ -394,8 +397,8 @@ private fun RowScope.RadiusChip(radiusKm: Int, selected: Boolean, onSelect: (Int
     Text(
         "$radiusKm km",
         style =
-            if (selected) jakarta(13, 16, Bold, SpottedBlue)
-            else jakarta(13, 16, FontWeight.SemiBold, SpottedInkSoft),
+            if (selected) jakarta(13, 16, Bold, SpottedTheme.colors.blue)
+            else jakarta(13, 16, FontWeight.SemiBold, SpottedTheme.colors.inkSoft),
     )
   }
 }
@@ -407,7 +410,7 @@ private fun Card(content: @Composable () -> Unit) {
       modifier =
           Modifier.fillMaxWidth()
               .clip(RoundedCornerShape(22.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(16.dp),
   ) {
     content()
@@ -437,7 +440,7 @@ private fun InputField(
             modifier =
                 Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(SpottedInputBackground)
+                    .background(SpottedTheme.colors.inputBackground)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
           Box(Modifier.weight(1f)) {
@@ -458,9 +461,9 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
       shape = RoundedCornerShape(14.dp),
       colors =
           ButtonDefaults.buttonColors(
-              containerColor = SpottedBlue,
+              containerColor = SpottedTheme.colors.blue,
               contentColor = Color.White,
-              disabledContainerColor = SpottedBlue.copy(alpha = 0.4f),
+              disabledContainerColor = SpottedTheme.colors.blue.copy(alpha = 0.4f),
               disabledContentColor = Color.White,
           ),
       modifier =
@@ -596,7 +599,7 @@ internal fun PhotoOptionsDialog(
       title = {
         Text(
             stringResource(R.string.profile_photo_title),
-            style = jakarta(18, 24, Bold, SpottedInk),
+            style = jakarta(18, 24, Bold, SpottedTheme.colors.ink),
         )
       },
       text = {
@@ -604,7 +607,7 @@ internal fun PhotoOptionsDialog(
           if (cameraError) {
             Text(
                 stringResource(R.string.photo_camera_unavailable),
-                style = jakarta(13, 18, FontWeight.Medium, SpottedError),
+                style = jakarta(13, 18, FontWeight.Medium, SpottedTheme.colors.error),
             )
           }
           PhotoOption(
@@ -636,6 +639,10 @@ internal fun PhotoOptionsDialog(
 @Composable
 private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit) {
   TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(testTag)) {
-    Text(text, style = jakarta(15, 20, Bold, SpottedBlue), modifier = Modifier.fillMaxWidth())
+    Text(
+        text,
+        style = jakarta(15, 20, Bold, SpottedTheme.colors.blue),
+        modifier = Modifier.fillMaxWidth(),
+    )
   }
 }
