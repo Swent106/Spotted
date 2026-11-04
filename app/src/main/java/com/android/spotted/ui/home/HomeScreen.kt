@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import androidx.compose.foundation.BorderStroke
@@ -90,6 +91,8 @@ object HomeScreenTestTags {
   const val ALERTS_ERROR = "home_alertsError"
   const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
+  const val OFFLINE_BANNER = "home_offlineBanner"
+  const val OFFLINE_RETRY = "home_offlineRetry"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val ADD_PET_BUTTON = "home_addPetButton"
   const val AVATAR = "home_avatar"
@@ -114,6 +117,7 @@ object HomeScreenTexts {
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
   const val NO_LOST_PETS = "No missing pets near you"
   const val RETRY = "Retry"
+  const val OFFLINE_ALERTS = "You're offline · showing the last 5 alerts"
   const val ADD_PET = "Add a pet"
 }
 

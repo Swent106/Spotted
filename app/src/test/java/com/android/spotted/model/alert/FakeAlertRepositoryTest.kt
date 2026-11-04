@@ -119,6 +119,49 @@ class FakeAlertRepositoryTest {
   }
 
   @Test
+  fun getCachedOpenAlertsNear_filtersSortsAndLimitsCachedAlerts() = runTest {
+    val alerts =
+        (1..6).map { index ->
+          alert(
+              id = "cached-$index",
+              lostAtMillis = index.toLong(),
+              latitude = 0.0,
+              longitude = 0.001,
+          )
+        }
+    val closed =
+        alert(id = "cached-closed", lostAtMillis = 7L, latitude = 0.0, longitude = 0.0)
+            .copy(status = AlertStatus.CLOSED)
+    val far = alert(id = "cached-far", lostAtMillis = 8L, latitude = 0.0, longitude = 0.02)
+    repository.cachedAlerts = alerts + closed + far
+
+    val result = repository.getCachedOpenAlertsNear(center, radiusKm = 1.0)
+
+    assertEquals(alerts.drop(1).reversed(), result.getOrThrow())
+  }
+
+  @Test
+  fun getCachedOpenAlertsNear_returnsEmptyWhenCacheHasNoNearbyOpenAlerts() = runTest {
+    repository.cachedAlerts =
+        listOf(
+            alert(id = "closed", latitude = 0.0, longitude = 0.0).copy(status = AlertStatus.CLOSED)
+        )
+
+    assertTrue(repository.getCachedOpenAlertsNear(center, radiusKm = 1.0).getOrThrow().isEmpty())
+  }
+
+  @Test
+  fun getCachedOpenAlertsNear_returnsConfiguredFailure() = runTest {
+    val expectedFailure = IllegalStateException("cache read failed")
+    repository.cachedAlertsFailure = expectedFailure
+
+    assertSame(
+        expectedFailure,
+        repository.getCachedOpenAlertsNear(center, radiusKm = 1.0).exceptionOrNull(),
+    )
+  }
+
+  @Test
   fun getMyAlerts_returnsOpenAndClosedAlertsOfOwnerOnly_newestFirst() = runTest {
     val older = alert(id = "alert-older", lostAtMillis = 1L, latitude = 0.0, longitude = 0.0)
     val newerClosed =

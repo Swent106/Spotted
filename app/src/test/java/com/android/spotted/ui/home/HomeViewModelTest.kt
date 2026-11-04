@@ -196,6 +196,7 @@ class HomeViewModelTest {
         assertEquals(listOf(newer, older), state.lostPetsNearby.items)
         assertNull(state.lostPetsNearby.errorMessage)
         assertEquals(NOW, state.nowMillis)
+        assertFalse(state.isOffline)
       }
 
   @Test
@@ -222,6 +223,78 @@ class HomeViewModelTest {
         val lostPets = viewModel.uiState.value.lostPetsNearby
         assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, lostPets.errorMessage)
         assertFalse(lostPets.isEmpty)
+        assertFalse(viewModel.uiState.value.isOffline)
+      }
+
+  @Test
+  fun lostPets_usesCachedAlertsWhenOnlineLoadFails() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val cached = alert("cached")
+        alertRepository.failure = Exception("offline")
+        alertRepository.cachedAlerts = listOf(cached)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(cached), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertTrue(state.isOffline)
+      }
+
+  @Test
+  fun lostPets_keepsErrorWhenOnlineAndCacheLoadsFailOrAreEmpty() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        alertRepository.failure = Exception("offline")
+        alertRepository.cachedAlertsFailure = Exception("cache unavailable")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, state.lostPetsNearby.errorMessage)
+        assertFalse(state.isOffline)
+      }
+
+  @Test
+  fun lostPets_keepsErrorWhenOnlineAndCacheIsEmpty() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        alertRepository.failure = Exception("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, state.lostPetsNearby.errorMessage)
+        assertTrue(state.lostPetsNearby.items.isEmpty())
+        assertFalse(state.isOffline)
+      }
+
+  @Test
+  fun lostPets_retryAfterOfflineCacheShowsOnlineAlerts() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val cached = alert("cached")
+        val online = alert("online", lostAtMillis = 2_000)
+        alertRepository.cachedAlerts = listOf(cached)
+        publish(online)
+        alertRepository.failure = Exception("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isOffline)
+
+        alertRepository.failure = null
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(online), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertFalse(state.isOffline)
       }
 
   // ===================== Independent sections =====================
@@ -764,6 +837,7 @@ class HomeViewModelTest {
 
         assertEquals(listOf(newer, older), viewModel.uiState.value.lostPetsNearby.items)
       }
+
   // ===================== Distance to each lost pet =====================
 
   private fun viewModelWithLocation(

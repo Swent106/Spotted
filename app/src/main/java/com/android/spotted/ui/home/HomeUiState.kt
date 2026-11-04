@@ -49,6 +49,7 @@ data class HomeUiState(
     val ownLostPets: List<Alert> = emptyList(),
     val nowMillis: Long = 0L,
     val distanceTexts: Map<String, String> = emptyMap(),
+    val isOffline: Boolean = false,
     val errorMessage: String? = null,
 ) {
   /** Ids of the user's pets with an open alert: those are missing, the others are safe. */

@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.tasks.await
 
 class AlertRepositoryFirestore(
@@ -160,6 +161,36 @@ class AlertRepositoryFirestore(
               .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
 
       Result.success(nearbyAlerts)
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
+  override suspend fun getCachedOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+      limit: Int,
+  ): Result<List<Alert>> {
+    return try {
+      require(limit > 0) { "limit must be positive" }
+      val snapshot =
+          db.collection(collectionPath)
+              .whereEqualTo("status", "OPEN")
+              .limit(100)
+              .get(Source.CACHE)
+              .await()
+
+      val alerts =
+          snapshot
+              .toAlerts()
+              .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
+              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+              .take(limit)
+
+      Result.success(alerts)
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
         throw e

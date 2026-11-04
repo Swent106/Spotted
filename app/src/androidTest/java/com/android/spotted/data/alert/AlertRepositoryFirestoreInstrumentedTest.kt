@@ -230,6 +230,33 @@ class AlertRepositoryFirestoreInstrumentedTest {
     assertTrue("Far alert should NOT be found", alerts.none { it.id == alert2.id })
   }
 
+  @Test
+  fun getCachedOpenAlertsNear_returnsAlertsAfterNetworkIsDisabled() = runBlocking {
+    val center = Location(latitude = 45.0, longitude = 5.0)
+    val alerts =
+        (1..6).map { index ->
+          publishOpenAlert(
+              Location(latitude = center.latitude + index * 0.0001, longitude = center.longitude),
+              lostAtMillis = index * 1000L,
+          )
+        }
+    val online = repository.getOpenAlertsNear(center, radiusKm = 1.0).getOrThrow()
+    assertEquals(alerts.map { it.id }.toSet(), online.map { it.id }.toSet())
+
+    firestore.disableNetwork().await()
+    try {
+      val cached = repository.getCachedOpenAlertsNear(center, radiusKm = 1.0)
+
+      assertTrue(
+          "Cache query should succeed: ${cached.exceptionOrNull()?.message}",
+          cached.isSuccess,
+      )
+      assertEquals(alerts.takeLast(5).reversed().map { it.id }, cached.getOrThrow().map { it.id })
+    } finally {
+      firestore.enableNetwork().await()
+    }
+  }
+
   /** Seeds a pet and publishes an open alert for it at [location], owned by the signed-in user. */
   private suspend fun publishOpenAlert(location: Location, lostAtMillis: Long = 1000L): Alert {
     val ownerId = auth.currentUser!!.uid

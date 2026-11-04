@@ -33,6 +33,13 @@ interface AlertRepository {
       radiusKm: Double,
   ): Result<List<Alert>>
 
+  /** Returns up to [limit] open alerts near [center] from the local cache, newest first. */
+  suspend fun getCachedOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+      limit: Int = 5,
+  ): Result<List<Alert>>
+
   /** Returns the open alerts published by [ownerId], wherever they are, newest first. */
   suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>>
 

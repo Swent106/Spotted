@@ -180,7 +180,6 @@ class HomeViewModel(
     updateFor(uid) { it.copy(pets = it.pets.after(result, PETS_LOAD_FAILED)) }
   }
 
-
   /** Loads "Lost near you" and returns the alerts, or null if they can't be loaded. */
   private suspend fun loadLostPetsNearby(
       uid: String,
@@ -192,18 +191,32 @@ class HomeViewModel(
     // returns
     val result =
         alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
-          alerts
-              .filter { it.ownerId != uid }
-              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+          sortNearbyAlerts(alerts, uid)
         }
+    val cachedAlerts =
+        if (result.isFailure) {
+          alertRepository.getCachedOpenAlertsNear(center, radiusKm).getOrNull()?.let {
+            sortNearbyAlerts(it, uid)
+          }
+        } else {
+          null
+        }
+    val usingCache = !cachedAlerts.isNullOrEmpty()
+    val displayedResult = if (usingCache) Result.success(cachedAlerts.orEmpty()) else result
     updateFor(uid) {
       it.copy(
-          lostPetsNearby = it.lostPetsNearby.after(result, LOST_PETS_LOAD_FAILED),
-          nowMillis = if (result.isSuccess) now() else it.nowMillis,
+          lostPetsNearby = it.lostPetsNearby.after(displayedResult, LOST_PETS_LOAD_FAILED),
+          nowMillis = if (displayedResult.isSuccess) now() else it.nowMillis,
+          isOffline = usingCache,
       )
     }
-    return result.getOrNull()
+    return displayedResult.getOrNull()
   }
+
+  private fun sortNearbyAlerts(alerts: List<Alert>, uid: String): List<Alert> =
+      alerts
+          .filter { it.ownerId != uid }
+          .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
 
   /** The user's own open alerts, wherever their pet was lost, so the map always shows them. */
   private suspend fun loadOwnLostPets(uid: String) {

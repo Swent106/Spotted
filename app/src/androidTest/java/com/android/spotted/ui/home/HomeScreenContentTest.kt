@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -131,6 +132,17 @@ class HomeScreenContentTest {
 
     scrollTo(HomeScreenTestTags.petCard(LUNA.id)).assertIsDisplayed()
     scrollTo(HomeScreenTestTags.PETS_ERROR).assertTextEquals(PETS_ERROR)
+  }
+
+  @Test
+  fun offlineAlerts_showBannerAndRetryReloads() {
+    setContent(HomeUiState(isOffline = true))
+
+    scrollTo(HomeScreenTestTags.OFFLINE_BANNER).assertIsDisplayed()
+    composeTestRule.onNodeWithText(HomeScreenTexts.OFFLINE_ALERTS).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.OFFLINE_RETRY).performClick()
+
+    assertEquals(1, clicks["retry"])
   }
 
   @Test
