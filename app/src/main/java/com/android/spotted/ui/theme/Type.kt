@@ -38,6 +38,23 @@ fun jakarta(
         textAlign = align,
     )
 
+/** Same as the [jakarta] above, with a theme colour, e.g. `SpottedTheme.colors.ink`. */
+fun jakarta(
+    size: Int,
+    line: Float,
+    weight: Int,
+    color: Color,
+    align: TextAlign = TextAlign.Start,
+) =
+    TextStyle(
+        fontSize = size.sp,
+        lineHeight = line.sp,
+        fontFamily = PlusJakartaSans,
+        fontWeight = FontWeight(weight),
+        color = color,
+        textAlign = align,
+    )
+
 /** Same as the [jakarta] above, with Compose types for the weight and the colour. */
 fun jakarta(size: Int, line: Float, weight: FontWeight, color: Color, spacing: Float = 0f) =
     TextStyle(

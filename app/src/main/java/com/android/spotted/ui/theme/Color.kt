@@ -45,7 +45,8 @@ val SpottedRankYou = Color(0xFF1B4FC0)
  * [SpottedTheme.colors], so they follow the system dark mode instead of using fixed light colours.
  *
  * Each colour has the role of the `Spotted...` constant of the same name; [surface] is the
- * background of cards and dialogs, white in light mode.
+ * background of cards and dialogs, white in light mode. [warning] and [warningTint] are the amber
+ * of notices (offline, pet found), and [errorTint] the pale red behind error messages.
  */
 @Immutable
 data class SpottedColors(
@@ -80,6 +81,9 @@ data class SpottedColors(
     val textFaint: Color,
     val rankYou: Color,
     val surface: Color,
+    val warning: Color,
+    val warningTint: Color,
+    val errorTint: Color,
 )
 
 /** The Figma colours, as they are used today. */
@@ -116,6 +120,9 @@ val LightSpottedColors =
         textFaint = SpottedTextFaint,
         rankYou = SpottedRankYou,
         surface = Color.White,
+        warning = Color(0xFF875000),
+        warningTint = Color(0xFFFFF2DE),
+        errorTint = Color(0xFFFCE9E9),
     )
 
 /**
@@ -155,4 +162,22 @@ val DarkSpottedColors =
         textFaint = Color(0xFF6F7580),
         rankYou = Color(0xFF7FA6F5),
         surface = Color(0xFF1B1E24),
+        warning = Color(0xFFF0B455),
+        warningTint = Color(0xFF3A2A10),
+        errorTint = Color(0xFF3A1A1C),
     )
+
+/**
+ * Colours of drawings rather than of the interface (the Sign in hero, the photo placeholder): they
+ * stay the same in light and dark mode, like a picture.
+ */
+object SpottedIllustration {
+  val bubbleGreen = Color(0xFFDEE9DC)
+  val bubblePurple = Color(0xFFE7DCEC)
+  val bubbleBeige = Color(0xFFF0E0CE)
+  val bubbleBlue = Color(0xFFE8EEFC)
+  val bubbleGrey = Color(0xFFDDE3EE)
+  val ring = Color(0xFFD3DBF5)
+  val photoPlaceholderStart = Color(0xFFA88D71)
+  val photoPlaceholderEnd = Color(0xFFE3B88F)
+}
