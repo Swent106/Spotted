@@ -68,7 +68,9 @@ class MyAlertContentTest {
 
   @Test
   fun error_showsTheMessage() {
-    setContent(MyAlertUiState(errorMessage = "Only the owner can open this alert."))
+    setContent(
+        MyAlertUiState(isLoading = false, errorMessage = "Only the owner can open this alert.")
+    )
 
     node(MyAlertScreenTestTags.ERROR)
         .assertIsDisplayed()
@@ -76,8 +78,49 @@ class MyAlertContentTest {
   }
 
   @Test
+  fun loadingWithAnAlert_showsOnlyTheSpinner() {
+    setContent(MyAlertUiState(isLoading = true, alert = MILO_ALERT, sightings = listOf(PENDING)))
+
+    node(MyAlertScreenTestTags.LOADING).assertIsDisplayed()
+    node(MyAlertScreenTestTags.MAP).assertDoesNotExist()
+    node(MyAlertScreenTestTags.sighting(PENDING.id)).assertDoesNotExist()
+    node(MyAlertScreenTestTags.PET_HOME_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
+  fun errorWithoutAnAlert_showsOnlyTheError() {
+    setContent(MyAlertUiState(isLoading = false, errorMessage = "Alert not found."))
+
+    node(MyAlertScreenTestTags.ERROR).assertIsDisplayed()
+    node(MyAlertScreenTestTags.LOADING).assertDoesNotExist()
+    node(MyAlertScreenTestTags.MAP).assertDoesNotExist()
+    node(MyAlertScreenTestTags.PET_HOME_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
+  fun errorWithAnAlert_keepsTheAlertBelowTheError() {
+    // A failed action (here confirming a sighting) must not wipe what the owner was looking at
+    setContent(
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(PENDING),
+            errorMessage = "Couldn't update the sighting. Please try again.",
+        )
+    )
+
+    node(MyAlertScreenTestTags.ERROR)
+        .assertIsDisplayed()
+        .assertTextEquals("Couldn't update the sighting. Please try again.")
+    node(MyAlertScreenTestTags.LOADING).assertDoesNotExist()
+    node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
+    node(MyAlertScreenTestTags.confirm(PENDING.id)).performScrollTo().assertIsDisplayed()
+    node(MyAlertScreenTestTags.PET_HOME_BUTTON).performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
   fun noSightings_showsTheEmptyStateAndTheMap() {
-    setContent(MyAlertUiState(alert = MILO_ALERT))
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT))
 
     node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
     node(MyAlertScreenTestTags.NO_SIGHTINGS).assertIsDisplayed()
@@ -89,7 +132,7 @@ class MyAlertContentTest {
     val confirmed = mutableListOf<String>()
     val dismissed = mutableListOf<String>()
     setContent(
-        MyAlertUiState(alert = MILO_ALERT, sightings = listOf(PENDING)),
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING)),
         onConfirm = { confirmed += it },
         onDismiss = { dismissed += it },
     )
@@ -104,7 +147,7 @@ class MyAlertContentTest {
 
   @Test
   fun confirmedSighting_showsItsStatusWithoutReviewButtons() {
-    setContent(MyAlertUiState(alert = MILO_ALERT, sightings = listOf(CONFIRMED)))
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(CONFIRMED)))
 
     node(MyAlertScreenTestTags.status(CONFIRMED.id)).assertTextEquals("Confirmed")
     node(MyAlertScreenTestTags.confirm(CONFIRMED.id)).assertDoesNotExist()
@@ -115,6 +158,7 @@ class MyAlertContentTest {
   fun dismissedSighting_staysInTheListButIsHiddenFromTheMap() {
     setContent(
         MyAlertUiState(
+            isLoading = false,
             alert = MILO_ALERT,
             sightings = listOf(PENDING, DISMISSED, CONFIRMED),
             likelyArea = AREA,
@@ -134,7 +178,10 @@ class MyAlertContentTest {
   @Test
   fun petHome_closesTheAlertOnlyAfterConfirming() {
     var markedFound = false
-    setContent(MyAlertUiState(alert = MILO_ALERT), onMarkFound = { markedFound = true })
+    setContent(
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT),
+        onMarkFound = { markedFound = true },
+    )
 
     node(MyAlertScreenTestTags.PET_HOME_BUTTON).performScrollTo().performClick()
     node(MyAlertScreenTestTags.PET_HOME_CANCEL).performClick()
@@ -148,7 +195,7 @@ class MyAlertContentTest {
   @Test
   fun back_reportsTheTap() {
     var back = false
-    setContent(MyAlertUiState(alert = MILO_ALERT), onBack = { back = true })
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT), onBack = { back = true })
 
     node(MyAlertScreenTestTags.BACK_BUTTON).performClick()
 

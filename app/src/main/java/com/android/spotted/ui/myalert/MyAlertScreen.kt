@@ -142,56 +142,58 @@ fun MyAlertContent(
       )
     }
 
+    // One state shows one thing. An error with a loaded alert comes from a failed action (confirm,
+    // dismiss, pet is home): it is shown above the alert instead of replacing it, so the owner
+    // keeps
+    // what they were looking at and can try again
+    val alert = state.alert
     when {
       state.isLoading ->
           CircularProgressIndicator(Modifier.size(32.dp).testTag(MyAlertScreenTestTags.LOADING))
-      state.errorMessage != null ->
+      alert == null -> state.errorMessage?.let { ErrorMessage(it) }
+      else -> {
+        state.errorMessage?.let { ErrorMessage(it) }
+        map(
+            state.mapSightings.map { SightingMarker(numbers.getValue(it.id), it.location) },
+            state.likelyArea,
+            state.likelyArea?.center
+                ?: state.mapSightings.firstOrNull()?.location
+                ?: alert.lastKnownLocation,
+            Modifier.fillMaxWidth()
+                .height(240.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SpottedMapBackground)
+                .testTag(MyAlertScreenTestTags.MAP),
+        )
+
+        Text("LATEST SIGHTINGS", style = jakarta(12, 16f, 700, 0xFF6B7280))
+        if (state.sightings.isEmpty()) {
           Text(
-              state.errorMessage,
-              style = jakarta(14, 20f, 600, 0xFFD93025),
-              modifier = Modifier.testTag(MyAlertScreenTestTags.ERROR),
+              "No sightings yet. You'll see them here as soon as someone reports one.",
+              style = jakarta(13, 18f, 500, 0xFF5F6672),
+              modifier = Modifier.testTag(MyAlertScreenTestTags.NO_SIGHTINGS),
           )
-    }
+        }
+        state.sightings.forEach { sighting ->
+          SightingRow(
+              number = numbers.getValue(sighting.id),
+              sighting = sighting,
+              onConfirm = { onConfirm(sighting.id) },
+              onDismiss = { onDismiss(sighting.id) },
+          )
+        }
 
-    state.alert?.let { alert ->
-      map(
-          state.mapSightings.map { SightingMarker(numbers.getValue(it.id), it.location) },
-          state.likelyArea,
-          state.likelyArea?.center
-              ?: state.mapSightings.firstOrNull()?.location
-              ?: alert.lastKnownLocation,
-          Modifier.fillMaxWidth()
-              .height(240.dp)
-              .clip(RoundedCornerShape(16.dp))
-              .background(SpottedMapBackground)
-              .testTag(MyAlertScreenTestTags.MAP),
-      )
-
-      Text("LATEST SIGHTINGS", style = jakarta(12, 16f, 700, 0xFF6B7280))
-      if (state.sightings.isEmpty()) {
-        Text(
-            "No sightings yet. You'll see them here as soon as someone reports one.",
-            style = jakarta(13, 18f, 500, 0xFF5F6672),
-            modifier = Modifier.testTag(MyAlertScreenTestTags.NO_SIGHTINGS),
-        )
-      }
-      state.sightings.forEach { sighting ->
-        SightingRow(
-            number = numbers.getValue(sighting.id),
-            sighting = sighting,
-            onConfirm = { onConfirm(sighting.id) },
-            onDismiss = { onDismiss(sighting.id) },
-        )
-      }
-
-      Button(
-          onClick = { askPetHome = true },
-          colors = ButtonDefaults.buttonColors(containerColor = SpottedBlue),
-          shape = RoundedCornerShape(16.dp),
-          modifier =
-              Modifier.fillMaxWidth().height(56.dp).testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
-      ) {
-        Text("My pet is home", style = jakarta(16, 20f, 700, 0xFFFFFFFF))
+        Button(
+            onClick = { askPetHome = true },
+            colors = ButtonDefaults.buttonColors(containerColor = SpottedBlue),
+            shape = RoundedCornerShape(16.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .height(56.dp)
+                    .testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
+        ) {
+          Text("My pet is home", style = jakarta(16, 20f, 700, 0xFFFFFFFF))
+        }
       }
     }
   }
@@ -223,6 +225,16 @@ fun MyAlertContent(
         modifier = Modifier.testTag(MyAlertScreenTestTags.PET_HOME_DIALOG),
     )
   }
+}
+
+/** The screen's error, alone when the alert couldn't be loaded, else above it. */
+@Composable
+private fun ErrorMessage(message: String) {
+  Text(
+      message,
+      style = jakarta(14, 20f, 600, 0xFFD93025),
+      modifier = Modifier.testTag(MyAlertScreenTestTags.ERROR),
+  )
 }
 
 /** One sighting in the list: number, photo, time and place, status, and the review buttons. */
