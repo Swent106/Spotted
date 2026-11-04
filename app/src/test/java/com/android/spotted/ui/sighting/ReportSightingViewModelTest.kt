@@ -248,6 +248,15 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun setDirection_nullClearsSelection() {
+    viewModel.setDirection(45)
+
+    viewModel.setDirection(null)
+
+    assertNull(viewModel.uiState.value.direction)
+  }
+
+  @Test
   fun submitSighting_success_storesSightingAndSetsSubmittedFlag() = runTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5197, 6.6323))

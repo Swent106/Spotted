@@ -816,6 +816,16 @@ describe("Firestore sighting access rules", () => {
     });
   }
 
+  it("sighting create: allows a document without headingDegrees", async () => {
+    const db = firestoreForUser("user-1");
+    const sightingWithoutHeading = sighting("sighting-1", "user-1");
+    delete sightingWithoutHeading.headingDegrees;
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sightingWithoutHeading),
+    );
+  });
+
   const readCases = [
     { who: "reporter", userId: "user-1", allowed: true },
     { who: "another user", userId: "user-2", allowed: true },
