@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.sighting
 
 import android.Manifest
@@ -341,6 +342,45 @@ class ReportSightingContentTest {
     composeTestRule.waitUntil(TIMEOUT_MILLIS) { submittedCalled }
   }
 
+  @Test
+  fun photoChecking_showsTheSpinnerAndNoWarning() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state = ReportSightingUiState(photoUri = PHOTO, photoCheck = PhotoCheck.CHECKING)
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_CHECKING).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_WARNING).assertDoesNotExist()
+  }
+
+  @Test
+  fun photoWithoutAnimal_showsTheWarning() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state = ReportSightingUiState(photoUri = PHOTO, photoCheck = PhotoCheck.NO_ANIMAL)
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.PHOTO_WARNING)
+        .assertIsDisplayed()
+        .assertTextEquals("We couldn't see an animal in this photo. Choose another one.")
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_CHECKING).assertDoesNotExist()
+  }
+
+  @Test
+  fun photoWithAnAnimal_showsNeitherTheSpinnerNorTheWarning() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state = ReportSightingUiState(photoUri = PHOTO, photoCheck = PhotoCheck.ANIMAL)
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_CHECKING).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_WARNING).assertDoesNotExist()
+  }
+
   private fun grantLocationPermission() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     instrumentation.uiAutomation.grantRuntimePermission(
@@ -388,5 +428,6 @@ class ReportSightingContentTest {
   private companion object {
     val GPS_LOCATION = Location(46.52, 6.63)
     const val TIMEOUT_MILLIS = 5_000L
+    const val PHOTO = "content://media/photo.jpg"
   }
 }

@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.sighting
 
 import androidx.lifecycle.ViewModel
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.LocationRepositoryProvider
+import com.android.spotted.data.photo.AnimalDetectorMlKit
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.Location
@@ -17,10 +19,12 @@ import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,10 +38,14 @@ class ReportSightingViewModel(
     private val authRepository: AuthRepository = AuthRepositoryProvider.authRepository,
     private val now: () -> Long = { System.currentTimeMillis() },
     private val alertRepository: AlertRepository? = null,
+    private val animalDetector: AnimalDetector? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(ReportSightingUiState())
   val uiState: StateFlow<ReportSightingUiState> = _uiState.asStateFlow()
+
+  /** Detection of the current photo, cancelled when another photo is chosen. */
+  private var photoCheckJob: Job? = null
 
   fun loadCurrentLocation() {
     val repo = locationRepository ?: return
@@ -121,15 +129,43 @@ class ReportSightingViewModel(
     }
   }
 
+  /**
+   * Shows [uri] as the sighting photo and checks that it shows an animal. Removing the photo (null)
+   * resets the check; if the detector fails, the photo is accepted so the user is never blocked.
+   */
   fun setPhotoUri(uri: String?) {
-    _uiState.update { it.copy(photoUri = uri) }
+    photoCheckJob?.cancel()
+    val detector = animalDetector
+    if (uri == null || detector == null) {
+      val check = if (uri == null) PhotoCheck.NONE else PhotoCheck.ANIMAL
+      _uiState.update { it.copy(photoUri = uri, photoCheck = check, detectedSpecies = null) }
+      return
+    }
+    _uiState.update {
+      it.copy(photoUri = uri, photoCheck = PhotoCheck.CHECKING, detectedSpecies = null)
+    }
+    photoCheckJob = viewModelScope.launch {
+      detector
+          .detect(uri)
+          .fold(
+              onSuccess = { detection ->
+                _uiState.update {
+                  if (detection.isAnimal)
+                      it.copy(photoCheck = PhotoCheck.ANIMAL, detectedSpecies = detection.species)
+                  else it.copy(photoCheck = PhotoCheck.NO_ANIMAL)
+                }
+              },
+              // Offline or failed: accept the photo, without a species
+              onFailure = { _uiState.update { it.copy(photoCheck = PhotoCheck.ANIMAL) } },
+          )
+    }
   }
 
   fun selectAlert(alertId: String) {
     _uiState.update { currentState ->
       val alert = currentState.nearbyAlerts.firstOrNull { it.alertId == alertId }
       val autoSpecies =
-          alert?.species ?: currentState.detectedSpecies ?: currentState.selectedSpecies
+          alert?.species ?: currentState.selectedSpecies ?: currentState.detectedSpecies
       currentState.copy(
           selectedAlertId = alertId,
           isNoMatchingAlertSelected = false,
@@ -140,7 +176,7 @@ class ReportSightingViewModel(
 
   fun selectNoMatchingAlert() {
     _uiState.update { currentState ->
-      val autoSpecies = currentState.detectedSpecies ?: currentState.selectedSpecies ?: Species.DOG
+      val autoSpecies = currentState.selectedSpecies ?: currentState.detectedSpecies ?: Species.DOG
       currentState.copy(
           selectedAlertId = null,
           isNoMatchingAlertSelected = true,
@@ -240,6 +276,7 @@ class ReportSightingViewModel(
                 locationRepository = LocationRepositoryProvider.create(application),
                 authRepository = AuthRepositoryProvider.authRepository,
                 alertRepository = AlertRepositoryFirestore(),
+                animalDetector = AnimalDetectorMlKit(application),
             )
                 as T
           }
