@@ -772,6 +772,7 @@ describe("Firestore sighting access rules", () => {
       species: "DOG",
       photoUrl: null,
       alertId: "alert-1",
+      headingDegrees: null,
       ...overrides,
     };
   }
@@ -942,6 +943,10 @@ describe("Firestore sighting access rules", () => {
       sighting("sighting-1", "user-1", { species: "PARROT" }),
       sighting("sighting-1", "user-1", { photoUrl: 42 }),
       sighting("sighting-1", "user-1", { alertId: "" }),
+      sighting("sighting-1", "user-1", { headingDegrees: -1 }),
+      sighting("sighting-1", "user-1", { headingDegrees: 360 }),
+      sighting("sighting-1", "user-1", { headingDegrees: 1.5 }),
+      sighting("sighting-1", "user-1", { headingDegrees: "45" }),
     ];
 
     for (const invalidSighting of invalidSightings) {
@@ -960,6 +965,7 @@ describe("Firestore sighting access rules", () => {
       { species: "PARROT" },
       { photoUrl: "x".repeat(2049) },
       { alertId: "" },
+      { headingDegrees: 360 },
       { species: deleteField() },
     ];
 
@@ -1095,6 +1101,13 @@ describe("Firestore sighting access rules", () => {
     { field: "location", value: { latitude: 90, longitude: 180 }, allowed: true },
     { field: "location", value: { latitude: -90.1, longitude: 0 }, allowed: false },
     { field: "location", value: { latitude: 0, longitude: 180.1 }, allowed: false },
+    { field: "headingDegrees", value: null, allowed: true },
+    { field: "headingDegrees", value: 0, allowed: true },
+    { field: "headingDegrees", value: 359, allowed: true },
+    { field: "headingDegrees", value: -1, allowed: false },
+    { field: "headingDegrees", value: 360, allowed: false },
+    { field: "headingDegrees", value: 1.5, allowed: false },
+    { field: "headingDegrees", value: "45", allowed: false },
   ];
 
   for (const testCase of boundaryCases) {
