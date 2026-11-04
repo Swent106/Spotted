@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 rules_version = '2';
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -240,6 +241,48 @@ service cloud.firestore {
           && request.resource.data.data is string
           && (resource == null || resource.data.ownerId == request.auth.uid);
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+    }
+
+    // petTags/{tagId}: tagId (uppercase hex UID), petId, ownerId and
+    // linkedAtMillis are required. The four-field schema is strict.
+    match /petTags/{tagId} {
+      function ownsPet(petId) {
+        let petPath = /databases/$(database)/documents/pets/$(petId);
+        return isAuthenticated()
+          && exists(petPath)
+          && get(petPath).data.ownerId == request.auth.uid;
+      }
+
+      function isValidPetTag(data) {
+        return data.keys().hasAll(['tagId', 'petId', 'ownerId', 'linkedAtMillis'])
+          && data.keys().hasOnly(['tagId', 'petId', 'ownerId', 'linkedAtMillis'])
+          && data.tagId == tagId
+          && data.tagId is string
+          && data.tagId.matches('^[0-9A-F]{1,32}$')
+          && data.petId is string
+          && data.petId.size() > 0
+          && data.petId.size() <= 128
+          && data.ownerId is string
+          && data.ownerId.size() > 0
+          && data.ownerId.size() <= 128
+          && data.linkedAtMillis is int
+          && data.linkedAtMillis >=0; //copilot told me this doesn't prevent buffer overflow because:Firestore integers are bounded 64-bit values, and Kotlin reads this field as a Long
+      }
+
+      // Known UID lookups are allowed for signed-in users; collection queries are owner-scoped.
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      allow create: if isAuthenticated()
+          && isValidPetTag(request.resource.data)
+          && request.resource.data.ownerId == request.auth.uid
+          && ownsPet(request.resource.data.petId);
+      allow update: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && isValidPetTag(request.resource.data)
+          && request.resource.data.ownerId == resource.data.ownerId
+          && ownsPet(request.resource.data.petId);
+      allow delete: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid;
     }
 
     match /{document=**} {
