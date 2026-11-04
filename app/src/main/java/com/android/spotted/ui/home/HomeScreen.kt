@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
@@ -324,7 +325,13 @@ private fun HeaderButton(
                 .clip(RoundedCornerShape(16.dp))
                 .background(SpottedTheme.colors.surface),
     ) {
-      Image(painterResource(icon), description, Modifier.size(iconSize))
+      // Tinted: the drawable is black, invisible on the dark surface
+      Image(
+          painterResource(icon),
+          description,
+          Modifier.size(iconSize),
+          colorFilter = ColorFilter.tint(SpottedTheme.colors.ink),
+      )
     }
   }
 }
@@ -539,7 +546,13 @@ internal fun TabBar(
                   .selectable(selected = selected, role = Role.Tab, onClick = onClicks[index])
                   .testTag(tab.tag),
       ) {
-        Image(painterResource(tab.icon), tab.label, Modifier.size(tab.iconSize))
+        // Tinted: the drawables are black, invisible on the dark surface
+        Image(
+            painterResource(tab.icon),
+            tab.label,
+            Modifier.size(tab.iconSize),
+            colorFilter = ColorFilter.tint(SpottedTheme.colors.ink),
+        )
       }
     }
   }

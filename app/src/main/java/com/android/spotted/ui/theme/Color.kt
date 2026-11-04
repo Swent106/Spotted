@@ -162,7 +162,7 @@ val DarkSpottedColors =
         badgeLocked = Color(0xFF262A31),
         badgeLockedIcon = Color(0xFF6B717C),
         textMuted = Color(0xFF7E848E),
-        textFaint = Color(0xFF6F7580),
+        textFaint = Color(0xFF8A909A),
         rankYou = Color(0xFF7FA6F5),
         surface = Color(0xFF1B1E24),
         warning = Color(0xFFF0B455),
@@ -184,6 +184,8 @@ object SpottedIllustration {
   val bubbleSlate = Color(0xFFD9E2E8)
   val ring = Color(0xFFD3DBF5)
   val photoBorder = Color.White
+  // Behind the camera preview and the photo just taken: dark in both modes, like a viewfinder
+  val cameraBackground = Color(0xFF14161A)
   val photoPlaceholderStart = Color(0xFFA88D71)
   val photoPlaceholderEnd = Color(0xFFE3B88F)
 }

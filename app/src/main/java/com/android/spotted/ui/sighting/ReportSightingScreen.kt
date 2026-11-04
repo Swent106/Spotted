@@ -52,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.components.rememberPhotoPickerActions
+import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
@@ -96,7 +97,7 @@ fun ReportSightingContent(
         modifier =
             Modifier.fillMaxWidth()
                 .height(260.dp)
-                .background(SpottedTheme.colors.ink)
+                .background(SpottedIllustration.cameraBackground)
                 .testTag(ReportSightingScreenTestTags.PHOTO_AREA),
         contentAlignment = Alignment.Center,
     ) {
@@ -122,7 +123,8 @@ fun ReportSightingContent(
       // Retake / Add Photo Button in top right
       Button(
           onClick = { photoPickerActions.pickFromGallery() },
-          colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.ink),
+          colors =
+              ButtonDefaults.buttonColors(containerColor = SpottedIllustration.cameraBackground),
           shape = RoundedCornerShape(20.dp),
           modifier =
               Modifier.align(Alignment.TopEnd)
