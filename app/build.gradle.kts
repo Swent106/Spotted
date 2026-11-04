@@ -136,6 +136,7 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.appcompat)
   implementation(libs.firebase.auth)
+  implementation(libs.image.labeling) // ML Kit, model bundled in the APK
   implementation(libs.material)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.navigation.compose)
