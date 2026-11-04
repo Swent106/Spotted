@@ -202,6 +202,32 @@ class MyAlertContentTest {
     assertTrue(back)
   }
 
+  @Test
+  fun realMap_drawsTheSightingsAndTheLikelyArea() {
+    // No placeholder: the OpenStreetMap view itself is created, given markers and the area
+    composeTestRule.setContent {
+      MyAlertContent(
+          state =
+              MyAlertUiState(
+                  isLoading = false,
+                  alert = MILO_ALERT,
+                  sightings = listOf(PENDING, DISMISSED, CONFIRMED),
+                  likelyArea = AREA,
+              )
+      )
+    }
+
+    node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
+  }
+
+  @Test
+  fun sightingWithAPhoto_showsItsRow() {
+    val withPhoto = PENDING.copy(photoUrl = "https://example.com/milo.jpg")
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withPhoto)))
+
+    node(MyAlertScreenTestTags.sighting(withPhoto.id)).performScrollTo().assertIsDisplayed()
+  }
+
   private companion object {
     val PARC = Location(latitude = 46.1925, longitude = 6.1580)
     val MILO_ALERT =
