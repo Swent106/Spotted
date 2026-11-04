@@ -43,10 +43,7 @@ import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.ui.components.MapPicker
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedBlueTint
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedScreenBackground
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 /** Test tags used by UI tests to find the elements of the Report missing screen. */
@@ -79,7 +76,7 @@ fun ReportMissingContent(
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(SpottedScreenBackground)
+              .background(SpottedTheme.colors.screenBackground)
               .paint(
                   painterResource(R.drawable.background_textures),
                   contentScale = ContentScale.Crop,
@@ -94,13 +91,13 @@ fun ReportMissingContent(
           onClick = onBack,
           modifier = Modifier.testTag(ReportMissingScreenTestTags.BACK_BUTTON),
       ) {
-        Text("<", style = jakarta(20, 24f, 700, 0xFF14161A))
+        Text("<", style = jakarta(20, 24f, 700, SpottedTheme.colors.ink))
       }
       Column {
-        Text("Report a pet missing", style = jakarta(22, 28f, 700, 0xFF14161A))
+        Text("Report a pet missing", style = jakarta(22, 28f, 700, SpottedTheme.colors.ink))
         Text(
             "Everyone within $ALERT_RADIUS_KM km gets an alert right away",
-            style = jakarta(12, 16f, 500, 0xFF5F6672),
+            style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
         )
       }
     }
@@ -111,7 +108,7 @@ fun ReportMissingContent(
       } else if (state.pets.isEmpty()) {
         Text(
             "You have no pets yet. Add one from your profile first.",
-            style = jakarta(13, 18f, 500, 0xFF5F6672),
+            style = jakarta(13, 18f, 500, SpottedTheme.colors.textSecondary),
             modifier = Modifier.testTag(ReportMissingScreenTestTags.NO_PETS),
         )
       }
@@ -139,7 +136,11 @@ fun ReportMissingContent(
           verticalAlignment = Alignment.CenterVertically,
           modifier = Modifier.fillMaxWidth().testTag(ReportMissingScreenTestTags.ERROR_MESSAGE),
       ) {
-        Text(message, style = jakarta(13, 18f, 600, 0xFFD93025), modifier = Modifier.weight(1f))
+        Text(
+            message,
+            style = jakarta(13, 18f, 600, SpottedTheme.colors.error),
+            modifier = Modifier.weight(1f),
+        )
         TextButton(onClick = onDismissError) { Text("OK") }
       }
     }
@@ -147,7 +148,7 @@ fun ReportMissingContent(
     Button(
         onClick = onPublish,
         enabled = state.canPublish,
-        colors = ButtonDefaults.buttonColors(containerColor = SpottedError),
+        colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.error),
         shape = RoundedCornerShape(16.dp),
         modifier =
             Modifier.fillMaxWidth()
@@ -161,7 +162,7 @@ fun ReportMissingContent(
             modifier = Modifier.size(20.dp).testTag(ReportMissingScreenTestTags.PUBLISH_LOADER),
         )
       } else {
-        Text("Publish alert", style = jakarta(16, 20f, 700, 0xFFFFFFFF))
+        Text("Publish alert", style = jakarta(16, 20f, 700, Color.White))
       }
     }
   }
@@ -171,10 +172,12 @@ fun ReportMissingContent(
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
   Column(
       modifier =
-          Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(20.dp)).padding(16.dp),
+          Modifier.fillMaxWidth()
+              .background(SpottedTheme.colors.surface, RoundedCornerShape(20.dp))
+              .padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    Text(title.uppercase(), style = jakarta(12, 16f, 700, 0xFF6B7280))
+    Text(title.uppercase(), style = jakarta(12, 16f, 700, SpottedTheme.colors.textLabel))
     content()
   }
 }
@@ -186,7 +189,8 @@ private fun PetOption(pet: Pet, selected: Boolean, onClick: () -> Unit) {
       modifier =
           Modifier.fillMaxWidth()
               .background(
-                  if (selected) SpottedBlueTint else Color(0xFFF5F6F8),
+                  if (selected) SpottedTheme.colors.blueTint
+                  else SpottedTheme.colors.inputBackground,
                   RoundedCornerShape(16.dp),
               )
               .clickable(onClick = onClick)
@@ -197,7 +201,7 @@ private fun PetOption(pet: Pet, selected: Boolean, onClick: () -> Unit) {
         modifier =
             Modifier.size(52.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(SpottedAvatarBackground),
+                .background(SpottedTheme.colors.avatarBackground),
         contentAlignment = Alignment.Center,
     ) {
       if (pet.photoUrl != null) {
@@ -208,15 +212,15 @@ private fun PetOption(pet: Pet, selected: Boolean, onClick: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
         )
       } else {
-        Text(pet.name.take(1), style = jakarta(18, 22f, 700, 0xFF14161A))
+        Text(pet.name.take(1), style = jakarta(18, 22f, 700, SpottedTheme.colors.ink))
       }
     }
     Spacer(Modifier.width(12.dp))
     Column(Modifier.weight(1f)) {
-      Text(pet.name, style = jakarta(16, 20f, 700, 0xFF14161A))
+      Text(pet.name, style = jakarta(16, 20f, 700, SpottedTheme.colors.ink))
       Text(
           pet.breed.ifBlank { pet.species.name.lowercase().replaceFirstChar { it.uppercase() } },
-          style = jakarta(12, 16f, 500, 0xFF5F6672),
+          style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
       )
     }
     RadioButton(selected = selected, onClick = onClick)

@@ -177,7 +177,9 @@ object SpottedIllustration {
   val bubbleBeige = Color(0xFFF0E0CE)
   val bubbleBlue = Color(0xFFE8EEFC)
   val bubbleGrey = Color(0xFFDDE3EE)
+  val bubbleSlate = Color(0xFFD9E2E8)
   val ring = Color(0xFFD3DBF5)
+  val photoBorder = Color.White
   val photoPlaceholderStart = Color(0xFFA88D71)
   val photoPlaceholderEnd = Color(0xFFE3B88F)
 }
