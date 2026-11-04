@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
 import androidx.compose.foundation.Image
@@ -32,12 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.spotted.R
 import com.android.spotted.model.alert.Alert
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedBlue
-import com.android.spotted.ui.theme.SpottedFeaturedPhotoBackground
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedLostRed
-import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 /** "12 min ago", "2 h ago", "yesterday", "3 days ago". A time in the future counts as now. */
@@ -82,7 +78,7 @@ internal fun LazyListScope.lostPetsSection(
         item(key = "alertsEmpty") {
           SectionMessage(
               HomeScreenTexts.NO_LOST_PETS,
-              SpottedTextSecondary,
+              SpottedTheme.colors.textSecondary,
               HomeScreenTestTags.ALERTS_EMPTY,
           )
         }
@@ -123,11 +119,18 @@ private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
           .fillMaxWidth()
           .height(58.dp)
           .clip(RoundedCornerShape(16.dp))
-          .background(Color.White)
+          .background(SpottedTheme.colors.surface)
   ) {
     Text(
         areaLabel(homeArea, alertRadiusKm),
-        style = jakarta(11, 14f, FontWeight.SemiBold, SpottedTextSecondary, spacing = 0.66f),
+        style =
+            jakarta(
+                11,
+                14f,
+                FontWeight.SemiBold,
+                SpottedTheme.colors.textSecondary,
+                spacing = 0.66f,
+            ),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.offset(9.dp, 4.dp).padding(end = 18.dp),
@@ -139,7 +142,7 @@ private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
     )
     Text(
         "$count ${if (count == 1) "pet" else "pets"} missing near you",
-        style = jakarta(17, 34f, FontWeight.ExtraBold, SpottedInk),
+        style = jakarta(17, 34f, FontWeight.ExtraBold, SpottedTheme.colors.ink),
         modifier = Modifier.offset(47.dp, 16.dp).testTag(HomeScreenTestTags.ALERTS_TITLE),
     )
   }
@@ -165,7 +168,7 @@ private fun AlertCard(
           modifier
               .fillMaxWidth()
               .clip(RoundedCornerShape(22.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .clickable(onClickLabel = "See ${alert.petName}'s alert") { onAlertClick(alert.id) }
               .padding(16.dp)
               .testTag(HomeScreenTestTags.alertCard(alert.id)),
@@ -176,7 +179,8 @@ private fun AlertCard(
           Modifier.size(if (featured) 78.dp else 58.dp)
               .clip(RoundedCornerShape(if (featured) 18.dp else 15.dp))
               .background(
-                  if (featured) SpottedFeaturedPhotoBackground else SpottedAvatarBackground
+                  if (featured) SpottedTheme.colors.featuredPhotoBackground
+                  else SpottedTheme.colors.avatarBackground
               ),
       )
       Spacer(Modifier.width(14.dp))
@@ -185,17 +189,20 @@ private fun AlertCard(
           Text(
               alert.petName,
               style =
-                  if (featured) jakarta(20, 26f, FontWeight.SemiBold, SpottedInk)
-                  else jakarta(17, 22f, FontWeight.SemiBold, SpottedInk),
+                  if (featured) jakarta(20, 26f, FontWeight.SemiBold, SpottedTheme.colors.ink)
+                  else jakarta(17, 22f, FontWeight.SemiBold, SpottedTheme.colors.ink),
           )
           if (featured) {
             Spacer(Modifier.width(9.dp))
-            Text("More info", style = jakarta(14, 18f, FontWeight.Medium, SpottedTextSecondary))
+            Text(
+                "More info",
+                style = jakarta(14, 18f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
+            )
           }
         }
         Text(
             alert.petSpecies.name.lowercase().replaceFirstChar { it.uppercase() },
-            style = jakarta(14, 18f, FontWeight.Medium, SpottedTextSecondary),
+            style = jakarta(14, 18f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
         )
         Text(
             "Lost ${timeAgo(alert.lostAtMillis, nowMillis)}",
@@ -204,13 +211,14 @@ private fun AlertCard(
                     13,
                     17f,
                     FontWeight.SemiBold,
-                    if (featured) SpottedLostRed else SpottedTextSecondary,
+                    if (featured) SpottedTheme.colors.lostRed
+                    else SpottedTheme.colors.textSecondary,
                 ),
         )
         if (distanceText != null) {
           Text(
               distanceText,
-              style = jakarta(13, 17f, FontWeight.Medium, SpottedTextSecondary),
+              style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
               modifier = Modifier.testTag(HomeScreenTestTags.alertDistance(alert.id)),
           )
         }
@@ -220,7 +228,7 @@ private fun AlertCard(
       Button(
           onClick = { onSeenPetClick(alert.id) },
           shape = RoundedCornerShape(14.dp),
-          colors = ButtonDefaults.buttonColors(containerColor = SpottedBlue),
+          colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
           modifier =
               Modifier.fillMaxWidth()
                   .height(50.dp)

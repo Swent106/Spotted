@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
 import androidx.compose.foundation.BorderStroke
@@ -61,16 +62,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedHomeBackground
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedLostRed
-import com.android.spotted.ui.theme.SpottedReportBorder
-import com.android.spotted.ui.theme.SpottedTabBarBorder
-import com.android.spotted.ui.theme.SpottedTabBorder
-import com.android.spotted.ui.theme.SpottedTabSelected
-import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 /** Test tags of the Home screen (`<feature>_<element>`). */
@@ -167,7 +159,11 @@ fun HomeScreenContent(
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
 ) {
-  Box(Modifier.fillMaxSize().background(SpottedHomeBackground).testTag(HomeScreenTestTags.SCREEN)) {
+  Box(
+      Modifier.fillMaxSize()
+          .background(SpottedTheme.colors.homeBackground)
+          .testTag(HomeScreenTestTags.SCREEN)
+  ) {
     // Background texture
     Image(
         painterResource(R.drawable.background_textures),
@@ -228,7 +224,7 @@ private fun HomeList(
           Spacer(Modifier.height(8.dp))
           Text(
               message,
-              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
+              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTheme.colors.error),
               modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
           )
         }
@@ -244,8 +240,9 @@ private fun HomeList(
       OutlinedButton(
           onClick = onReportMissingClick,
           shape = RoundedCornerShape(14.dp),
-          border = BorderStroke(1.dp, SpottedReportBorder),
-          colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
+          border = BorderStroke(1.dp, SpottedTheme.colors.reportBorder),
+          colors =
+              ButtonDefaults.outlinedButtonColors(containerColor = SpottedTheme.colors.surface),
           modifier =
               Modifier.padding(top = 9.dp)
                   .fillMaxWidth()
@@ -254,7 +251,7 @@ private fun HomeList(
       ) {
         Text(
             "Report a pet missing",
-            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed),
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.lostRed),
         )
       }
     }
@@ -275,13 +272,13 @@ private fun Header(
         photoUrl,
         Modifier.size(58.dp)
             .clip(RoundedCornerShape(27.dp))
-            .background(SpottedAvatarBackground)
+            .background(SpottedTheme.colors.avatarBackground)
             .testTag(HomeScreenTestTags.AVATAR),
     )
     Spacer(Modifier.width(9.dp))
     Text(
         if (userName.isBlank()) "Hey" else "Hey $userName",
-        style = jakarta(19, 24f, FontWeight.SemiBold, Color.Black),
+        style = jakarta(19, 24f, FontWeight.SemiBold, SpottedTheme.colors.ink),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.weight(1f),
@@ -322,7 +319,10 @@ private fun HeaderButton(
   ) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(32.dp).clip(RoundedCornerShape(16.dp)).background(Color.White),
+        modifier =
+            Modifier.size(32.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SpottedTheme.colors.surface),
     ) {
       Image(painterResource(icon), description, Modifier.size(iconSize))
     }
@@ -342,7 +342,7 @@ private fun LazyListScope.petsSection(
   item(key = "petsTitle") {
     Text(
         HomeScreenTexts.PETS_TITLE,
-        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
+        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
         modifier = Modifier.padding(top = 18.dp).testTag(HomeScreenTestTags.PETS_TITLE),
     )
   }
@@ -356,7 +356,7 @@ private fun LazyListScope.petsSection(
         item(key = "petsEmpty") {
           SectionMessage(
               HomeScreenTexts.NO_PETS,
-              SpottedTextSecondary,
+              SpottedTheme.colors.textSecondary,
               HomeScreenTestTags.PETS_EMPTY,
           )
         }
@@ -373,7 +373,7 @@ private fun LazyListScope.petsSection(
     ) {
       Text(
           HomeScreenTexts.ADD_PET,
-          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected),
+          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTheme.colors.tabSelected),
       )
     }
   }
@@ -393,9 +393,12 @@ internal fun SectionError(
     onRetryClick: () -> Unit,
 ) {
   Column {
-    SectionMessage(message, SpottedError, tag)
+    SectionMessage(message, SpottedTheme.colors.error, tag)
     TextButton(onClick = onRetryClick, modifier = Modifier.testTag(retryTag)) {
-      Text(HomeScreenTexts.RETRY, style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected))
+      Text(
+          HomeScreenTexts.RETRY,
+          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTheme.colors.tabSelected),
+      )
     }
   }
 }
@@ -409,7 +412,7 @@ private fun PetCard(pet: Pet, onClick: () -> Unit) {
           .heightIn(min = 131.dp)
           .height(IntrinsicSize.Min)
           .clip(RoundedCornerShape(22.dp))
-          .background(Color.White)
+          .background(SpottedTheme.colors.surface)
           .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
           .testTag(HomeScreenTestTags.petCard(pet.id))
   ) {
@@ -417,7 +420,7 @@ private fun PetCard(pet: Pet, onClick: () -> Unit) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             pet.name,
-            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
@@ -432,7 +435,7 @@ private fun PetCard(pet: Pet, onClick: () -> Unit) {
       Spacer(Modifier.height(3.dp))
       Text(
           "Profile ready if they go missing",
-          style = jakarta(13, 17f, FontWeight.Medium, SpottedTextSecondary),
+          style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
           maxLines = 3,
           overflow = TextOverflow.Ellipsis,
       )
@@ -457,7 +460,7 @@ internal fun SectionMessage(message: String, color: Color, tag: String) {
           Modifier.padding(top = 12.dp)
               .fillMaxWidth()
               .clip(RoundedCornerShape(16.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(16.dp)
               .testTag(tag),
   )
@@ -516,8 +519,8 @@ internal fun TabBar(
               .width(264.dp)
               .height(56.dp)
               .clip(RoundedCornerShape(28.dp))
-              .background(Color.White)
-              .border(1.dp, SpottedTabBarBorder, RoundedCornerShape(28.dp))
+              .background(SpottedTheme.colors.surface)
+              .border(1.dp, SpottedTheme.colors.tabBarBorder, RoundedCornerShape(28.dp))
               .padding(horizontal = 3.dp)
               .testTag(HomeScreenTestTags.TAB_BAR),
   ) {
@@ -529,8 +532,10 @@ internal fun TabBar(
               Modifier.width(if (selected) tab.selectedWidth else tab.width)
                   .height(51.dp)
                   .clip(RoundedCornerShape(27.dp))
-                  .background(if (selected) SpottedTabSelected else Color.White)
-                  .border(1.dp, SpottedTabBorder, RoundedCornerShape(27.dp))
+                  .background(
+                      if (selected) SpottedTheme.colors.tabSelected else SpottedTheme.colors.surface
+                  )
+                  .border(1.dp, SpottedTheme.colors.tabBorder, RoundedCornerShape(27.dp))
                   .selectable(selected = selected, role = Role.Tab, onClick = onClicks[index])
                   .testTag(tab.tag),
       ) {

@@ -54,7 +54,6 @@ import com.android.spotted.ui.components.PIN_TIP_Y
 import com.android.spotted.ui.components.createMapView
 import com.android.spotted.ui.home.HomeScreenTexts
 import com.android.spotted.ui.home.HomeViewModel
-import com.android.spotted.ui.theme.SpottedInk
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import org.osmdroid.util.GeoPoint
@@ -134,12 +133,12 @@ fun AlertsMapContent(
       if (alerts.isEmpty()) {
         Text(
             HomeScreenTexts.NO_LOST_PETS,
-            style = jakarta(13, 17f, FontWeight.SemiBold, SpottedInk),
+            style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTheme.colors.ink),
             modifier =
                 Modifier.align(Alignment.BottomStart)
                     .padding(12.dp)
                     .clip(RoundedCornerShape(100.dp))
-                    .background(Color.White.copy(alpha = 0.95f))
+                    .background(SpottedTheme.colors.surface.copy(alpha = 0.95f))
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag(AlertsMapTestTags.EMPTY),
         )
