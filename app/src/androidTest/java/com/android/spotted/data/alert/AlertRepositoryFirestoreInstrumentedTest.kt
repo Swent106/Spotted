@@ -16,6 +16,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
@@ -318,6 +319,22 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
       assertEquals(receivedBeforeCancel, received.toList())
     }
+  }
+
+  @Test
+  fun observeOpenAlertsNear_whenSignedOut_emitsFailureAndEnds() = runBlocking {
+    // The rules only let signed-in users list alerts, so the listener is refused
+    auth.signOut()
+
+    val emissions =
+        withTimeout(TIMEOUT_MILLIS) {
+          repository
+              .observeOpenAlertsNear(Location(latitude = 46.0, longitude = 6.0), radiusKm = 1.0)
+              .toList()
+        }
+
+    assertEquals(1, emissions.size)
+    assertTrue("The only emission should be a failure", emissions.single().isFailure)
   }
 
   /**
