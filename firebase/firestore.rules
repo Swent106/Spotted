@@ -194,10 +194,27 @@ service cloud.firestore {
           && get(alertPath).data.ownerId == request.auth.uid;
       }
 
+      // A new sighting is at most 5 minutes in the future (clocks are not always in sync).
+      function notInTheFuture(d) {
+        return d.seenAtMillis <= request.time.toMillis() + 300000;
+      }
+
+      // A new sighting may only be linked to an open alert of another user.
+      function canBeLinkedTo(d) {
+        let alertId = d.get('alertId', null);
+        let alertPath = /databases/$(database)/documents/alerts/$(alertId);
+        return alertId == null
+          || (exists(alertPath)
+              && get(alertPath).data.status == 'OPEN'
+              && get(alertPath).data.ownerId != request.auth.uid);
+      }
+
       allow create: if request.auth != null
           && validSighting(request.resource.data)
           && request.resource.data.reporterId == request.auth.uid
-          && statusOf(request.resource.data) == 'PENDING';
+          && statusOf(request.resource.data) == 'PENDING'
+          && notInTheFuture(request.resource.data)
+          && canBeLinkedTo(request.resource.data);
 
       // Once linked to an alert, a sighting stays on it (it may still be linked later).
       function alertIdKept() {

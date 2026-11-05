@@ -565,6 +565,125 @@ class ReportSightingViewModelTest {
     assertEquals(Species.CAT, vm.uiState.value.selectedSpecies)
   }
 
+  // ===================== Plausibility of a sighting on an alert =====================
+
+  @Test
+  fun submitSighting_plausibleSightingOnAnAlert_isSent() = runTest {
+    val vm = viewModelOnAlert(alertOwnedBy("someone-else"))
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
+    assertEquals(ALERT_ID, sightingRepository.reportedSightings.single().alertId)
+  }
+
+  @Test
+  fun submitSighting_onOwnAlert_isRefusedWithItsMessageAndNothingUploaded() = runTest {
+    val vm = viewModelOnAlert(alertOwnedBy(signedInUid()))
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertEquals(ReportSightingViewModel.OWN_ALERT_MESSAGE, state.errorMessage)
+    assertFalse(state.submitted)
+    assertFalse(state.isSubmitting)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+    assertTrue(photoRepository.uploadedPhotos.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_severalIssues_showsOneLinePerIssue() = runTest {
+    // Lost after the sighting time, far away, by the signed-in user
+    val alert =
+        alertOwnedBy(signedInUid())
+            .copy(lostAtMillis = fixedTimestamp + 1, lastKnownLocation = Location(47.37, 8.54))
+    val vm = viewModelOnAlert(alert)
+
+    vm.submitSighting()
+
+    assertEquals(
+        listOf(
+                ReportSightingViewModel.SEEN_BEFORE_LOST_MESSAGE,
+                ReportSightingViewModel.TOO_FAR_MESSAGE,
+                ReportSightingViewModel.OWN_ALERT_MESSAGE,
+            )
+            .joinToString("\n"),
+        vm.uiState.value.errorMessage,
+    )
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_alertThatCantBeLoaded_isRefused() = runTest {
+    val alertRepository = FakeAlertRepository().apply { failure = Exception("Offline") }
+    val vm = viewModelOnAlert(alert = null, alertRepository = alertRepository)
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.ALERT_NOT_LOADED, vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.isSubmitting)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_alertThatDoesNotExist_isRefused() = runTest {
+    val vm = viewModelOnAlert(alert = null)
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.ALERT_NOT_LOADED, vm.uiState.value.errorMessage)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_withoutAnAlertRepository_isRefusedWhenAnAlertIsChosen() = runTest {
+    viewModel.setSpecies(Species.DOG)
+    viewModel.setLocation(ALERT_PLACE)
+    viewModel.selectAlert(ALERT_ID)
+
+    viewModel.submitSighting()
+
+    assertEquals(ReportSightingViewModel.ALERT_NOT_LOADED, viewModel.uiState.value.errorMessage)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  private fun signedInUid() = authRepository.currentUser.value!!.uid
+
+  private fun alertOwnedBy(ownerId: String) =
+      Alert(
+          id = ALERT_ID,
+          petId = "pet",
+          ownerId = ownerId,
+          lastKnownLocation = ALERT_PLACE,
+          lostAtMillis = 0L,
+          petName = "Rex",
+          petSpecies = Species.DOG,
+      )
+
+  /**
+   * A view model whose form is filled in for a sighting at [ALERT_PLACE] on [ALERT_ID], with
+   * [alert] published (none if null) in [alertRepository].
+   */
+  private suspend fun viewModelOnAlert(
+      alert: Alert?,
+      alertRepository: FakeAlertRepository = FakeAlertRepository(),
+  ): ReportSightingViewModel {
+    alert?.let { alertRepository.publishAlert(it) }
+    return ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            now = { fixedTimestamp },
+            alertRepository = alertRepository,
+        )
+        .apply {
+          setSpecies(Species.DOG)
+          setLocation(ALERT_PLACE)
+          selectAlert(ALERT_ID)
+        }
+  }
+
   private fun viewModelWith(detector: AnimalDetector) =
       ReportSightingViewModel(
           sightingRepository = sightingRepository,
@@ -595,5 +714,7 @@ class ReportSightingViewModelTest {
   private companion object {
     const val PHOTO = "content://media/photo.jpg"
     const val OTHER_PHOTO = "content://media/other.jpg"
+    const val ALERT_ID = "alert-rex"
+    val ALERT_PLACE = Location(46.52, 6.63)
   }
 }
