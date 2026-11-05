@@ -1,3 +1,5 @@
+// Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
 import androidx.compose.foundation.BorderStroke
@@ -33,9 +35,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
@@ -53,6 +58,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -61,16 +69,8 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedHomeBackground
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedLostRed
-import com.android.spotted.ui.theme.SpottedReportBorder
-import com.android.spotted.ui.theme.SpottedTabBarBorder
-import com.android.spotted.ui.theme.SpottedTabBorder
-import com.android.spotted.ui.theme.SpottedTabSelected
-import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.components.RequestLocationPermissionOnce
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 /** Test tags of the Home screen (`<feature>_<element>`). */
@@ -90,6 +90,8 @@ object HomeScreenTestTags {
   const val ALERTS_ERROR = "home_alertsError"
   const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
+  const val OFFLINE_BANNER = "home_offlineBanner"
+  const val OFFLINE_RETRY = "home_offlineRetry"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val ADD_PET_BUTTON = "home_addPetButton"
   const val AVATAR = "home_avatar"
@@ -100,6 +102,10 @@ object HomeScreenTestTags {
   const val TAB_PROFILE = "home_tabProfile"
 
   fun petCard(petId: String) = "home_pet_$petId"
+
+  fun missingBanner(alertId: String) = "home_missing_$alertId"
+
+  fun missingBadge(petId: String) = "home_missingBadge_$petId"
 
   fun alertCard(alertId: String) = "home_alert_$alertId"
 
@@ -114,6 +120,7 @@ object HomeScreenTexts {
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
   const val NO_LOST_PETS = "No missing pets near you"
   const val RETRY = "Retry"
+  const val OFFLINE_ALERTS = "You're offline · showing the last 5 alerts"
   const val ADD_PET = "Add a pet"
 }
 
@@ -128,6 +135,7 @@ fun HomeScreen(
     onSeenPetClick: (alertId: String) -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
+    onMissingPetClick: (alertId: String) -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
@@ -137,11 +145,14 @@ fun HomeScreen(
   // a profile change (radius, home) shows up. The first time, the ViewModel has just loaded
   var shownBefore by rememberSaveable { mutableStateOf(false) }
   LaunchedEffect(Unit) { if (shownBefore) viewModel.refresh() else shownBefore = true }
+  // Once granted, reload so "600 m away" is measured from the GPS instead of the home area
+  RequestLocationPermissionOnce(onGranted = viewModel::refresh)
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,
       onAddPetClick = onAddPetClick,
       onPetClick = onPetClick,
+      onMissingPetClick = onMissingPetClick,
       onMapClick = onMapClick,
       onCameraClick = onCameraClick,
       onProfileClick = onProfileClick,
@@ -161,13 +172,28 @@ fun HomeScreenContent(
     onRetryClick: () -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
+    onMissingPetClick: (alertId: String) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
 ) {
-  Box(Modifier.fillMaxSize().background(SpottedHomeBackground).testTag(HomeScreenTestTags.SCREEN)) {
+  var isOpeningPetProfile by remember { mutableStateOf(false) }
+  val lifecycleOwner = LocalLifecycleOwner.current
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) isOpeningPetProfile = false
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+
+  Box(
+      Modifier.fillMaxSize()
+          .background(SpottedTheme.colors.homeBackground)
+          .testTag(HomeScreenTestTags.SCREEN)
+  ) {
     // Background texture
     Image(
         painterResource(R.drawable.background_textures),
@@ -193,7 +219,19 @@ fun HomeScreenContent(
           onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
           onAddPetClick = onAddPetClick,
-          onPetClick = onPetClick,
+          onPetClick = { petId ->
+            if (!isOpeningPetProfile) {
+              isOpeningPetProfile = true
+              onPetClick(petId)
+            }
+          },
+          // Same guard: a double tap must not open the alert twice
+          onMissingPetClick = { alertId ->
+            if (!isOpeningPetProfile) {
+              isOpeningPetProfile = true
+              onMissingPetClick(alertId)
+            }
+          },
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),
@@ -212,6 +250,7 @@ private fun HomeList(
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
     onPetClick: (petId: String) -> Unit,
+    onMissingPetClick: (alertId: String) -> Unit,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -228,14 +267,17 @@ private fun HomeList(
           Spacer(Modifier.height(8.dp))
           Text(
               message,
-              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedError),
+              style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTheme.colors.error),
               modifier = Modifier.testTag(HomeScreenTestTags.ERROR_MESSAGE),
           )
         }
       }
     }
 
-    petsSection(state.pets, onRetryClick, onAddPetClick, onPetClick)
+    // The user's own missing pets come first: that is what they open the app for
+    missingPetsSection(state.ownLostPets, state.nowMillis, onMissingPetClick)
+
+    petsSection(state.pets, state.missingPetIds, onRetryClick, onAddPetClick, onPetClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
@@ -244,8 +286,9 @@ private fun HomeList(
       OutlinedButton(
           onClick = onReportMissingClick,
           shape = RoundedCornerShape(14.dp),
-          border = BorderStroke(1.dp, SpottedReportBorder),
-          colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
+          border = BorderStroke(1.dp, SpottedTheme.colors.reportBorder),
+          colors =
+              ButtonDefaults.outlinedButtonColors(containerColor = SpottedTheme.colors.surface),
           modifier =
               Modifier.padding(top = 9.dp)
                   .fillMaxWidth()
@@ -254,7 +297,7 @@ private fun HomeList(
       ) {
         Text(
             "Report a pet missing",
-            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedLostRed),
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.lostRed),
         )
       }
     }
@@ -275,13 +318,13 @@ private fun Header(
         photoUrl,
         Modifier.size(58.dp)
             .clip(RoundedCornerShape(27.dp))
-            .background(SpottedAvatarBackground)
+            .background(SpottedTheme.colors.avatarBackground)
             .testTag(HomeScreenTestTags.AVATAR),
     )
     Spacer(Modifier.width(9.dp))
     Text(
         if (userName.isBlank()) "Hey" else "Hey $userName",
-        style = jakarta(19, 24f, FontWeight.SemiBold, Color.Black),
+        style = jakarta(19, 24f, FontWeight.SemiBold, SpottedTheme.colors.ink),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.weight(1f),
@@ -322,9 +365,18 @@ private fun HeaderButton(
   ) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(32.dp).clip(RoundedCornerShape(16.dp)).background(Color.White),
+        modifier =
+            Modifier.size(32.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SpottedTheme.colors.surface),
     ) {
-      Image(painterResource(icon), description, Modifier.size(iconSize))
+      // Tinted: the drawable is black, invisible on the dark surface
+      Image(
+          painterResource(icon),
+          description,
+          Modifier.size(iconSize),
+          colorFilter = ColorFilter.tint(SpottedTheme.colors.ink),
+      )
     }
   }
 }
@@ -335,6 +387,7 @@ private fun HeaderButton(
  */
 private fun LazyListScope.petsSection(
     pets: HomeSection<Pet>,
+    missingPetIds: Set<String>,
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
     onPetClick: (petId: String) -> Unit,
@@ -342,7 +395,7 @@ private fun LazyListScope.petsSection(
   item(key = "petsTitle") {
     Text(
         HomeScreenTexts.PETS_TITLE,
-        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
+        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
         modifier = Modifier.padding(top = 18.dp).testTag(HomeScreenTestTags.PETS_TITLE),
     )
   }
@@ -356,12 +409,14 @@ private fun LazyListScope.petsSection(
         item(key = "petsEmpty") {
           SectionMessage(
               HomeScreenTexts.NO_PETS,
-              SpottedTextSecondary,
+              SpottedTheme.colors.textSecondary,
               HomeScreenTestTags.PETS_EMPTY,
           )
         }
   }
-  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) { onPetClick(pet.id) } }
+  items(pets.items, key = { "pet_${it.id}" }) { pet ->
+    PetCard(pet, missing = pet.id in missingPetIds) { onPetClick(pet.id) }
+  }
   // A refresh that failed keeps the pets and shows the error under them
   if (error != null && pets.items.isNotEmpty()) {
     item(key = "petsError") { PetsError(error, onRetryClick) }
@@ -373,7 +428,7 @@ private fun LazyListScope.petsSection(
     ) {
       Text(
           HomeScreenTexts.ADD_PET,
-          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected),
+          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTheme.colors.tabSelected),
       )
     }
   }
@@ -393,23 +448,29 @@ internal fun SectionError(
     onRetryClick: () -> Unit,
 ) {
   Column {
-    SectionMessage(message, SpottedError, tag)
+    SectionMessage(message, SpottedTheme.colors.error, tag)
     TextButton(onClick = onRetryClick, modifier = Modifier.testTag(retryTag)) {
-      Text(HomeScreenTexts.RETRY, style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTabSelected))
+      Text(
+          HomeScreenTexts.RETRY,
+          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTheme.colors.tabSelected),
+      )
     }
   }
 }
 
-/** The pet's name and status on the left, its photo on the right; grows with long texts. */
+/**
+ * The pet's name and status on the left, its photo on the right; grows with long texts. A [missing]
+ * pet shows a "Missing" badge instead of the "profile ready" check.
+ */
 @Composable
-private fun PetCard(pet: Pet, onClick: () -> Unit) {
+private fun PetCard(pet: Pet, missing: Boolean, onClick: () -> Unit) {
   Row(
       Modifier.padding(top = 12.dp)
           .fillMaxWidth()
           .heightIn(min = 131.dp)
           .height(IntrinsicSize.Min)
           .clip(RoundedCornerShape(22.dp))
-          .background(Color.White)
+          .background(SpottedTheme.colors.surface)
           .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
           .testTag(HomeScreenTestTags.petCard(pet.id))
   ) {
@@ -417,22 +478,35 @@ private fun PetCard(pet: Pet, onClick: () -> Unit) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             pet.name,
-            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedInk),
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        Spacer(Modifier.width(3.dp))
-        Image(
-            painterResource(R.drawable.ic_check_verified),
-            contentDescription = "Profile ready",
-            modifier = Modifier.size(21.dp),
-        )
+        Spacer(Modifier.width(if (missing) 6.dp else 3.dp))
+        if (missing) {
+          Text(
+              "Missing",
+              style = jakarta(12, 16f, FontWeight.SemiBold, SpottedTheme.colors.lostRed),
+              modifier =
+                  Modifier.clip(RoundedCornerShape(8.dp))
+                      .background(SpottedTheme.colors.errorTint)
+                      .padding(horizontal = 8.dp, vertical = 2.dp)
+                      .testTag(HomeScreenTestTags.missingBadge(pet.id)),
+          )
+        } else {
+          Image(
+              painterResource(R.drawable.ic_check_verified),
+              contentDescription = "Profile ready",
+              modifier = Modifier.size(21.dp),
+          )
+        }
       }
       Spacer(Modifier.height(3.dp))
       Text(
-          "Profile ready if they go missing",
-          style = jakarta(13, 17f, FontWeight.Medium, SpottedTextSecondary),
+          if (missing) "Your alert is open: the community is looking out"
+          else "Profile ready if they go missing",
+          style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
           maxLines = 3,
           overflow = TextOverflow.Ellipsis,
       )
@@ -457,7 +531,7 @@ internal fun SectionMessage(message: String, color: Color, tag: String) {
           Modifier.padding(top = 12.dp)
               .fillMaxWidth()
               .clip(RoundedCornerShape(16.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(16.dp)
               .testTag(tag),
   )
@@ -516,8 +590,8 @@ internal fun TabBar(
               .width(264.dp)
               .height(56.dp)
               .clip(RoundedCornerShape(28.dp))
-              .background(Color.White)
-              .border(1.dp, SpottedTabBarBorder, RoundedCornerShape(28.dp))
+              .background(SpottedTheme.colors.surface)
+              .border(1.dp, SpottedTheme.colors.tabBarBorder, RoundedCornerShape(28.dp))
               .padding(horizontal = 3.dp)
               .testTag(HomeScreenTestTags.TAB_BAR),
   ) {
@@ -529,12 +603,20 @@ internal fun TabBar(
               Modifier.width(if (selected) tab.selectedWidth else tab.width)
                   .height(51.dp)
                   .clip(RoundedCornerShape(27.dp))
-                  .background(if (selected) SpottedTabSelected else Color.White)
-                  .border(1.dp, SpottedTabBorder, RoundedCornerShape(27.dp))
+                  .background(
+                      if (selected) SpottedTheme.colors.tabSelected else SpottedTheme.colors.surface
+                  )
+                  .border(1.dp, SpottedTheme.colors.tabBorder, RoundedCornerShape(27.dp))
                   .selectable(selected = selected, role = Role.Tab, onClick = onClicks[index])
                   .testTag(tab.tag),
       ) {
-        Image(painterResource(tab.icon), tab.label, Modifier.size(tab.iconSize))
+        // Tinted: the drawables are black, invisible on the dark surface
+        Image(
+            painterResource(tab.icon),
+            tab.label,
+            Modifier.size(tab.iconSize),
+            colorFilter = ColorFilter.tint(SpottedTheme.colors.ink),
+        )
       }
     }
   }

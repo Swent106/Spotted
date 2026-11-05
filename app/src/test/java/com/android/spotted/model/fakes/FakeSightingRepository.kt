@@ -1,14 +1,17 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.fakes
 
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.update
 
 /**
@@ -24,12 +27,21 @@ import kotlinx.coroutines.flow.update
  */
 class FakeSightingRepository : SightingRepository {
   private val sightings = MutableStateFlow<Map<String, Sighting>>(emptyMap())
+  private val observationEvents = MutableSharedFlow<Result<List<Sighting>>>()
   private var nextId = 0
 
   var reportFailure: Throwable? = null
   var queryFailure: Throwable? = null
   var observeFailure: Throwable? = null
   var statusFailure: Throwable? = null
+
+  suspend fun emitObservationFailure(error: Throwable) {
+    observationEvents.emit(Result.failure(error))
+  }
+
+  suspend fun emitObservationSuccess(sightings: List<Sighting>) {
+    observationEvents.emit(Result.success(sightings))
+  }
 
   val reportedSightings: List<Sighting>
     get() = sightings.value.values.toList()
@@ -64,10 +76,9 @@ class FakeSightingRepository : SightingRepository {
     observeFailure?.let {
       return flowOf(Result.failure(it))
     }
-    return sightings
-        .map { sightingsOf(it, alertId) }
-        .distinctUntilChanged()
-        .map { Result.success(it) }
+    val liveSightings =
+        sightings.map { sightingsOf(it, alertId) }.distinctUntilChanged().map { Result.success(it) }
+    return merge(liveSightings, observationEvents)
   }
 
   override suspend fun setSightingStatus(sightingId: String, status: SightingStatus): Result<Unit> {

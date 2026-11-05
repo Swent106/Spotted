@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.alert
 
 import android.util.Log
@@ -11,6 +12,13 @@ import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.tasks.await
 
 class AlertRepositoryFirestore(
@@ -150,22 +158,70 @@ class AlertRepositoryFirestore(
   override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double): Result<List<Alert>> {
     return try {
       val snapshot =
-          db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100).get().await()
+          db.collection(collectionPath)
+              .whereEqualTo("status", "OPEN")
+              .limit(100)
+              .get(Source.SERVER)
+              .await()
 
-      val alerts = snapshot.toAlerts()
-      // Filter by distance and sort by lostAtMillis (descending) locally
-      val nearbyAlerts =
-          alerts
-              .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
-              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-
-      Result.success(nearbyAlerts)
+      Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm))
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
       }
       Result.failure(e)
     }
+  }
+
+  override suspend fun getCachedOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+      limit: Int,
+  ): Result<List<Alert>> {
+    return try {
+      require(limit > 0) { "limit must be positive" }
+      val snapshot =
+          db.collection(collectionPath)
+              .whereEqualTo("status", "OPEN")
+              .limit(100)
+              .get(Source.CACHE)
+              .await()
+
+      Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm).take(limit))
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      Result.failure(e)
+    }
+  }
+
+  override fun observeOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+  ): Flow<Result<List<Alert>>> = callbackFlow {
+    val openAlerts = db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100)
+    // Firestore calls the listener with the current alerts, then after every change.
+    // It runs on a background thread, so parsing the documents never blocks the UI.
+    val registration =
+        openAlerts.addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error ->
+          if (error != null) {
+            trySend(Result.failure(error))
+            close()
+          } else if (snapshot != null) {
+            trySend(Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm)))
+          }
+        }
+    // Runs when the collector is cancelled, so the listener does not leak
+    awaitClose { registration.remove() }
+  }
+      // Each emission is the full list, so a slow collector only needs the latest one
+      .conflate()
+
+  /** The alerts within the inclusive [radiusKm] of [center], newest first, ties by id. */
+  private fun List<Alert>.nearNewestFirst(center: Location, radiusKm: Double): List<Alert> {
+    val nearby = filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
+    return nearby.sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
   }
 
   /** The alerts of this snapshot, in order. Documents that aren't valid alerts are logged. */

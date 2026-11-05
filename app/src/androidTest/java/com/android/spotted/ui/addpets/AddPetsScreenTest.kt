@@ -117,6 +117,7 @@ class AddPetsScreenTest {
     setContent(completeForm.copy(isSaving = true))
 
     node(AddPetsScreenTestTags.LOADER).assertIsDisplayed()
+    node(PetPhotoPickerTestTags.ADD_BUTTON).performScrollTo().assertIsNotEnabled()
     saveAndContinue().assertIsNotEnabled()
     addAnother().assertIsNotEnabled()
     node(AddPetsScreenTestTags.SKIP_BUTTON).assertIsNotEnabled()

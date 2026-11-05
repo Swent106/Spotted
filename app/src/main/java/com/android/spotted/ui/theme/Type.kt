@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.theme
 
 import androidx.compose.material3.Typography
@@ -21,11 +22,15 @@ val PlusJakartaSans =
         Font(R.font.plus_jakarta_sans_extrabold, FontWeight.ExtraBold),
     )
 
+/**
+ * A Plus Jakarta Sans text style, with a theme colour such as `SpottedTheme.colors.ink`. There is
+ * no overload taking a hex colour, so text colours always come from the theme.
+ */
 fun jakarta(
     size: Int,
     line: Float,
     weight: Int,
-    color: Long,
+    color: Color,
     align: TextAlign = TextAlign.Start,
 ) =
     TextStyle(
@@ -33,7 +38,7 @@ fun jakarta(
         lineHeight = line.sp,
         fontFamily = PlusJakartaSans,
         fontWeight = FontWeight(weight),
-        color = Color(color),
+        color = color,
         textAlign = align,
     )
 
@@ -48,15 +53,28 @@ fun jakarta(size: Int, line: Float, weight: FontWeight, color: Color, spacing: F
         letterSpacing = spacing.sp,
     )
 
-// Set of Material typography styles to start with
+/**
+ * The Material type scale in Plus Jakarta Sans, so Material components (dialogs, buttons, text
+ * fields) use the same font as the screens. Sizes are Material's defaults.
+ */
 val Typography =
-    Typography(
-        bodyLarge =
-            TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Normal,
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                letterSpacing = 0.5.sp,
-            )
-    )
+    Typography().run {
+      fun TextStyle.jakarta() = copy(fontFamily = PlusJakartaSans)
+      Typography(
+          displayLarge = displayLarge.jakarta(),
+          displayMedium = displayMedium.jakarta(),
+          displaySmall = displaySmall.jakarta(),
+          headlineLarge = headlineLarge.jakarta(),
+          headlineMedium = headlineMedium.jakarta(),
+          headlineSmall = headlineSmall.jakarta(),
+          titleLarge = titleLarge.jakarta(),
+          titleMedium = titleMedium.jakarta(),
+          titleSmall = titleSmall.jakarta(),
+          bodyLarge = bodyLarge.jakarta(),
+          bodyMedium = bodyMedium.jakarta(),
+          bodySmall = bodySmall.jakarta(),
+          labelLarge = labelLarge.jakarta(),
+          labelMedium = labelMedium.jakarta(),
+          labelSmall = labelSmall.jakarta(),
+      )
+    }

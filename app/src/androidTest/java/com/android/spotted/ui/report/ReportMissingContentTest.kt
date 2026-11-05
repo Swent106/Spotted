@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.report
 
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -22,6 +23,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.ui.components.MapPickerTestTags
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -79,6 +81,15 @@ class ReportMissingContentTest {
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(published.toList())
+
+    override fun observeOpenAlertsNear(center: Location, radiusKm: Double) =
+        flowOf(Result.success(published.toList()))
+
+    override suspend fun getCachedOpenAlertsNear(
+        center: Location,
+        radiusKm: Double,
+        limit: Int,
+    ) = Result.success(published.take(limit))
 
     override suspend fun getOpenAlertsByOwner(ownerId: String) =
         Result.success(published.filter { it.ownerId == ownerId })

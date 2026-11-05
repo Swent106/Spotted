@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.map
 
 import android.content.Context
@@ -53,8 +54,7 @@ import com.android.spotted.ui.components.PIN_TIP_Y
 import com.android.spotted.ui.components.createMapView
 import com.android.spotted.ui.home.HomeScreenTexts
 import com.android.spotted.ui.home.HomeViewModel
-import com.android.spotted.ui.theme.SpottedHomeBackground
-import com.android.spotted.ui.theme.SpottedInk
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -101,7 +101,7 @@ fun AlertsMapContent(
 ) {
   Column(
       Modifier.fillMaxSize()
-          .background(SpottedHomeBackground)
+          .background(SpottedTheme.colors.homeBackground)
           .statusBarsPadding()
           .testTag(AlertsMapTestTags.SCREEN)
   ) {
@@ -110,9 +110,18 @@ fun AlertsMapContent(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
       IconButton(onClick = onBack, modifier = Modifier.testTag(AlertsMapTestTags.BACK)) {
-        Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
+        // Tinted with the theme's ink, like the title: untinted, it turned white in dark mode and
+        // vanished on the fixed light background
+        Icon(
+            painterResource(R.drawable.ic_arrow_back),
+            contentDescription = "Back",
+            tint = SpottedTheme.colors.ink,
+        )
       }
-      Text("Lost pets near you", style = jakarta(20, 26f, FontWeight.SemiBold, SpottedInk))
+      Text(
+          "Lost pets near you",
+          style = jakarta(20, 26f, FontWeight.SemiBold, SpottedTheme.colors.ink),
+      )
     }
     Box(
         Modifier.fillMaxSize()
@@ -124,12 +133,12 @@ fun AlertsMapContent(
       if (alerts.isEmpty()) {
         Text(
             HomeScreenTexts.NO_LOST_PETS,
-            style = jakarta(13, 17f, FontWeight.SemiBold, SpottedInk),
+            style = jakarta(13, 17f, FontWeight.SemiBold, SpottedTheme.colors.ink),
             modifier =
                 Modifier.align(Alignment.BottomStart)
                     .padding(12.dp)
                     .clip(RoundedCornerShape(100.dp))
-                    .background(Color.White.copy(alpha = 0.95f))
+                    .background(SpottedTheme.colors.surface.copy(alpha = 0.95f))
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag(AlertsMapTestTags.EMPTY),
         )

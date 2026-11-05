@@ -1,7 +1,9 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
+import kotlinx.coroutines.flow.Flow
 
 interface AlertRepository {
   fun getNewId(): String
@@ -31,6 +33,19 @@ interface AlertRepository {
   suspend fun getOpenAlertsNear(
       center: Location,
       radiusKm: Double,
+  ): Result<List<Alert>>
+
+  /**
+   * Emits the open alerts near [center] right away, then again after every change. Same filtering
+   * and order as [getOpenAlertsNear]. An error is emitted as a failure and ends the flow.
+   */
+  fun observeOpenAlertsNear(center: Location, radiusKm: Double): Flow<Result<List<Alert>>>
+
+  /** Returns up to [limit] open alerts near [center] from the local cache, newest first. */
+  suspend fun getCachedOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+      limit: Int = 5,
   ): Result<List<Alert>>
 
   /** Returns the open alerts published by [ownerId], wherever they are, newest first. */

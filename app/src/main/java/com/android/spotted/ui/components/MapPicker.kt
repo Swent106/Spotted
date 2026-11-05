@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.components
 
 import android.content.Context
@@ -28,9 +29,7 @@ import androidx.core.content.ContextCompat
 import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.ui.theme.PlusJakartaSans
-import com.android.spotted.ui.theme.SpottedBlue
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedMapBackground
+import com.android.spotted.ui.theme.SpottedTheme
 import java.io.File
 import kotlin.math.log2
 import org.osmdroid.config.Configuration
@@ -91,16 +90,18 @@ fun MapPicker(
     mapView.controller.setCenter(center)
   }
 
+  // Read here: the circle is drawn by osmdroid, outside of Compose
+  val circleColor = SpottedTheme.colors.blue
   Box(
       modifier
           .clip(RoundedCornerShape(16.dp))
-          .background(SpottedMapBackground)
+          .background(SpottedTheme.colors.mapBackground)
           .testTag(MapPickerTestTags.MAP)
   ) {
     AndroidView(
         factory = { mapView },
         modifier = Modifier.matchParentSize(),
-        update = { map -> map.showPin(location?.toGeoPoint(), radiusKm) },
+        update = { map -> map.showPin(location?.toGeoPoint(), radiusKm, circleColor) },
     )
     val (text, tag) =
         if (location == null) hint to MapPickerTestTags.HINT
@@ -113,13 +114,13 @@ fun MapPicker(
                 lineHeight = 14.sp,
                 fontFamily = PlusJakartaSans,
                 fontWeight = FontWeight.SemiBold,
-                color = SpottedInk,
+                color = SpottedTheme.colors.ink,
             ),
         modifier =
             Modifier.align(Alignment.BottomStart)
                 .padding(10.dp)
                 .clip(RoundedCornerShape(100.dp))
-                .background(Color.White.copy(alpha = 0.95f))
+                .background(SpottedTheme.colors.surface.copy(alpha = 0.95f))
                 .padding(horizontal = 10.dp, vertical = 5.dp)
                 .testTag(tag),
     )
@@ -169,14 +170,14 @@ internal fun createMapView(context: Context, onTap: ((Location) -> Unit)? = null
  * Replaces the pin and the radius circle. They are drawn below the tap overlay, so tapping inside
  * the circle still moves the pin.
  */
-private fun MapView.showPin(position: GeoPoint?, radiusKm: Int) {
+private fun MapView.showPin(position: GeoPoint?, radiusKm: Int, circleColor: Color) {
   overlays.removeAll { it is Marker || it is Polygon }
   if (position != null) {
     val circle =
         Polygon(this).apply {
           points = Polygon.pointsAsCircle(position, radiusKm * METERS_PER_KM)
-          fillPaint.color = SpottedBlue.copy(alpha = 0.15f).toArgb()
-          outlinePaint.color = SpottedBlue.toArgb()
+          fillPaint.color = circleColor.copy(alpha = 0.15f).toArgb()
+          outlinePaint.color = circleColor.toArgb()
           outlinePaint.strokeWidth = 4f
         }
     val pin =

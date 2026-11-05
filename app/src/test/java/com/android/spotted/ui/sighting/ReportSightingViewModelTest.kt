@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
@@ -7,12 +8,16 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeAnimalDetector
 import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
+import com.android.spotted.model.photo.AnimalDetection
+import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -478,5 +483,148 @@ class ReportSightingViewModelTest {
 
     assertNull(vm.uiState.value.selectedAlertId)
     assertTrue(vm.uiState.value.nearbyAlerts.isEmpty())
+  }
+
+  // ===================== Animal check of the photo =====================
+
+  @Test
+  fun setPhotoUri_withAnAnimal_acceptsThePhotoAndDetectsItsSpecies() {
+    val detector = FakeAnimalDetector().apply { result = AnimalDetection(true, Species.CAT) }
+    val vm = viewModelWith(detector)
+
+    vm.setPhotoUri(PHOTO)
+
+    val state = vm.uiState.value
+    assertEquals(PHOTO, state.photoUri)
+    assertEquals(PhotoCheck.ANIMAL, state.photoCheck)
+    assertEquals(Species.CAT, state.detectedSpecies)
+    assertEquals(listOf(PHOTO), detector.checkedPhotos)
+  }
+
+  @Test
+  fun setPhotoUri_withoutAnAnimal_blocksTheSubmit() {
+    val detector = FakeAnimalDetector().apply { result = AnimalDetection(false, null) }
+    val vm = viewModelWith(detector).withAValidForm()
+
+    vm.setPhotoUri(PHOTO)
+
+    val state = vm.uiState.value
+    assertEquals(PhotoCheck.NO_ANIMAL, state.photoCheck)
+    assertNull(state.detectedSpecies)
+    assertFalse(state.canSubmit)
+  }
+
+  @Test
+  fun setPhotoUri_whenTheDetectorFails_acceptsThePhotoWithoutSpecies() {
+    val detector = FakeAnimalDetector().apply { failure = Exception("ML Kit unavailable") }
+    val vm = viewModelWith(detector).withAValidForm()
+
+    vm.setPhotoUri(PHOTO)
+
+    val state = vm.uiState.value
+    assertEquals(PhotoCheck.ANIMAL, state.photoCheck)
+    assertNull(state.detectedSpecies)
+    assertTrue(state.canSubmit)
+  }
+
+  @Test
+  fun setPhotoUri_null_resetsTheCheckAndTheDetectedSpecies() {
+    val vm = viewModelWith(FakeAnimalDetector())
+    vm.setPhotoUri(PHOTO)
+
+    vm.setPhotoUri(null)
+
+    val state = vm.uiState.value
+    assertNull(state.photoUri)
+    assertEquals(PhotoCheck.NONE, state.photoCheck)
+    assertNull(state.detectedSpecies)
+  }
+
+  @Test
+  fun setPhotoUri_blocksTheSubmitWhileChecking() {
+    val detector = PendingAnimalDetector()
+    val vm = viewModelWith(detector).withAValidForm()
+
+    vm.setPhotoUri(PHOTO)
+
+    assertEquals(PhotoCheck.CHECKING, vm.uiState.value.photoCheck)
+    assertFalse(vm.uiState.value.canSubmit)
+
+    detector.finish(PHOTO, AnimalDetection(true, Species.DOG))
+
+    assertEquals(PhotoCheck.ANIMAL, vm.uiState.value.photoCheck)
+    assertTrue(vm.uiState.value.canSubmit)
+  }
+
+  @Test
+  fun setPhotoUri_anotherPhotoDuringTheCheck_ignoresTheFirstResult() {
+    val detector = PendingAnimalDetector()
+    val vm = viewModelWith(detector)
+
+    vm.setPhotoUri(PHOTO)
+    vm.setPhotoUri(OTHER_PHOTO)
+    detector.finish(OTHER_PHOTO, AnimalDetection(true, Species.CAT))
+    detector.finish(PHOTO, AnimalDetection(false, null))
+
+    val state = vm.uiState.value
+    assertEquals(OTHER_PHOTO, state.photoUri)
+    assertEquals(PhotoCheck.ANIMAL, state.photoCheck)
+    assertEquals(Species.CAT, state.detectedSpecies)
+  }
+
+  @Test
+  fun detectedSpecies_doesNotReplaceTheSpeciesChosenByTheUser() {
+    val detector = FakeAnimalDetector().apply { result = AnimalDetection(true, Species.DOG) }
+    val vm = viewModelWith(detector)
+    vm.setSpecies(Species.CAT)
+
+    vm.setPhotoUri(PHOTO)
+    vm.selectNoMatchingAlert()
+
+    assertEquals(Species.DOG, vm.uiState.value.detectedSpecies)
+    assertEquals(Species.CAT, vm.uiState.value.selectedSpecies)
+  }
+
+  @Test
+  fun detectedSpecies_isUsedWhenTheUserChoseNone() {
+    val detector = FakeAnimalDetector().apply { result = AnimalDetection(true, Species.CAT) }
+    val vm = viewModelWith(detector)
+
+    vm.setPhotoUri(PHOTO)
+    vm.selectNoMatchingAlert()
+
+    assertEquals(Species.CAT, vm.uiState.value.selectedSpecies)
+  }
+
+  private fun viewModelWith(detector: AnimalDetector) =
+      ReportSightingViewModel(
+          sightingRepository = sightingRepository,
+          photoRepository = photoRepository,
+          authRepository = authRepository,
+          animalDetector = detector,
+      )
+
+  /** Fills everything [ReportSightingUiState.canSubmit] needs, except the photo. */
+  private fun ReportSightingViewModel.withAValidForm() = apply {
+    setSpecies(Species.DOG)
+    setLocation(Location(46.5, 6.6))
+    selectNoMatchingAlert()
+  }
+
+  /** [AnimalDetector] whose detections wait until the test [finish]es them. */
+  private class PendingAnimalDetector : AnimalDetector {
+    private val pending = mutableMapOf<String, CompletableDeferred<AnimalDetection>>()
+
+    override suspend fun detect(photoUri: String): Result<AnimalDetection> =
+        Result.success(pending.getOrPut(photoUri) { CompletableDeferred() }.await())
+
+    fun finish(photoUri: String, detection: AnimalDetection) {
+      pending.getValue(photoUri).complete(detection)
+    }
+  }
+
+  private companion object {
+    const val PHOTO = "content://media/photo.jpg"
+    const val OTHER_PHOTO = "content://media/other.jpg"
   }
 }

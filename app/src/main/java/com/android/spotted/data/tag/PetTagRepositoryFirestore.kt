@@ -1,0 +1,174 @@
+// Portions of this code were generated with the help of Copilot.
+package com.android.spotted.data.tag
+
+import com.android.spotted.data.user.UserRepositoryFirestore
+import com.android.spotted.model.tag.PetTag
+import com.android.spotted.model.tag.PetTagRepository
+import com.android.spotted.model.tag.TagAlreadyLinkedException
+import com.android.spotted.model.user.UserRepository
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+import java.util.concurrent.ExecutionException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+class PetTagRepositoryFirestore(
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val userRepository: UserRepository = UserRepositoryFirestore(firestore),
+    private val now: () -> Long = System::currentTimeMillis,
+) : PetTagRepository {
+  private val petTags = firestore.collection(PET_TAGS_COLLECTION)
+
+  override suspend fun linkTag(tagId: String, petId: String): Result<Unit> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      val ownerId = requireSignedInOwnerId()
+      val profile = userRepository.getUser(ownerId).getOrThrow()
+      val tagReference = petTags.document(tagId)
+
+      Tasks.await(
+          firestore.runTransaction { transaction ->
+            val existingTag = transaction.get(tagReference)
+            if (existingTag.exists() && existingTag.getString(OWNER_ID_FIELD) != ownerId) {
+              throw TagAlreadyLinkedException(tagId)
+            }
+
+            transaction.set(
+                tagReference,
+                mapOf(
+                    TAG_ID_FIELD to tagId,
+                    PET_ID_FIELD to petId,
+                    OWNER_ID_FIELD to ownerId,
+                    LINKED_AT_MILLIS_FIELD to now(),
+                    SHOW_PHONE_FIELD to true,
+                    SHOW_EMAIL_FIELD to true,
+                    CONTACT_PHONE_FIELD to profile.phone,
+                    CONTACT_EMAIL_FIELD to profile.email,
+                ),
+            )
+            Unit
+          }
+      )
+    }
+  }
+
+  override suspend fun unlinkTag(tagId: String): Result<Unit> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      val ownerId = requireSignedInOwnerId()
+      val tagReference = petTags.document(tagId)
+      val tag = Tasks.await(tagReference.get())
+      if (!tag.exists()) return@withContext
+      if (tag.getString(OWNER_ID_FIELD) != ownerId) {
+        throw SecurityException("Tag $tagId is not owned by the signed-in user")
+      }
+      Tasks.await(tagReference.delete())
+    }
+  }
+
+  override suspend fun getTag(tagId: String): Result<PetTag?> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      requireSignedInOwnerId()
+      val snapshot = Tasks.await(petTags.document(tagId).get())
+      if (snapshot.exists()) snapshot.toPetTag() else null
+    }
+  }
+
+  override suspend fun getTagForPet(petId: String): Result<PetTag?> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      val ownerId = requireSignedInOwnerId()
+      val snapshot =
+          Tasks.await(
+              petTags
+                  .whereEqualTo(PET_ID_FIELD, petId)
+                  .whereEqualTo(
+                      OWNER_ID_FIELD,
+                      ownerId,
+                  ) // prohibts queries from non owners but they can still use getTag
+                  .limit(1)
+                  .get()
+          )
+      snapshot.documents.firstOrNull()?.toPetTag()
+    }
+  }
+
+  override suspend fun setVisibleContacts(
+      tagId: String,
+      showPhone: Boolean,
+      showEmail: Boolean,
+      phone: String?,
+      email: String?,
+  ): Result<Unit> = firestoreResult {
+    require(showPhone || showEmail) { "At least one contact method must remain visible" }
+    val contactPhone = if (showPhone) phone else null
+    val contactEmail = if (showEmail) email else null
+    withContext(Dispatchers.IO) {
+      requireSignedInOwnerId()
+      Tasks.await(
+          petTags
+              .document(tagId)
+              .update(
+                  SHOW_PHONE_FIELD,
+                  showPhone,
+                  SHOW_EMAIL_FIELD,
+                  showEmail,
+                  CONTACT_PHONE_FIELD,
+                  contactPhone,
+                  CONTACT_EMAIL_FIELD,
+                  contactEmail,
+              )
+      )
+    }
+  }
+
+  private fun requireSignedInOwnerId(): String =
+      firebaseAuth.currentUser?.uid
+          ?: throw IllegalStateException("A signed-in user is required for pet tag operations")
+
+  private fun DocumentSnapshot.toPetTag(): PetTag =
+      PetTag(
+          tagId = requireNotNull(getString(TAG_ID_FIELD)) { "Tag document $id has no tagId" },
+          petId = requireNotNull(getString(PET_ID_FIELD)) { "Tag document $id has no petId" },
+          ownerId = requireNotNull(getString(OWNER_ID_FIELD)) { "Tag document $id has no ownerId" },
+          linkedAtMillis =
+              requireNotNull(getLong(LINKED_AT_MILLIS_FIELD)) {
+                "Tag document $id has no linkedAtMillis"
+              },
+          showPhone =
+              requireNotNull(getBoolean(SHOW_PHONE_FIELD)) { "Tag document $id has no showPhone" },
+          showEmail =
+              requireNotNull(getBoolean(SHOW_EMAIL_FIELD)) { "Tag document $id has no showEmail" },
+          contactPhone = getNullableString(CONTACT_PHONE_FIELD),
+          contactEmail = getNullableString(CONTACT_EMAIL_FIELD),
+      )
+
+  private fun DocumentSnapshot.getNullableString(field: String): String? {
+    require(contains(field)) { "Tag document $id has no $field" }
+    return getString(field)
+  }
+
+  private suspend fun <T> firestoreResult(action: suspend () -> T): Result<T> =
+      try {
+        Result.success(action())
+      } catch (exception: CancellationException) {
+        throw exception
+      } catch (exception: ExecutionException) {
+        Result.failure(exception.cause ?: exception)
+      } catch (exception: Exception) {
+        Result.failure(exception)
+      }
+
+  private companion object {
+    const val PET_TAGS_COLLECTION = "petTags"
+    const val TAG_ID_FIELD = "tagId"
+    const val PET_ID_FIELD = "petId"
+    const val OWNER_ID_FIELD = "ownerId"
+    const val LINKED_AT_MILLIS_FIELD = "linkedAtMillis"
+    const val SHOW_PHONE_FIELD = "showPhone"
+    const val SHOW_EMAIL_FIELD = "showEmail"
+    const val CONTACT_PHONE_FIELD = "contactPhone"
+    const val CONTACT_EMAIL_FIELD = "contactEmail"
+  }
+}

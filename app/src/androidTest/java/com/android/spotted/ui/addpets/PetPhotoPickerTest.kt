@@ -11,10 +11,14 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -26,6 +30,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+
+private object PhotoPickerActionTestTags {
+  const val GALLERY = "gallery"
+  const val CAMERA = "camera"
+  const val PICKER_STATE = "picker_state"
+}
 
 class PetPhotoPickerTest {
 
@@ -140,11 +150,13 @@ class PetPhotoPickerTest {
    * - Camera: true = photo saved, false = cancelled.
    */
   private class FakeActivityRegistry(
-      private val result: Any?,
+      var result: Any?,
       private val launchFailure: ActivityNotFoundException? = null,
+      private val autoDispatch: Boolean = true,
   ) : ActivityResultRegistry() {
     val launchedContracts = mutableListOf<ActivityResultContract<*, *>>()
     val launchedInputs = mutableListOf<Any?>()
+    private var pendingResult: (() -> Unit)? = null
 
     override fun <I, O> onLaunch(
         requestCode: Int,
@@ -155,8 +167,72 @@ class PetPhotoPickerTest {
       launchedContracts += contract
       launchedInputs += input
       launchFailure?.let { throw it }
-      @Suppress("UNCHECKED_CAST") dispatchResult(requestCode, result as O)
+      val dispatch: () -> Unit = {
+        @Suppress("UNCHECKED_CAST") dispatchResult(requestCode, result as O)
+        Unit
+      }
+      if (autoDispatch) dispatch() else pendingResult = dispatch
     }
+
+    fun dispatchPendingResult() {
+      val dispatch = requireNotNull(pendingResult)
+      pendingResult = null
+      dispatch()
+    }
+  }
+
+  @Test
+  fun picker_ignoresSecondLaunchAndClearsPickingStateOnCancel() {
+    val registry = FakeActivityRegistry(result = null, autoDispatch = false)
+    val owner =
+        object : ActivityResultRegistryOwner {
+          override val activityResultRegistry: ActivityResultRegistry = registry
+        }
+
+    composeRule.setContent {
+      CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+        val actions =
+            rememberPhotoPickerActions(
+                onPhotoSelected = {},
+                onCameraUnavailable = {},
+            )
+        Column {
+          Button(
+              onClick = actions.pickFromGallery,
+              modifier = Modifier.testTag(PhotoPickerActionTestTags.GALLERY),
+          ) {
+            Text("Gallery")
+          }
+          Button(
+              onClick = actions.takePhoto,
+              modifier = Modifier.testTag(PhotoPickerActionTestTags.CAMERA),
+          ) {
+            Text("Camera")
+          }
+          Text(
+              if (actions.isPicking) "picking" else "idle",
+              Modifier.testTag(PhotoPickerActionTestTags.PICKER_STATE),
+          )
+        }
+      }
+    }
+
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.GALLERY).performClick()
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.CAMERA).performClick()
+
+    assertEquals(1, registry.launchedInputs.size)
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.PICKER_STATE).assertTextEquals("picking")
+
+    composeRule.runOnUiThread { registry.dispatchPendingResult() }
+    composeRule.waitForIdle()
+
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.PICKER_STATE).assertTextEquals("idle")
+    registry.result = false
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.CAMERA).performClick()
+    assertEquals(2, registry.launchedInputs.size)
+    composeRule.runOnUiThread { registry.dispatchPendingResult() }
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.PICKER_STATE).assertTextEquals("idle")
   }
 
   /** Records every value PetPhotoPicker sends to onPhotoSelected (including null). */
@@ -226,12 +302,13 @@ class PetPhotoPickerTest {
                 onCameraUnavailable = {},
             )
         androidx.compose.foundation.layout.Box(
-            Modifier.clickable(onClick = actions.pickFromGallery).testTag("gallery")
+            Modifier.clickable(onClick = actions.pickFromGallery)
+                .testTag(PhotoPickerActionTestTags.GALLERY)
         )
       }
     }
 
-    composeRule.onNodeWithTag("gallery").performClick()
+    composeRule.onNodeWithTag(PhotoPickerActionTestTags.GALLERY).performClick()
     composeRule.waitForIdle()
 
     assertTrue(selections.isEmpty())

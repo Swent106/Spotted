@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
@@ -34,8 +35,12 @@ import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
 import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.components.isResumed
+import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
+import com.android.spotted.ui.myalert.MyAlertScreen
+import com.android.spotted.ui.myalert.MyAlertViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -44,7 +49,7 @@ import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
-import com.android.spotted.ui.theme.SampleAppTheme
+import com.android.spotted.ui.theme.SpottedTheme
 
 object Route {
   const val SIGNIN = "signin"
@@ -67,8 +72,13 @@ object Route {
   const val PET_ID = "petId"
   private const val PET = "pet"
   const val PET_PROFILE = "$PET/{$PET_ID}"
+  /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
+  private const val MY_ALERT_BASE = "my_alert"
+  const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
 
   fun petProfile(petId: String) = "$PET/$petId"
+
+  fun myAlert(alertId: String) = "$MY_ALERT_BASE/$alertId"
 
   fun alertDetail(alertId: String) = "$ALERT/$alertId"
 
@@ -88,7 +98,7 @@ class MainActivity : ComponentActivity() {
             .build()
     )
     setContent {
-      SampleAppTheme {
+      SpottedTheme {
         Surface(
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,
@@ -167,7 +177,7 @@ fun NavGraphBuilder.addPetsDestination(
 ) {
   composable(Route.ADD_PETS) {
     addPetsContent(
-        { navController.popBackStack() },
+        { navController.popBackStackSafely() },
         {
           // Onboarding is over: Back from Home must not return to it
           navController.navigate(Route.HOME) {
@@ -184,8 +194,9 @@ fun NavGraphBuilder.addPetsDestination(
  * missing screen, [alertDetailContent] an alert's detail, [addPetContent] Add pets opened from
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
- * profile (Profile tab) and [editProfileContent] the profile form it opens; tests replace them to
- * use hand-built states instead of the real ViewModels.
+ * profile (Profile tab), [editProfileContent] the profile form it opens and [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
+ * instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -196,9 +207,16 @@ fun NavGraphBuilder.homeDestinations(
           onSeenPetClick = navigation.onSeenPetClick,
           onAddPetClick = navigation.onAddPetClick,
           onPetClick = navigation.onPetClick,
+          onMissingPetClick = navigation.onMissingPetClick,
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
+      )
+    },
+    myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
+      MyAlertScreen(
+          viewModel = viewModel(key = alertId, factory = MyAlertViewModel.Factory(alertId)),
+          onBack = onBack,
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -236,51 +254,75 @@ fun NavGraphBuilder.homeDestinations(
       PersonalInfoScreen(onBack = onDone, onSaved = onDone)
     },
 ) {
-  composable(Route.HOME) {
+  // Every click below is ignored while a transition is running (the screen is not RESUMED), so
+  // two quick taps open one screen. Callbacks with an argument check the entry themselves, as
+  // dropUnlessResumed only wraps () -> Unit.
+  composable(Route.HOME) { entry ->
     homeContent(
         HomeNavigation(
-            onReportMissingClick = { navController.navigate(Route.REPORT_MISSING) },
-            onAlertClick = { alertId -> navController.navigate(Route.alertDetail(alertId)) },
-            onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
-            onAddPetClick = { navController.navigate(Route.ADD_PET) },
-            onPetClick = { petId -> navController.navigate(Route.petProfile(petId)) },
-            onMapClick = { navController.navigate(Route.MAP) },
-            onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
-            onProfileClick = { navController.navigate(Route.PROFILE) },
+            onReportMissingClick =
+                dropUnlessResumed { navController.navigate(Route.REPORT_MISSING) },
+            onAlertClick = { alertId ->
+              if (entry.isResumed()) navController.navigate(Route.alertDetail(alertId))
+            },
+            onSeenPetClick = { alertId ->
+              if (entry.isResumed()) navController.navigate(Route.reportSighting(alertId))
+            },
+            onAddPetClick = dropUnlessResumed { navController.navigate(Route.ADD_PET) },
+            onPetClick = { petId ->
+              if (entry.isResumed()) navController.navigate(Route.petProfile(petId))
+            },
+            onMissingPetClick = { alertId ->
+              if (entry.isResumed()) navController.navigate(Route.myAlert(alertId))
+            },
+            onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
+            onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
+            onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
         )
     )
   }
   composable(Route.PROFILE) {
     profileContent(
         HelperProfileNavigation(
-            onHomeClick = { navController.popBackStack(Route.HOME, inclusive = false) },
-            onMapClick = { navController.navigate(Route.MAP) },
-            onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
-            onEditProfileClick = { navController.navigate(Route.EDIT_PROFILE) },
+            onHomeClick =
+                dropUnlessResumed { navController.popBackStack(Route.HOME, inclusive = false) },
+            onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
+            onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
+            onEditProfileClick = dropUnlessResumed { navController.navigate(Route.EDIT_PROFILE) },
         )
     )
   }
-  composable(Route.EDIT_PROFILE) { editProfileContent { navController.popBackStack() } }
-  composable(Route.MAP) {
-    mapContent({ navController.popBackStack() }) { alertId ->
-      navController.navigate(Route.alertDetail(alertId))
+  composable(Route.EDIT_PROFILE) { editProfileContent { navController.popBackStackSafely() } }
+  composable(Route.MAP) { entry ->
+    mapContent({ navController.popBackStackSafely() }) { alertId ->
+      if (entry.isResumed()) navController.navigate(Route.alertDetail(alertId))
     }
   }
-  composable(Route.ADD_PET) { addPetContent { navController.popBackStack() } }
+  composable(Route.ADD_PET) { addPetContent { navController.popBackStackSafely() } }
   composable(Route.PET_PROFILE) { entry ->
     petProfileContent(entry.arguments?.getString(Route.PET_ID).orEmpty())
   }
-  composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
+  composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStackSafely() } }
   composable(Route.ALERT_DETAIL) { entry ->
     val alertId = entry.arguments?.getString(Route.ALERT_ID).orEmpty()
-    alertDetailContent(alertId) { navController.navigate(Route.reportSighting(alertId)) }
+    alertDetailContent(
+        alertId,
+        dropUnlessResumed { navController.navigate(Route.reportSighting(alertId)) },
+    )
   }
   composable(Route.REPORT_SIGHTING) { entry ->
     reportSightingContent(entry.arguments?.getString(Route.ALERT_ID)) {
-      navController.popBackStack()
+      navController.popBackStackSafely()
     }
   }
-  composable(Route.NEW_SIGHTING) { reportSightingContent(null) { navController.popBackStack() } }
+  composable(Route.NEW_SIGHTING) {
+    reportSightingContent(null) { navController.popBackStackSafely() }
+  }
+  composable(Route.MY_ALERT) { entry ->
+    myAlertContent(entry.arguments?.getString(Route.ALERT_ID).orEmpty()) {
+      navController.popBackStackSafely()
+    }
+  }
 }
 
 /** Where Home can send the user. */
@@ -290,6 +332,8 @@ data class HomeNavigation(
     val onSeenPetClick: (alertId: String) -> Unit,
     val onAddPetClick: () -> Unit = {},
     val onPetClick: (petId: String) -> Unit = {},
+    /** Opens My alert for one of the user's missing pets. */
+    val onMissingPetClick: (alertId: String) -> Unit = {},
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},

@@ -38,12 +38,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -53,11 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
-import com.android.spotted.ui.theme.SpottedBlue
-import com.android.spotted.ui.theme.SpottedBlueTint
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedInputBackground
-import com.android.spotted.ui.theme.SpottedScreenBackground
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 object AddPetsScreenTestTags {
@@ -95,9 +91,13 @@ internal fun Behavior.labelRes(): Int =
       Behavior.FEARFUL_OF_STRANGERS -> R.string.add_pets_behavior_fearful_of_strangers
     }
 
-private val sectionLabelStyle = jakarta(11, 15f, 700, 0xFF6B7280)
-private val fieldTextStyle = jakarta(14, 18f, 600, 0xFF14161A)
-private val fieldPlaceholderStyle = jakarta(14, 18f, 500, 0xFF6B7280)
+// Getters, so they follow the light or dark palette of the current theme
+private val sectionLabelStyle: TextStyle
+  @Composable get() = jakarta(11, 15f, 700, SpottedTheme.colors.textLabel)
+private val fieldTextStyle: TextStyle
+  @Composable get() = jakarta(14, 18f, 600, SpottedTheme.colors.ink)
+private val fieldPlaceholderStyle: TextStyle
+  @Composable get() = jakarta(14, 18f, 500, SpottedTheme.colors.textLabel)
 
 /**
  * Stateless "Add your pet" screen (Figma "03 · Add a pet").
@@ -124,7 +124,7 @@ fun AddPetsContent(
 ) {
   Box(
       Modifier.fillMaxSize()
-          .background(SpottedScreenBackground)
+          .background(SpottedTheme.colors.screenBackground)
           .testTag(AddPetsScreenTestTags.SCREEN)
   ) {
     Image(
@@ -169,6 +169,7 @@ fun AddPetsContent(
               photoUri = state.photoUri,
               onPhotoSelected = onPhotoChange,
               onPhotoError = onPhotoError,
+              isSaving = state.isSaving,
           )
         }
         // The details card is tighter than the others in the Figma
@@ -209,7 +210,7 @@ fun AddPetsContent(
       if (state.addedPets.isNotEmpty()) {
         Text(
             stringResource(R.string.add_pets_added_pets, state.addedPets.joinToString { it.name }),
-            style = jakarta(13, 18f, 600, 0xFF5F6672, TextAlign.Center),
+            style = jakarta(13, 18f, 600, SpottedTheme.colors.textSecondary, TextAlign.Center),
             modifier =
                 Modifier.fillMaxWidth()
                     .padding(bottom = 8.dp)
@@ -219,7 +220,7 @@ fun AddPetsContent(
       (state.errorMessage ?: state.missingField)?.let { message ->
         Text(
             message.resolve(),
-            style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
+            style = jakarta(13, 18f, 600, SpottedTheme.colors.error, TextAlign.Center),
             modifier =
                 Modifier.fillMaxWidth()
                     .padding(bottom = 8.dp)
@@ -252,7 +253,7 @@ private fun AddPetsHeader(
         modifier =
             Modifier.size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(SpottedTheme.colors.surface)
                 .clickable(
                     onClickLabel = stringResource(R.string.add_pets_back),
                     role = Role.Button,
@@ -263,26 +264,26 @@ private fun AddPetsHeader(
       Icon(
           painterResource(R.drawable.ic_arrow_back),
           contentDescription = stringResource(R.string.add_pets_back),
-          tint = SpottedInk,
+          tint = SpottedTheme.colors.ink,
           modifier = Modifier.size(20.dp),
       )
     }
     Column(Modifier.weight(1f)) {
       Text(
           stringResource(R.string.add_pets_screen_title),
-          style = jakarta(23, 31f, 800, 0xFF14161A),
+          style = jakarta(23, 31f, 800, SpottedTheme.colors.ink),
       )
       if (isOnboarding) {
         Text(
             stringResource(R.string.add_pets_onboarding_step),
-            style = jakarta(12, 16f, 500, 0xFF5F6672),
+            style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
         )
       }
     }
     if (isOnboarding) {
       Text(
           stringResource(R.string.add_pets_skip),
-          style = jakarta(14, 18f, 700, 0xFF1B5BD7),
+          style = jakarta(14, 18f, 700, SpottedTheme.colors.blue),
           modifier =
               Modifier.clip(RoundedCornerShape(10.dp))
                   .clickable(enabled = !isSaving, role = Role.Button, onClick = onSkipClick)
@@ -300,7 +301,7 @@ private fun FormCard(spacing: Dp = 10.dp, content: @Composable () -> Unit) {
       modifier =
           Modifier.fillMaxWidth()
               .clip(RoundedCornerShape(22.dp))
-              .background(Color.White)
+              .background(SpottedTheme.colors.surface)
               .padding(16.dp),
   ) {
     content()
@@ -347,11 +348,18 @@ private fun FormChip(
   Text(
       text,
       style =
-          if (selected) jakarta(13, 16f, 700, 0xFF1B5BD7) else jakarta(13, 16f, 600, 0xFF2C3340),
+          if (selected) jakarta(13, 16f, 700, SpottedTheme.colors.blue)
+          else jakarta(13, 16f, 600, SpottedTheme.colors.inkSoft),
       modifier =
           Modifier.clip(shape)
-              .background(if (selected) SpottedBlueTint else SpottedInputBackground)
-              .then(if (selected) Modifier.border(1.5.dp, SpottedBlue, shape) else Modifier)
+              .background(
+                  if (selected) SpottedTheme.colors.blueTint
+                  else SpottedTheme.colors.inputBackground
+              )
+              .then(
+                  if (selected) Modifier.border(1.5.dp, SpottedTheme.colors.blue, shape)
+                  else Modifier
+              )
               .then(selection)
               .padding(horizontal = 12.dp, vertical = 7.dp)
               .testTag(testTag),
@@ -383,7 +391,7 @@ private fun FormField(
                 Modifier.fillMaxWidth()
                     .heightIn(min = minHeight)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(SpottedInputBackground)
+                    .background(SpottedTheme.colors.inputBackground)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
           if (value.isEmpty()) Text(placeholder, style = fieldPlaceholderStyle)
@@ -410,10 +418,10 @@ private fun AddPetsFooter(
         shape = RoundedCornerShape(14.dp),
         colors =
             ButtonDefaults.buttonColors(
-                containerColor = SpottedBlue,
-                contentColor = Color.White,
-                disabledContainerColor = SpottedBlue.copy(alpha = 0.4f),
-                disabledContentColor = Color.White,
+                containerColor = SpottedTheme.colors.blue,
+                contentColor = SpottedTheme.colors.onAccent,
+                disabledContainerColor = SpottedTheme.colors.blue.copy(alpha = 0.4f),
+                disabledContentColor = SpottedTheme.colors.onAccent,
             ),
         modifier =
             Modifier.weight(1f)
@@ -422,14 +430,14 @@ private fun AddPetsFooter(
     ) {
       if (state.isSaving) {
         CircularProgressIndicator(
-            color = Color.White,
+            color = SpottedTheme.colors.onAccent,
             strokeWidth = 2.dp,
             modifier = Modifier.size(20.dp).testTag(AddPetsScreenTestTags.LOADER),
         )
       } else {
         Text(
             stringResource(R.string.add_pets_save_and_continue),
-            style = jakarta(15, 20f, 700, 0xFFFFFFFF),
+            style = jakarta(15, 20f, 700, SpottedTheme.colors.onAccent),
         )
       }
     }
@@ -438,10 +446,10 @@ private fun AddPetsFooter(
         modifier =
             Modifier.size(52.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(SpottedTheme.colors.surface)
                 .border(
                     2.dp,
-                    SpottedBlue.copy(alpha = if (state.canSave) 1f else 0.4f),
+                    SpottedTheme.colors.blue.copy(alpha = if (state.canSave) 1f else 0.4f),
                     CircleShape,
                 )
                 .clickable(
@@ -454,7 +462,14 @@ private fun AddPetsFooter(
     ) {
       Text(
           "+",
-          style = jakarta(26, 28f, 800, if (state.canSave) 0xFF1B5BD7 else 0x661B5BD7),
+          style =
+              jakarta(
+                  26,
+                  28f,
+                  800,
+                  if (state.canSave) SpottedTheme.colors.blue
+                  else SpottedTheme.colors.blue.copy(alpha = 0.4f),
+              ),
       )
     }
   }

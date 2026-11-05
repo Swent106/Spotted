@@ -13,13 +13,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import com.android.spotted.resources.C
-import com.android.spotted.ui.theme.SampleAppTheme
+import com.android.spotted.ui.theme.SpottedTheme
 
 class SecondActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setContent {
-      SampleAppTheme {
+      SpottedTheme {
         // A surface container using the 'background' color from the theme
         Surface(
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.second_screen_container },
@@ -40,5 +40,5 @@ fun GreetingRobo(name: String, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview2() {
-  SampleAppTheme { GreetingRobo("Robolectric") }
+  SpottedTheme { GreetingRobo("Robolectric") }
 }

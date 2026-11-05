@@ -18,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -29,8 +28,7 @@ import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.rememberPhotoPickerActions
-import com.android.spotted.ui.theme.SpottedButtonBorder
-import com.android.spotted.ui.theme.SpottedInputBackground
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 object PetPhotoPickerTestTags {
@@ -63,6 +61,7 @@ fun PetPhotoPicker(
     onPhotoError: () -> Unit,
     modifier: Modifier = Modifier,
     canTakePhoto: Boolean = rememberDeviceHasCamera(),
+    isSaving: Boolean = false,
 ) {
   val actions =
       rememberPhotoPickerActions(
@@ -76,6 +75,7 @@ fun PetPhotoPicker(
       onTakePhoto = actions.takePhoto,
       onRemovePhoto = { onPhotoSelected(null) },
       canTakePhoto = canTakePhoto,
+      enabled = !isSaving && !actions.isPicking,
       modifier = modifier,
   )
 }
@@ -101,13 +101,18 @@ fun PetPhotoPickerContent(
     onRemovePhoto: () -> Unit,
     modifier: Modifier = Modifier,
     canTakePhoto: Boolean = true,
+    enabled: Boolean = true,
 ) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
       modifier = modifier.fillMaxWidth(),
   ) {
-    Box(Modifier.size(84.dp).clip(RoundedCornerShape(18.dp)).background(SpottedInputBackground)) {
+    Box(
+        Modifier.size(84.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(SpottedTheme.colors.inputBackground)
+    ) {
       if (photoUri != null) {
         AsyncImage(
             model = photoUri,
@@ -126,12 +131,14 @@ fun PetPhotoPickerContent(
             stringResource(R.string.pet_photo_upload),
             PetPhotoPickerTestTags.ADD_BUTTON,
             onPickPhoto,
+            enabled,
         )
         if (canTakePhoto) {
           PhotoButton(
               stringResource(R.string.photo_take),
               PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
               onTakePhoto,
+              enabled,
           )
         }
       } else {
@@ -139,18 +146,21 @@ fun PetPhotoPickerContent(
             stringResource(R.string.photo_change),
             PetPhotoPickerTestTags.CHANGE_BUTTON,
             onPickPhoto,
+            enabled,
         )
         if (canTakePhoto) {
           PhotoButton(
               stringResource(R.string.photo_take),
               PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
               onTakePhoto,
+              enabled,
           )
         }
         PhotoButton(
             stringResource(R.string.photo_remove),
             PetPhotoPickerTestTags.REMOVE_BUTTON,
             onRemovePhoto,
+            enabled,
         )
       }
     }
@@ -158,19 +168,19 @@ fun PetPhotoPickerContent(
 }
 
 @Composable
-private fun PhotoButton(text: String, testTag: String, onClick: () -> Unit) {
+private fun PhotoButton(text: String, testTag: String, onClick: () -> Unit, enabled: Boolean) {
   val shape = RoundedCornerShape(14.dp)
   Box(
       contentAlignment = Alignment.Center,
       modifier =
           Modifier.fillMaxWidth()
               .clip(shape)
-              .background(Color.White)
-              .border(1.5.dp, SpottedButtonBorder, shape)
-              .clickable(role = Role.Button, onClick = onClick)
+              .background(SpottedTheme.colors.surface)
+              .border(1.5.dp, SpottedTheme.colors.buttonBorder, shape)
+              .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
               .padding(vertical = 12.dp)
               .testTag(testTag),
   ) {
-    Text(text, style = jakarta(13, 16f, 700, 0xFF2C3340))
+    Text(text, style = jakarta(13, 16f, 700, SpottedTheme.colors.inkSoft))
   }
 }

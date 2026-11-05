@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
+import com.android.spotted.ui.theme.SpottedIllustration
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 /** Test tags used by UI tests to find the elements of the Sign-In screen. */
@@ -65,7 +67,7 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(Color(0xFFEFEFEF))
+              .background(SpottedTheme.colors.screenBackground)
               .paint(
                   painterResource(R.drawable.background_textures),
                   contentScale = ContentScale.Crop,
@@ -91,7 +93,7 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
             contentScale = ContentScale.FillBounds,
             modifier = Modifier.width(53.dp),
         )
-        Text("Spotted", style = jakarta(27, 35.59f, 800, 0xFF14161A))
+        Text("Spotted", style = jakarta(27, 35.59f, 800, SpottedTheme.colors.ink))
       }
       // Heading
       Column(
@@ -101,12 +103,12 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
         Text(
             "Nobody finds a lost pet alone",
             Modifier.fillMaxWidth(),
-            style = jakarta(30, 37f, 800, 0xFF14161A),
+            style = jakarta(30, 37f, 800, SpottedTheme.colors.ink),
         )
         Text(
             "Sign in to post an alert for your own pet, and to be told when one goes missing close to you.",
             Modifier.fillMaxWidth(),
-            style = jakarta(15, 20f, 500, 0xFF5F6672),
+            style = jakarta(15, 20f, 500, SpottedTheme.colors.textSecondary),
         )
       }
       // Hero
@@ -123,7 +125,7 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
           modifier =
               Modifier.fillMaxWidth()
                   .height(59.dp)
-                  .background(Color(0xFFF5F6F8), RoundedCornerShape(100.dp))
+                  .background(SpottedTheme.colors.inputBackground, RoundedCornerShape(100.dp))
                   .padding(start = 14.dp, end = 16.dp),
       ) {
         Image(
@@ -134,7 +136,7 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
         )
         Text(
             "1 240 people already watching out in Geneva",
-            style = jakarta(12, 16f, 600, 0xFF2C3340),
+            style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
         )
       }
       Spacer(Modifier.height(30.dp))
@@ -146,7 +148,7 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
                   Modifier.size(40.dp).testTag(SignInScreenTestTags.LOADER).semantics {
                     contentDescription = "Signing in"
                   },
-              color = Color(0xFF14161A),
+              color = SpottedTheme.colors.ink,
           )
         }
       } else {
@@ -158,7 +160,7 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
         Text(
             message,
             Modifier.fillMaxWidth().testTag(SignInScreenTestTags.ERROR_MESSAGE),
-            style = jakarta(13, 18f, 600, 0xFFD93025, TextAlign.Center),
+            style = jakarta(13, 18f, 600, SpottedTheme.colors.error, TextAlign.Center),
         )
       }
 
@@ -167,13 +169,13 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
       Text(
           "Why an account? It keeps alerts tied to a real owner, so only you can confirm sightings of your pet.",
           Modifier.fillMaxWidth(),
-          style = jakarta(12, 16f, 500, 0xFF6B7280, TextAlign.Center),
+          style = jakarta(12, 16f, 500, SpottedTheme.colors.textLabel, TextAlign.Center),
       )
       Spacer(Modifier.height(34.dp))
       Text(
           "By continuing you accept the terms and the privacy notice",
           Modifier.fillMaxWidth(),
-          style = jakarta(11, 14f, 500, 0xFF9AA0AA, TextAlign.Center),
+          style = jakarta(11, 14f, 500, SpottedTheme.colors.textFaint, TextAlign.Center),
       )
       Spacer(Modifier.height(24.dp))
     }
@@ -186,7 +188,7 @@ private fun Hero() {
       Modifier.width(342.dp)
           .height(220.dp)
           .clip(RoundedCornerShape(27.dp))
-          .background(Color(0xFFE8EEFC))
+          .background(SpottedIllustration.bubbleBlue)
   ) {
     // Carte en fond
     Image(
@@ -207,15 +209,41 @@ private fun Hero() {
         138,
         77,
         66.dp,
-        0xFFF0E0CE,
+        SpottedIllustration.bubbleBeige,
         98.dp,
         174.51.dp,
         mirror = true,
     )
-    PetPhoto(R.drawable.hero_helper_1, 58, 44, 44.dp, 0xFFD9E2E8, 46.dp, 70.dp)
-    PetPhoto(R.drawable.hero_helper_2, 240, 52, 44.dp, 0xFFDEE9DC, 38.dp, 50.87.dp)
-    PetPhoto(R.drawable.hero_helper_3, 78, 142, 44.dp, 0xFFE7DCEC, 68.dp, 44.dp, mirror = true)
-    PetPhoto(R.drawable.hero_helper_4, 252, 140, 44.dp, 0xFFDDE3EE, 40.dp, 64.dp, mirror = true)
+    PetPhoto(R.drawable.hero_helper_1, 58, 44, 44.dp, SpottedIllustration.bubbleSlate, 46.dp, 70.dp)
+    PetPhoto(
+        R.drawable.hero_helper_2,
+        240,
+        52,
+        44.dp,
+        SpottedIllustration.bubbleGreen,
+        38.dp,
+        50.87.dp,
+    )
+    PetPhoto(
+        R.drawable.hero_helper_3,
+        78,
+        142,
+        44.dp,
+        SpottedIllustration.bubblePurple,
+        68.dp,
+        44.dp,
+        mirror = true,
+    )
+    PetPhoto(
+        R.drawable.hero_helper_4,
+        252,
+        140,
+        44.dp,
+        SpottedIllustration.bubbleGrey,
+        40.dp,
+        64.dp,
+        mirror = true,
+    )
     // Pins
     listOf(
             Triple(85, 30, 22),
@@ -236,7 +264,11 @@ private fun Hero() {
 
 @Composable
 private fun Ring(x: Int, y: Int, size: Int) =
-    Box(Modifier.offset(x.dp, y.dp).size(size.dp).border(1.dp, Color(0xFFD3DBF5), CircleShape))
+    Box(
+        Modifier.offset(x.dp, y.dp)
+            .size(size.dp)
+            .border(1.dp, SpottedIllustration.ring, CircleShape)
+    )
 
 @Composable
 private fun PetPhoto(
@@ -244,7 +276,7 @@ private fun PetPhoto(
     x: Int,
     y: Int,
     size: Dp,
-    bg: Long,
+    bg: Color,
     imgW: Dp,
     imgH: Dp,
     mirror: Boolean = false,
@@ -255,8 +287,8 @@ private fun PetPhoto(
           Modifier.offset(x.dp, y.dp)
               .size(size)
               .clip(CircleShape)
-              .background(Color(bg))
-              .border(3.dp, Color.White, CircleShape),
+              .background(bg)
+              .border(3.dp, SpottedIllustration.photoBorder, CircleShape),
   ) {
     Image(
         painterResource(res),
@@ -274,9 +306,10 @@ private fun PetPhoto(
 private fun GoogleSignInButton(onSignInClick: () -> Unit) {
   Button(
       onClick = onSignInClick,
-      colors = ButtonDefaults.buttonColors(containerColor = Color.White), // Button color
+      colors =
+          ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.surface), // Button color
       shape = RoundedCornerShape(50), // Circular edges for the button
-      border = BorderStroke(1.dp, Color.LightGray),
+      border = BorderStroke(1.dp, SpottedTheme.colors.buttonBorder),
       modifier = Modifier.padding(8.dp).height(48.dp).testTag(SignInScreenTestTags.GOOGLE_BUTTON),
   ) {
     Row(
@@ -294,7 +327,7 @@ private fun GoogleSignInButton(onSignInClick: () -> Unit) {
       // Text for the button
       Text(
           text = "Sign in with Google",
-          color = Color.Black,
+          color = SpottedTheme.colors.ink,
           fontSize = 16.sp,
           fontWeight = FontWeight.Medium,
       )
