@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -15,8 +16,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -36,6 +39,8 @@ class HomeScreenContentTest {
       HomeScreenContent(
           state = state,
           onReportMissingClick = click("report"),
+          onAlertClick = { id -> clicks["alert:$id"] = (clicks["alert:$id"] ?: 0) + 1 },
+          onSeenPetClick = { id -> clicks["seen:$id"] = (clicks["seen:$id"] ?: 0) + 1 },
           onRetryClick = click("retry"),
           onAddPetClick = click("addPet"),
           onPetClick = { petId -> clicks["pet:$petId"] = (clicks["pet:$petId"] ?: 0) + 1 },
@@ -126,6 +131,60 @@ class HomeScreenContentTest {
   }
 
   @Test
+  fun lostPetsLoading_showsLoaderInsteadOfEmptyState() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(isLoading = true)))
+
+    scrollTo(HomeScreenTestTags.ALERTS_LOADER).assertExists()
+    node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
+  }
+
+  @Test
+  fun lostPetsError_withoutItems_showsRetry() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(errorMessage = ALERTS_ERROR)))
+
+    scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertTextEquals(ALERTS_ERROR)
+    scrollTo(HomeScreenTestTags.ALERTS_RETRY).performClick()
+
+    assertEquals(1, clicks["retry"])
+  }
+
+  @Test
+  fun lostPetsError_withItems_keepsTheAlertAndShowsTheError() {
+    setContent(
+        HomeUiState(lostPetsNearby = HomeSection(items = listOf(NALA), errorMessage = ALERTS_ERROR))
+    )
+
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
+    scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertTextEquals(ALERTS_ERROR)
+  }
+
+  @Test
+  fun featuredLostPet_showsSingularCountAndDistanceAndCallsSeenCallback() {
+    setContent(
+        HomeUiState(
+            lostPetsNearby = HomeSection(items = listOf(NALA)),
+            distanceTexts = mapOf(NALA.id to "600 m away"),
+        )
+    )
+
+    node(HomeScreenTestTags.ALERTS_TITLE).assertTextEquals("1 pet missing near you")
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
+    node(HomeScreenTestTags.alertDistance(NALA.id)).assertTextEquals("600 m away")
+    node(HomeScreenTestTags.seenButton(NALA.id)).performClick()
+
+    assertEquals(1, clicks["seen:${NALA.id}"])
+  }
+
+  @Test
+  fun lostPetCard_callsAlertCallback() {
+    setContent(HomeUiState(lostPetsNearby = HomeSection(items = listOf(NALA))))
+
+    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
+
+    assertEquals(1, clicks["alert:${NALA.id}"])
+  }
+
+  @Test
   fun failedRefresh_keepsThePets_andShowsTheErrorUnderThem() {
     setContent(HomeUiState(pets = HomeSection(listOf(LUNA), errorMessage = PETS_ERROR)))
 
@@ -200,8 +259,19 @@ class HomeScreenContentTest {
 
   private companion object {
     const val PETS_ERROR = "Couldn't load your pets. Please try again."
+    const val ALERTS_ERROR = "Couldn't load missing pets. Please try again."
     const val NOT_SIGNED_IN = "You need to be signed in to see your pets."
     val LUNA = Pet(id = "luna", ownerId = "me", name = "Luna", species = Species.DOG)
     val REX = Pet(id = "rex", ownerId = "me", name = "Rex", species = Species.DOG)
+    val NALA =
+        Alert(
+            id = "nala",
+            petId = "nala",
+            ownerId = "someone",
+            lastKnownLocation = Location(46.5197, 6.6323),
+            lostAtMillis = 0L,
+            petName = "Nala",
+            petSpecies = Species.CAT,
+        )
   }
 }

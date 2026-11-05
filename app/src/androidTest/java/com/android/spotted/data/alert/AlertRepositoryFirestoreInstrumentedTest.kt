@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.alert
 
@@ -304,5 +305,56 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     assertTrue("Query should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
     assertEquals(listOf(newest.id, middle.id, oldest.id), result.getOrThrow().map { it.id })
+  }
+
+  @Test
+  fun getOpenAlertsByOwner_returnsOnlyOpenAlertsNewestFirst() = runBlocking {
+    val location = Location(latitude = 46.0, longitude = 6.0)
+    val newest = publishOpenAlert(location, lostAtMillis = 3_000L)
+    val oldest = publishOpenAlert(location, lostAtMillis = 1_000L)
+    val closed = publishOpenAlert(location, lostAtMillis = 2_000L)
+    nowMillis = 4_000L
+    repository.closeAlert(closed.id).getOrThrow()
+
+    val result = repository.getOpenAlertsByOwner(auth.currentUser!!.uid)
+
+    assertTrue("Query should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    assertEquals(listOf(newest.id, oldest.id), result.getOrThrow().map { it.id })
+  }
+
+  @Test
+  fun deleteAlertsByOwner_removesTheOwnersAlerts() = runBlocking {
+    val location = Location(latitude = 46.0, longitude = 6.0)
+    publishOpenAlert(location, lostAtMillis = 1_000L)
+    publishOpenAlert(location, lostAtMillis = 2_000L)
+
+    val result = repository.deleteAlertsByOwner(auth.currentUser!!.uid)
+
+    assertTrue("Delete should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+    assertTrue(repository.getMyAlerts(auth.currentUser!!.uid).getOrThrow().isEmpty())
+  }
+
+  @Test
+  fun firestoreOperations_whenSignedOut_returnFailures() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = "pet-not-written",
+            ownerId = ownerId,
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_000L,
+            petName = "Milo",
+            petSpecies = Species.CAT,
+        )
+    auth.signOut()
+
+    assertTrue(repository.publishAlert(alert).isFailure)
+    assertTrue(repository.getAlertById(alert.id).isFailure)
+    assertTrue(repository.getMyAlerts(ownerId).isFailure)
+    assertTrue(repository.closeAlert(alert.id).isFailure)
+    assertTrue(repository.getOpenAlertsByOwner(ownerId).isFailure)
+    assertTrue(repository.deleteAlertsByOwner(ownerId).isFailure)
+    assertTrue(repository.getOpenAlertsNear(alert.lastKnownLocation, 5.0).isFailure)
   }
 }

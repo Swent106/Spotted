@@ -1,9 +1,11 @@
+// Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of GitHub Copilot.
 package com.android.spotted.ui.alertdetail
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -183,5 +185,33 @@ class AlertDetailScreenTest {
 
     composeTestRule.runOnIdle { state.value = AlertDetailUiState(alert = alert) }
     composeTestRule.onNodeWithTag(AlertDetailTestTags.DISTANCE).assertDoesNotExist()
+  }
+
+  @Test
+  fun lostTime_isFormattedForRecentAlerts() {
+    val now = System.currentTimeMillis()
+    val alert =
+        Alert(
+            id = "alert-recent",
+            petId = "pet-recent",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = now,
+            petName = "Milo",
+            petSpecies = Species.DOG,
+        )
+    val state = mutableStateOf(AlertDetailUiState(alert = alert))
+    composeTestRule.setContent { AlertDetailContent(state = state.value) }
+
+    composeTestRule
+        .onNodeWithTag(AlertDetailTestTags.LOST_AT)
+        .assertTextContains("Lost just now", substring = true)
+
+    composeTestRule.runOnIdle {
+      state.value = AlertDetailUiState(alert = alert.copy(lostAtMillis = now - 20 * 60_000L))
+    }
+    composeTestRule
+        .onNodeWithTag(AlertDetailTestTags.LOST_AT)
+        .assertTextContains("Lost 20 min ago", substring = true)
   }
 }

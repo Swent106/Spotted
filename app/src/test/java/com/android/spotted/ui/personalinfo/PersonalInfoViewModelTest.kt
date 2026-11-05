@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.personalinfo
 
 import com.android.spotted.model.Location
@@ -558,5 +559,45 @@ class PersonalInfoViewModelTest {
         assertEquals(PersonalInfoViewModel.PHOTO_UPLOAD_FAILED, state.errorMessage)
         assertFalse(state.isSaved)
         assertTrue(userRepository.getUser("user-1").isFailure)
+      }
+
+  @Test
+  fun saveProfile_withExistingPhotoUrl_doesNotUploadItAgain() =
+      runTest(testDispatcher) {
+        val photoRepository = FakePhotoRepository()
+        val photoViewModel =
+            PersonalInfoViewModel(
+                user = User(uid = "user-1", email = "jamie@example.com"),
+                userRepository = userRepository,
+                authRepository = authRepository,
+                photoRepository = photoRepository,
+            )
+        photoViewModel.onFirstNameChanged("Jamie")
+        photoViewModel.onHomeAreaChanged("Lausanne")
+        photoViewModel.onPhotoSelected(photoRepository.profilePhotoUrl("user-1"))
+
+        photoViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertTrue(photoRepository.uploadedPhotos.isEmpty())
+        assertTrue(photoViewModel.uiState.value.isSaved)
+      }
+
+  @Test
+  fun useCurrentLocation_whenAreaLookupFails_keepsTypedAreaAndPlacesPin() =
+      runTest(testDispatcher) {
+        val location = Location(46.52, 6.63)
+        val addressRepository =
+            FakeAddressRepository().apply { failure = IllegalStateException("offline") }
+        val gpsViewModel =
+            viewModelWithLocation(FakeLocationRepository(location), addressRepository)
+        gpsViewModel.onHomeAreaChanged("Flon")
+
+        gpsViewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertEquals(location, gpsViewModel.uiState.value.homeLocation)
+        assertEquals("Flon", gpsViewModel.uiState.value.homeArea)
+        assertNull(gpsViewModel.uiState.value.errorMessage)
       }
 }

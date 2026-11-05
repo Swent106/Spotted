@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.personalinfo
 
+import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -24,9 +25,12 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.model.Location
 import com.android.spotted.R
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.DefaultMapCenter
@@ -96,6 +100,15 @@ class PersonalInfoScreenTest {
         )
         .forEach { composeTestRule.onNodeWithTag(it).performScrollTo().assertIsDisplayed() }
     button().assertIsDisplayed().assertIsNotEnabled()
+  }
+
+  @Test
+  fun editingState_showsEditCopyAndSaveChangesAction() {
+    setContent(validState.copy(isEditing = true))
+
+    composeTestRule.onNodeWithText("Edit your profile").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Changes are saved to your profile").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Save changes").assertIsDisplayed()
   }
 
   @Test
@@ -388,6 +401,65 @@ class PersonalInfoScreenTest {
     assertNull(viewModel.uiState.value.photoUri)
   }
 
+  @Test
+  fun personalInfoScreen_locationPermissionGranted_usesCurrentLocation() {
+    val location = Location(46.52, 6.63)
+    val viewModel =
+        PersonalInfoViewModel(
+            user = User(uid = "user-1", email = "rayen@example.com"),
+            userRepository = FakeUserRepository(),
+            authRepository = FakeAuthRepository(),
+            locationRepository =
+                object : LocationRepository {
+                  override suspend fun getCurrentLocation() = Result.success(location)
+                },
+            addressRepository =
+                object : AddressRepository {
+                  override suspend fun areaName(location: Location) = Result.success("Lausanne")
+
+                  override suspend fun locate(area: String) = Result.success(location)
+                },
+        )
+    setScreenWithResult(
+        viewModel,
+        mapOf(
+            Manifest.permission.ACCESS_FINE_LOCATION to false,
+            Manifest.permission.ACCESS_COARSE_LOCATION to true,
+        ),
+    )
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.USE_MY_LOCATION)
+        .performScrollTo()
+        .performClick()
+    composeTestRule.waitUntil { viewModel.uiState.value.homeLocation == location }
+
+    assertEquals("Lausanne", viewModel.uiState.value.homeArea)
+  }
+
+  @Test
+  fun personalInfoScreen_locationPermissionDenied_showsPermissionError() {
+    val viewModel = photoViewModel()
+    setScreenWithResult(
+        viewModel,
+        mapOf(
+            Manifest.permission.ACCESS_FINE_LOCATION to false,
+            Manifest.permission.ACCESS_COARSE_LOCATION to false,
+        ),
+    )
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.USE_MY_LOCATION)
+        .performScrollTo()
+        .performClick()
+    composeTestRule.waitForIdle()
+
+    assertEquals(
+        PersonalInfoViewModel.LOCATION_PERMISSION_DENIED,
+        viewModel.uiState.value.errorMessage,
+    )
+  }
+
   private fun context() = InstrumentationRegistry.getInstrumentation().targetContext
 
   private fun photoViewModel() =
@@ -445,6 +517,11 @@ class PersonalInfoScreenTest {
   }
 
   @Test
+  fun photoOptions_withoutCameraOrPhoto_onlyOffersGallery() {
+    composeTestRule.setContent {
+      PhotoOptionsDialog(
+          hasPhoto = false,
+          canTakePhoto = false,
   fun photoOptions_cameraUnavailable_showsGalleryFallback() {
     composeTestRule.setContent {
       PhotoOptionsDialog(
@@ -458,8 +535,8 @@ class PersonalInfoScreenTest {
       )
     }
 
-    composeTestRule
-        .onNodeWithText(context().getString(R.string.photo_camera_unavailable))
-        .assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).assertDoesNotExist()
   }
 }
