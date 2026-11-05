@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.personalinfo
 
 import androidx.lifecycle.ViewModel
@@ -9,7 +10,6 @@ import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
-import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.location.AddressRepository
@@ -26,7 +26,6 @@ import kotlinx.coroutines.launch
 class PersonalInfoViewModel(
     private val user: User?,
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository,
     private val locationRepository: LocationRepository? = null,
     private val addressRepository: AddressRepository? = null,
     private val photoRepository: PhotoRepository? = null,
@@ -70,10 +69,6 @@ class PersonalInfoViewModel(
     }
   }
 
-  fun onNameChanged(name: String) {
-    _uiState.update { it.copy(name = name, isSaved = false, errorMessage = null) }
-  }
-
   fun onUsernameChanged(username: String) {
     _uiState.update { it.copy(username = username, isSaved = false, errorMessage = null) }
   }
@@ -108,10 +103,6 @@ class PersonalInfoViewModel(
 
   private fun fullName(firstName: String, lastName: String): String =
       listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
-
-  fun onPhoneChanged(phone: String) {
-    _uiState.update { it.copy(phone = phone, isSaved = false, errorMessage = null) }
-  }
 
   fun onHomeAreaChanged(homeArea: String) {
     _uiState.update { it.copy(homeArea = homeArea, isSaved = false, errorMessage = null) }
@@ -208,36 +199,6 @@ class PersonalInfoViewModel(
     _uiState.update { it.copy(isSaved = false) }
   }
 
-  fun logout() {
-    if (_uiState.value.isLoggingOut || _uiState.value.isLoggedOut) return
-
-    _uiState.update { it.copy(isLoggingOut = true, errorMessage = null) }
-    viewModelScope.launch {
-      authRepository
-          .signOut()
-          .fold(
-              onSuccess = { _uiState.update { it.copy(isLoggingOut = false, isLoggedOut = true) } },
-              onFailure = { failure ->
-                _uiState.update {
-                  it.copy(
-                      isLoggingOut = false,
-                      isLoggedOut = false,
-                      errorMessage = failure.localizedMessage ?: "Unable to log out",
-                  )
-                }
-              },
-          )
-    }
-  }
-
-  fun requestNearbyAlerts() {
-    _uiState.update { it.copy(nearbyAlertsRequested = true) }
-  }
-
-  fun clearNearbyAlertsRequest() {
-    _uiState.update { it.copy(nearbyAlertsRequested = false) }
-  }
-
   companion object {
     const val PHOTO_UPLOAD_FAILED =
         "Couldn't upload your photo. Try again, or remove it to save without one."
@@ -250,15 +211,13 @@ class PersonalInfoViewModel(
         object : ViewModelProvider.Factory {
           override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
             require(modelClass.isAssignableFrom(PersonalInfoViewModel::class.java))
-            val authRepository = AuthRepositoryProvider.authRepository
             val application = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
 
             return requireNotNull(
                 modelClass.cast(
                     PersonalInfoViewModel(
-                        user = authRepository.currentUser.value,
+                        user = AuthRepositoryProvider.authRepository.currentUser.value,
                         userRepository = UserRepositoryFirestore(),
-                        authRepository = authRepository,
                         locationRepository =
                             application?.let { LocationRepositoryProvider.create(it) },
                         addressRepository = application?.let { AddressRepositoryGeocoder(it) },

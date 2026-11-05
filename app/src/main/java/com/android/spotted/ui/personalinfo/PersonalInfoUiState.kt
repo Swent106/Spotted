@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.personalinfo
 
 import com.android.spotted.model.Location
@@ -9,6 +10,7 @@ data class PersonalInfoUiState(
     val lastName: String = "",
     val name: String = "",
     val email: String = "",
+    /** Not edited on this screen, but kept so that saving doesn't erase the stored phone. */
     val phone: String = "",
     val homeArea: String = "",
     /** Home pin placed on the map picker; lost pets are searched around it. */
@@ -18,25 +20,13 @@ data class PersonalInfoUiState(
     /** True when the user already has a profile: the form then edits it instead of creating it. */
     val isEditing: Boolean = false,
     val alertRadiusKm: Int = DEFAULT_ALERT_RADIUS_KM,
-    val petsBroughtHome: List<String> = emptyList(),
-    val achievements: List<String> = emptyList(),
-    val helpersThisYear: Int = 0,
     val isSaving: Boolean = false,
-    val isLoggingOut: Boolean = false,
     val isSaved: Boolean = false,
     val isSignedOut: Boolean = false,
-    val isLoggedOut: Boolean = false,
-    val nearbyAlertsRequested: Boolean = false,
     val errorMessage: String? = null,
 ) {
   val canSave: Boolean
-    get() =
-        name.isNotBlank() &&
-            homeArea.isNotBlank() &&
-            !isSaving &&
-            !isLoggingOut &&
-            !isSignedOut &&
-            !isLoggedOut
+    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving && !isSignedOut
 
   companion object {
     val ALERT_RADIUS_OPTIONS_KM = listOf(1, 3, 5, 10)
