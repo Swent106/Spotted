@@ -17,6 +17,7 @@ import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,19 +38,32 @@ class PersonalInfoViewModel(
       )
   val uiState: StateFlow<PersonalInfoUiState> = _uiState.asStateFlow()
 
+  private var profileLoad: Job? = null
+
   init {
     loadExistingProfile()
   }
 
   /**
    * Fills the form with the saved profile, if there is one, so editing it doesn't start from empty
-   * fields. A new user has no profile yet: the form then stays empty.
+   * fields. A new user has no profile yet: the form then stays empty. If the profile can't be read,
+   * the form must not look like a new user's, or saving it would overwrite the real profile.
    */
   private fun loadExistingProfile() {
     val signedInUser = user ?: return
-    viewModelScope.launch {
-      val profile = userRepository.getUser(signedInUser.uid).getOrNull() ?: return@launch
-      // The name is saved as one string: the first word is the first name, the rest the last name
+    profileLoad = viewModelScope.launch {
+      val profile =
+          userRepository.getUser(signedInUser.uid).getOrElse { failure ->
+            // The repository reports a missing profile as NoSuchElementException
+            if (failure !is NoSuchElementException) {
+              _uiState.update {
+                it.copy(isProfileLoadFailed = true, errorMessage = PROFILE_LOAD_FAILED)
+              }
+            }
+            return@launch
+          }
+      // The name is saved as one string: the first word is the first name, the rest the last
+      // name
       val firstName = profile.name.substringBefore(' ')
       val lastName = profile.name.substringAfter(' ', missingDelimiterValue = "")
       _uiState.update {
@@ -146,24 +160,39 @@ class PersonalInfoViewModel(
     _uiState.update { it.copy(errorMessage = LOCATION_PERMISSION_DENIED) }
   }
 
+  /**
+   * Saves the form as the user's profile. If the saved profile couldn't be read, this reads it
+   * again instead, so the form never replaces a profile it didn't load.
+   */
   fun saveProfile() {
-    val currentState = _uiState.value
-    if (!currentState.canSave) return
+    if (!_uiState.value.canSave) return
+    if (_uiState.value.isProfileLoadFailed) {
+      _uiState.update { it.copy(isProfileLoadFailed = false, errorMessage = null) }
+      loadExistingProfile()
+      return
+    }
     val signedInUser = user ?: return
-
-    val profile =
-        UserProfile(
-            uid = signedInUser.uid,
-            name = currentState.name.trim(),
-            phone = currentState.phone,
-            email = signedInUser.email,
-            homeArea = currentState.homeArea.trim(),
-            homeLocation = currentState.homeLocation,
-            alertRadiusKm = currentState.alertRadiusKm,
-        )
 
     _uiState.update { it.copy(isSaving = true, errorMessage = null) }
     viewModelScope.launch {
+      // Saving before the profile has loaded would overwrite it with what the form held then
+      profileLoad?.join()
+      val currentState = _uiState.value
+      if (currentState.isProfileLoadFailed) {
+        _uiState.update { it.copy(isSaving = false) }
+        return@launch
+      }
+      val profile =
+          UserProfile(
+              uid = signedInUser.uid,
+              name = currentState.name.trim(),
+              phone = currentState.phone,
+              email = signedInUser.email,
+              homeArea = currentState.homeArea.trim(),
+              homeLocation = currentState.homeLocation,
+              alertRadiusKm = currentState.alertRadiusKm,
+          )
+
       // A photo just picked or taken is a local URI: upload it before saving the profile
       val photoUri = currentState.photoUri
       val repository = photoRepository
@@ -196,6 +225,8 @@ class PersonalInfoViewModel(
   }
 
   companion object {
+    const val PROFILE_LOAD_FAILED =
+        "Couldn't load your profile. Check your connection, then tap the button to try again."
     const val SAVE_FAILED = "Couldn't save your profile. Please try again."
     const val PHOTO_UPLOAD_FAILED =
         "Couldn't upload your photo. Try again, or remove it to save without one."

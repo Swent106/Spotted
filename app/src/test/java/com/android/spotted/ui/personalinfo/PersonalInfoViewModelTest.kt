@@ -214,6 +214,50 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
+  fun existingProfile_whenItCannotBeRead_isNotOverwritten_andTheButtonReadsItAgain() =
+      runTest(testDispatcher) {
+        val saved = savedProfile()
+        userRepository.saveUser(saved)
+        userRepository.failure = IllegalStateException("offline")
+        val editViewModel = viewModelFor(userRepository)
+        advanceUntilIdle()
+
+        val failed = editViewModel.uiState.value
+        assertEquals(PersonalInfoViewModel.PROFILE_LOAD_FAILED, failed.errorMessage)
+        assertFalse(failed.isEditing)
+        assertTrue(failed.canSave)
+
+        // Back online, the user fills the empty form and taps the button
+        userRepository.failure = null
+        editViewModel.onFirstNameChanged("Someone")
+        editViewModel.onHomeAreaChanged("Elsewhere")
+        editViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(saved, userRepository.getUser("user-1").getOrThrow())
+        val reloaded = editViewModel.uiState.value
+        assertTrue(reloaded.isEditing)
+        assertEquals("Ouchy, Lausanne", reloaded.homeArea)
+        assertNull(reloaded.errorMessage)
+      }
+
+  @Test
+  fun saveProfile_beforeTheProfileHasLoaded_doesNotOverwriteIt() =
+      runTest(testDispatcher) {
+        val saved = savedProfile()
+        userRepository.saveUser(saved)
+        val editViewModel = viewModelFor(userRepository)
+
+        // Tapped before the load has run: the form is still empty apart from what was typed
+        editViewModel.onFirstNameChanged("Someone")
+        editViewModel.onHomeAreaChanged("Elsewhere")
+        editViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(saved, userRepository.getUser("user-1").getOrThrow())
+      }
+
+  @Test
   fun homeLocation_isEmptyAtFirst_andFollowsThePlacedPin() {
     assertNull(viewModel.uiState.value.homeLocation)
 
@@ -258,6 +302,23 @@ class PersonalInfoViewModelTest {
 
     assertTrue(failed.canSave)
   }
+
+  private fun savedProfile() =
+      UserProfile(
+          uid = "user-1",
+          name = "Jamie Lee Curtis",
+          phone = "+41 79 123 45 67",
+          email = "jamie@example.com",
+          homeArea = "Ouchy, Lausanne",
+          homeLocation = Location(46.507, 6.627),
+          alertRadiusKm = 10,
+      )
+
+  private fun viewModelFor(userRepository: FakeUserRepository) =
+      PersonalInfoViewModel(
+          user = User(uid = "user-1", email = "jamie@example.com"),
+          userRepository = userRepository,
+      )
 
   private fun viewModelWithLocation(
       locationRepository: FakeLocationRepository,

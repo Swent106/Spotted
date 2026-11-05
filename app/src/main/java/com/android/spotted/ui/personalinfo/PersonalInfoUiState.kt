@@ -19,14 +19,20 @@ data class PersonalInfoUiState(
     val photoUri: String? = null,
     /** True when the user already has a profile: the form then edits it instead of creating it. */
     val isEditing: Boolean = false,
+    /** True when the saved profile couldn't be read: the button then reads it again. */
+    val isProfileLoadFailed: Boolean = false,
     val alertRadiusKm: Int = DEFAULT_ALERT_RADIUS_KM,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val isSignedOut: Boolean = false,
     val errorMessage: String? = null,
 ) {
+  /** Whether the button can be tapped: to save the form, or to read the profile again. */
   val canSave: Boolean
-    get() = name.isNotBlank() && homeArea.isNotBlank() && !isSaving && !isSignedOut
+    get() =
+        (isProfileLoadFailed || (name.isNotBlank() && homeArea.isNotBlank())) &&
+            !isSaving &&
+            !isSignedOut
 
   companion object {
     val ALERT_RADIUS_OPTIONS_KM = listOf(1, 3, 5, 10)
