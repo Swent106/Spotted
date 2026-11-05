@@ -103,6 +103,10 @@ object HomeScreenTestTags {
 
   fun petCard(petId: String) = "home_pet_$petId"
 
+  fun missingBanner(alertId: String) = "home_missing_$alertId"
+
+  fun missingBadge(petId: String) = "home_missingBadge_$petId"
+
   fun alertCard(alertId: String) = "home_alert_$alertId"
 
   fun alertDistance(alertId: String) = "home_alertDistance_$alertId"
@@ -131,6 +135,7 @@ fun HomeScreen(
     onSeenPetClick: (alertId: String) -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
+    onMissingPetClick: (alertId: String) -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
@@ -147,6 +152,7 @@ fun HomeScreen(
       onReportMissingClick = onReportMissingClick,
       onAddPetClick = onAddPetClick,
       onPetClick = onPetClick,
+      onMissingPetClick = onMissingPetClick,
       onMapClick = onMapClick,
       onCameraClick = onCameraClick,
       onProfileClick = onProfileClick,
@@ -166,6 +172,7 @@ fun HomeScreenContent(
     onRetryClick: () -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
+    onMissingPetClick: (alertId: String) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
@@ -218,6 +225,13 @@ fun HomeScreenContent(
               onPetClick(petId)
             }
           },
+          // Same guard: a double tap must not open the alert twice
+          onMissingPetClick = { alertId ->
+            if (!isOpeningPetProfile) {
+              isOpeningPetProfile = true
+              onMissingPetClick(alertId)
+            }
+          },
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),
@@ -236,6 +250,7 @@ private fun HomeList(
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
     onPetClick: (petId: String) -> Unit,
+    onMissingPetClick: (alertId: String) -> Unit,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -259,7 +274,10 @@ private fun HomeList(
       }
     }
 
-    petsSection(state.pets, onRetryClick, onAddPetClick, onPetClick)
+    // The user's own missing pets come first: that is what they open the app for
+    missingPetsSection(state.ownLostPets, state.nowMillis, onMissingPetClick)
+
+    petsSection(state.pets, state.missingPetIds, onRetryClick, onAddPetClick, onPetClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
@@ -369,6 +387,7 @@ private fun HeaderButton(
  */
 private fun LazyListScope.petsSection(
     pets: HomeSection<Pet>,
+    missingPetIds: Set<String>,
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
     onPetClick: (petId: String) -> Unit,
@@ -395,7 +414,9 @@ private fun LazyListScope.petsSection(
           )
         }
   }
-  items(pets.items, key = { "pet_${it.id}" }) { pet -> PetCard(pet) { onPetClick(pet.id) } }
+  items(pets.items, key = { "pet_${it.id}" }) { pet ->
+    PetCard(pet, missing = pet.id in missingPetIds) { onPetClick(pet.id) }
+  }
   // A refresh that failed keeps the pets and shows the error under them
   if (error != null && pets.items.isNotEmpty()) {
     item(key = "petsError") { PetsError(error, onRetryClick) }
@@ -437,9 +458,12 @@ internal fun SectionError(
   }
 }
 
-/** The pet's name and status on the left, its photo on the right; grows with long texts. */
+/**
+ * The pet's name and status on the left, its photo on the right; grows with long texts. A [missing]
+ * pet shows a "Missing" badge instead of the "profile ready" check.
+ */
 @Composable
-private fun PetCard(pet: Pet, onClick: () -> Unit) {
+private fun PetCard(pet: Pet, missing: Boolean, onClick: () -> Unit) {
   Row(
       Modifier.padding(top = 12.dp)
           .fillMaxWidth()
@@ -459,16 +483,29 @@ private fun PetCard(pet: Pet, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        Spacer(Modifier.width(3.dp))
-        Image(
-            painterResource(R.drawable.ic_check_verified),
-            contentDescription = "Profile ready",
-            modifier = Modifier.size(21.dp),
-        )
+        Spacer(Modifier.width(if (missing) 6.dp else 3.dp))
+        if (missing) {
+          Text(
+              "Missing",
+              style = jakarta(12, 16f, FontWeight.SemiBold, SpottedTheme.colors.lostRed),
+              modifier =
+                  Modifier.clip(RoundedCornerShape(8.dp))
+                      .background(SpottedTheme.colors.errorTint)
+                      .padding(horizontal = 8.dp, vertical = 2.dp)
+                      .testTag(HomeScreenTestTags.missingBadge(pet.id)),
+          )
+        } else {
+          Image(
+              painterResource(R.drawable.ic_check_verified),
+              contentDescription = "Profile ready",
+              modifier = Modifier.size(21.dp),
+          )
+        }
       }
       Spacer(Modifier.height(3.dp))
       Text(
-          "Profile ready if they go missing",
+          if (missing) "Your alert is open: the community is looking out"
+          else "Profile ready if they go missing",
           style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
           maxLines = 3,
           overflow = TextOverflow.Ellipsis,
