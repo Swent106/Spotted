@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.android.spotted.model.Location
 import com.android.spotted.model.sighting.LikelyArea
@@ -87,6 +88,24 @@ object MyAlertScreenTestTags {
 
 /** A sighting drawn on the map, with the number it has in the list below. */
 data class SightingMarker(val number: Int, val location: Location)
+
+/**
+ * "My alert" wired to [viewModel]: shows [MyAlertContent] with its state and sends the owner's
+ * actions to the ViewModel. Calls [onBack] on Back, and once the alert is closed ("My pet is
+ * home"), since there is nothing left to review.
+ */
+@Composable
+fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
+  val state by viewModel.uiState.collectAsStateWithLifecycle()
+  LaunchedEffect(state.isClosed) { if (state.isClosed) onBack() }
+  MyAlertContent(
+      state = state,
+      onBack = onBack,
+      onConfirm = viewModel::confirm,
+      onDismiss = viewModel::dismiss,
+      onMarkFound = viewModel::markFound,
+  )
+}
 
 /**
  * Stateless "My alert" screen (Figma "02 · Lost pet · prediction map"): the owner sees the
