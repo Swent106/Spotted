@@ -181,13 +181,9 @@ class PersonalInfoViewModel(
           .saveUser(profile)
           .fold(
               onSuccess = { _uiState.update { it.copy(isSaving = false, isSaved = true) } },
-              onFailure = { failure ->
+              onFailure = {
                 _uiState.update {
-                  it.copy(
-                      isSaving = false,
-                      isSaved = false,
-                      errorMessage = failure.localizedMessage ?: "Unable to save profile",
-                  )
+                  it.copy(isSaving = false, isSaved = false, errorMessage = SAVE_FAILED)
                 }
               },
           )
@@ -200,6 +196,7 @@ class PersonalInfoViewModel(
   }
 
   companion object {
+    const val SAVE_FAILED = "Couldn't save your profile. Please try again."
     const val PHOTO_UPLOAD_FAILED =
         "Couldn't upload your photo. Try again, or remove it to save without one."
     const val LOCATION_UNAVAILABLE =

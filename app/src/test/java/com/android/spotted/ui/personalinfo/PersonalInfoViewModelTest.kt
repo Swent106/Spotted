@@ -192,32 +192,25 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
-  fun saveProfile_whenRepositoryFails_exposesError() =
+  fun saveProfile_whenRepositoryFails_showsAFixedMessage_whateverTheException() =
       runTest(testDispatcher) {
-        userRepository.failure = IllegalStateException("Save failed")
+        // Lets the profile load finish first, so only the save fails
+        advanceUntilIdle()
         viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
 
-        viewModel.saveProfile()
-        advanceUntilIdle()
+        listOf(IllegalStateException("PERMISSION_DENIED: internal detail"), IllegalStateException())
+            .forEach { failure ->
+              userRepository.failure = failure
 
-        assertEquals("Save failed", viewModel.uiState.value.errorMessage)
-        assertFalse(viewModel.uiState.value.isSaved)
-        assertFalse(viewModel.uiState.value.isSaving)
-      }
+              viewModel.saveProfile()
+              advanceUntilIdle()
 
-  @Test
-  fun saveProfile_failureWithoutMessage_usesFallbackText() =
-      runTest(testDispatcher) {
-        userRepository.failure = IllegalStateException()
-        viewModel.onFirstNameChanged("Jamie")
-        viewModel.onHomeAreaChanged("Lausanne")
-
-        viewModel.saveProfile()
-        advanceUntilIdle()
-
-        assertEquals("Unable to save profile", viewModel.uiState.value.errorMessage)
-        assertFalse(viewModel.uiState.value.isSaved)
+              val state = viewModel.uiState.value
+              assertEquals(PersonalInfoViewModel.SAVE_FAILED, state.errorMessage)
+              assertFalse(state.isSaved)
+              assertFalse(state.isSaving)
+            }
       }
 
   @Test
