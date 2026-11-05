@@ -326,15 +326,16 @@ class AlertRepositoryFirestoreInstrumentedTest {
     // The rules only let signed-in users list alerts, so the listener is refused
     auth.signOut()
 
+    // Far from the other tests' alerts. Firestore may still emit its local cache first.
     val emissions =
         withTimeout(TIMEOUT_MILLIS) {
           repository
-              .observeOpenAlertsNear(Location(latitude = 46.0, longitude = 6.0), radiusKm = 1.0)
+              .observeOpenAlertsNear(Location(latitude = 10.0, longitude = 10.0), radiusKm = 1.0)
               .toList()
         }
 
-    assertEquals(1, emissions.size)
-    assertTrue("The only emission should be a failure", emissions.single().isFailure)
+    assertTrue("The flow should end with a failure", emissions.last().isFailure)
+    assertTrue("Only the last emission is a failure", emissions.dropLast(1).all { it.isSuccess })
   }
 
   /**
