@@ -130,12 +130,13 @@ private val MapPickerHeight = 118.dp
  * Stateless "Create your profile" screen.
  *
  * The form scrolls, and the "Create profile" button stays pinned at the bottom. The button is
- * enabled only when [PersonalInfoUiState.canSave] is true.
+ * enabled only when [PersonalInfoUiState.canSave] is true. Back is shown only when [onBackClick] is
+ * given: during onboarding there is no screen to go back to.
  */
 @Composable
 fun PersonalInfoContent(
     state: PersonalInfoUiState,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)?,
     onChangePhotoClick: () -> Unit,
     onUsernameChange: (String) -> Unit,
     onFirstNameChange: (String) -> Unit,
@@ -193,28 +194,30 @@ fun PersonalInfoContent(
 }
 
 @Composable
-private fun Header(isEditing: Boolean, onBackClick: () -> Unit) {
+private fun Header(isEditing: Boolean, onBackClick: (() -> Unit)?) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
       modifier = Modifier.fillMaxWidth(),
   ) {
-    val back = stringResource(R.string.personal_info_back)
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier.size(40.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(SpottedTheme.colors.surface)
-                .clickable(onClickLabel = back, role = Role.Button, onClick = onBackClick)
-                .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
-    ) {
-      Icon(
-          painterResource(R.drawable.ic_arrow_back),
-          contentDescription = back,
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(20.dp),
-      )
+    if (onBackClick != null) {
+      val back = stringResource(R.string.personal_info_back)
+      Box(
+          contentAlignment = Alignment.Center,
+          modifier =
+              Modifier.size(40.dp)
+                  .clip(RoundedCornerShape(20.dp))
+                  .background(SpottedTheme.colors.surface)
+                  .clickable(onClickLabel = back, role = Role.Button, onClick = onBackClick)
+                  .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
+      ) {
+        Icon(
+            painterResource(R.drawable.ic_arrow_back),
+            contentDescription = back,
+            tint = SpottedTheme.colors.ink,
+            modifier = Modifier.size(20.dp),
+        )
+      }
     }
     Column(Modifier.weight(1f)) {
       Text(
@@ -505,12 +508,13 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
  * Collects the [PersonalInfoViewModel] state, forwards user input to it, and calls [onSaved] once
  * the profile is saved. "Use my location" asks for the location permission (precise or approximate)
  * and, once granted, lets the ViewModel place the home pin and name the area. Tapping the avatar
- * offers the gallery (system Photo Picker) or the camera app, as for pet photos.
+ * offers the gallery (system Photo Picker) or the camera app, as for pet photos. Without [onBack]
+ * (onboarding), no Back button is shown.
  */
 @Composable
 fun PersonalInfoScreen(
     viewModel: PersonalInfoViewModel = viewModel(factory = PersonalInfoViewModel.Factory),
-    onBack: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
     onSaved: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()

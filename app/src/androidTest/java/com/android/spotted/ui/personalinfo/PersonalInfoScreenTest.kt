@@ -56,7 +56,7 @@ class PersonalInfoScreenTest {
 
   private fun setContent(
       state: PersonalInfoUiState,
-      onBackClick: () -> Unit = {},
+      onBackClick: (() -> Unit)? = {},
       onFirstNameChange: (String) -> Unit = {},
       onAlertRadiusSelect: (Int) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
@@ -206,6 +206,13 @@ class PersonalInfoScreenTest {
     assertEquals("@rayen.gva", state.username)
     assertEquals("Ben Ali", state.lastName)
     assertEquals("Plainpalais, Geneva", state.homeArea)
+  }
+
+  @Test
+  fun onboarding_withNowhereToGoBack_showsNoBackButton() {
+    setContent(PersonalInfoUiState(), onBackClick = null)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.BACK_BUTTON).assertDoesNotExist()
   }
 
   @Test
