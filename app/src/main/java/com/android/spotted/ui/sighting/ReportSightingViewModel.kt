@@ -74,6 +74,11 @@ class ReportSightingViewModel(
     loadNearbyAlerts(location)
   }
 
+  fun setDirection(degrees: Int?) {
+    val normalized = degrees?.let { ((it % 360) + 360) % 360 }
+    _uiState.update { it.copy(direction = normalized) }
+  }
+
   /**
    * Opens the form for the alert [alertId] (from "I have seen this pet"): loads it so it is listed
    * with its pet's species, and selects it.
@@ -234,6 +239,7 @@ class ReportSightingViewModel(
                 seenAtMillis = now(),
                 species = species,
                 photoUrl = uploadedPhotoUrl,
+                headingDegrees = currentState.direction,
                 alertId =
                     if (currentState.isNoMatchingAlertSelected) null
                     else currentState.selectedAlertId,

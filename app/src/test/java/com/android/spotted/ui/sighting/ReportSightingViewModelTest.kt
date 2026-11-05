@@ -244,6 +244,24 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun setDirection_normalizesDegrees() {
+    viewModel.setDirection(-10)
+    assertEquals(350, viewModel.uiState.value.direction)
+
+    viewModel.setDirection(360)
+    assertEquals(0, viewModel.uiState.value.direction)
+  }
+
+  @Test
+  fun setDirection_nullClearsSelection() {
+    viewModel.setDirection(45)
+
+    viewModel.setDirection(null)
+
+    assertNull(viewModel.uiState.value.direction)
+  }
+
+  @Test
   fun submitSighting_success_storesSightingAndSetsSubmittedFlag() = runTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5197, 6.6323))
@@ -266,6 +284,19 @@ class ReportSightingViewModelTest {
     assertEquals(Species.DOG, saved.species)
     assertNull(saved.alertId)
     assertNotNull("Photo URL should be saved from photo repository", saved.photoUrl)
+    assertNull(saved.headingDegrees)
+  }
+
+  @Test
+  fun submitSighting_savesSelectedDirection() = runTest {
+    viewModel.setSpecies(Species.DOG)
+    viewModel.setLocation(Location(46.5197, 6.6323))
+    viewModel.selectNoMatchingAlert()
+    viewModel.setDirection(45)
+
+    viewModel.submitSighting()
+
+    assertEquals(45, sightingRepository.reportedSightings.single().headingDegrees)
   }
 
   @Test

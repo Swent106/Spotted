@@ -27,6 +27,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -81,6 +82,7 @@ class SightingRepositoryFirestoreTest {
             id = repository.getNewId(),
             alertId = alertId,
             photoUrl = "https://example.test/milo.jpg",
+            headingDegrees = 315,
         )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
@@ -177,6 +179,7 @@ class SightingRepositoryFirestoreTest {
         listOf(legacyId to SightingStatus.PENDING),
         repository.getSightingsForAlert(alertId).getOrThrow().map { it.id to it.status },
     )
+    assertNull(repository.getSightingsForAlert(alertId).getOrThrow().single().headingDegrees)
   }
 
   @Test
@@ -404,6 +407,7 @@ class SightingRepositoryFirestoreTest {
       seenAtMillis: Long = 1_000L,
       species: Species = Species.DOG,
       photoUrl: String? = null,
+      headingDegrees: Int? = null,
   ): Sighting {
     insertedSightingIds += id
     return Sighting(
@@ -414,6 +418,7 @@ class SightingRepositoryFirestoreTest {
         species = species,
         photoUrl = photoUrl,
         alertId = alertId,
+        headingDegrees = headingDegrees,
     )
   }
 }

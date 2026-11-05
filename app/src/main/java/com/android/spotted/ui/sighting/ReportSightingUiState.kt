@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.sighting
 
@@ -25,6 +26,7 @@ data class ReportSightingUiState(
     val selectedAlertId: String? = null,
     val isNoMatchingAlertSelected: Boolean = false,
     val location: Location? = null,
+    val direction: Int? = null,
     val locationAddress: String = "Tap to set location",
     val photoUri: String? = null,
     val detectedSpecies: Species? = null,
