@@ -1073,6 +1073,7 @@ describe("Firestore sighting access rules", () => {
   });
 
   it("sighting update: reporter can link a sighting that had no alert", async () => {
+    await seedAlert("alert-1", "owner-1");
     await seedSighting("sighting-1", "user-1", { alertId: null });
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       const { alertId, ...withoutAlert } = sighting("sighting-2", "user-1");
@@ -1082,6 +1083,22 @@ describe("Firestore sighting access rules", () => {
 
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-1"), { alertId: "alert-1" }));
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-2"), { alertId: "alert-1" }));
+  });
+
+  it("sighting update: linking to the reporter's own alert is denied", async () => {
+    await seedAlert("alert-1", "user-1");
+    await seedSighting("sighting-1", "user-1", { alertId: null });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { alertId: "alert-1" }));
+  });
+
+  it("sighting update: moving the time more than 5 minutes ahead is denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { seenAtMillis: Date.now() + fiveMinutesMillis + 60 * 1000 }));
   });
 
   const boundaryCases = [

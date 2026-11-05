@@ -4,6 +4,8 @@ package com.android.spotted.model.sighting
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.sighting.SightingPlausibility.FUTURE_TOLERANCE_MILLIS
+import com.android.spotted.model.sighting.SightingPlausibility.MIN_DISTANCE_KM
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

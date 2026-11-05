@@ -4,13 +4,18 @@ package com.android.spotted.model.sighting
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.distanceKm
+import com.android.spotted.model.sighting.SightingPlausibility.CAT_MAX_SPEED_KMH
+import com.android.spotted.model.sighting.SightingPlausibility.DOG_MAX_SPEED_KMH
+import com.android.spotted.model.sighting.SightingPlausibility.FUTURE_TOLERANCE_MILLIS
+import com.android.spotted.model.sighting.SightingPlausibility.MIN_DISTANCE_KM
+import com.android.spotted.model.sighting.SightingPlausibility.OTHER_MAX_SPEED_KMH
 import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 
 /** Why a sighting of the pet of an alert can't be true. */
 enum class PlausibilityIssue {
-  /** Seen more than [FUTURE_TOLERANCE_MILLIS] after now. */
+  /** Seen more than [SightingPlausibility.FUTURE_TOLERANCE_MILLIS] after now. */
   SEEN_IN_THE_FUTURE,
 
   /** Seen before the pet was lost. */
@@ -23,16 +28,19 @@ enum class PlausibilityIssue {
   OWN_ALERT,
 }
 
-/** How far after now a sighting may be, to allow for clocks that are not in sync. */
-const val FUTURE_TOLERANCE_MILLIS = 5 * 60 * 1000L
+/** Limits used by [checkPlausibility]. */
+object SightingPlausibility {
+  /** How far after now a sighting may be, to allow for clocks that are not in sync. */
+  const val FUTURE_TOLERANCE_MILLIS = 5 * 60 * 1000L
 
-/** A sighting this close to where the pet was lost is always near enough, in kilometres. */
-const val MIN_DISTANCE_KM = 2.0
+  /** A sighting this close to where the pet was lost is always near enough, in kilometres. */
+  const val MIN_DISTANCE_KM = 2.0
 
-/** Highest average speed of a lost pet, in km/h, by species. */
-const val CAT_MAX_SPEED_KMH = 5.0
-const val DOG_MAX_SPEED_KMH = 10.0
-const val OTHER_MAX_SPEED_KMH = 15.0
+  /** Highest average speed of a lost pet, in km/h, by species. */
+  const val CAT_MAX_SPEED_KMH = 5.0
+  const val DOG_MAX_SPEED_KMH = 10.0
+  const val OTHER_MAX_SPEED_KMH = 15.0
+}
 
 /**
  * Lists why [sighting] can't be a sighting of the pet of [alert], given that it is now [nowMillis].

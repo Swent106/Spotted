@@ -223,15 +223,25 @@ service cloud.firestore {
           || request.resource.data.get('alertId', null) == savedAlertId;
       }
 
+      // A sighting linked to an alert later gets the same checks as on create. When the alert
+      // stays the same (e.g. it has closed since), the edit isn't refused.
+      function linkedAlertAllowed() {
+        return request.resource.data.get('alertId', null) == resource.data.get('alertId', null)
+          || canBeLinkedTo(request.resource.data);
+      }
+
       // The author may change their sighting until the alert owner reviews it. It stays theirs,
-      // on the same alert, and they cannot review it themselves.
+      // on the same alert, and they cannot review it themselves. It gets the same plausibility
+      // checks as on create, so they cannot be bypassed by creating first and editing after.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
           && statusOf(resource.data) == 'PENDING'
           && validSighting(request.resource.data)
           && request.resource.data.reporterId == resource.data.reporterId
           && statusOf(request.resource.data) == 'PENDING'
-          && alertIdKept();
+          && alertIdKept()
+          && notInTheFuture(request.resource.data)
+          && linkedAlertAllowed();
 
       // The owner of the linked alert may confirm or dismiss it, and change nothing else.
       // The status stays explicit once reviewed (it cannot be deleted).
