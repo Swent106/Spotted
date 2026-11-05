@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,6 +85,10 @@ internal fun LazyListScope.lostPetsSection(
         }
   }
 
+  if (state.isOffline) {
+    item(key = "alertsOfflineBanner") { OfflineBanner(onRetryClick) }
+  }
+
   // The first alert is the newest (HomeViewModel sorts them): it is highlighted, like Milo in Figma
   itemsIndexed(lostPets.items, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
     AlertCard(
@@ -97,6 +103,32 @@ internal fun LazyListScope.lostPetsSection(
   }
   if (error != null && lostPets.items.isNotEmpty()) {
     item(key = "alertsError") { AlertsError(error, onRetryClick) }
+  }
+}
+
+@Composable
+private fun OfflineBanner(onRetryClick: () -> Unit) {
+  Row(
+      modifier =
+          Modifier.padding(top = 10.dp)
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(14.dp))
+              .background(SpottedTheme.colors.surface)
+              .padding(horizontal = 12.dp, vertical = 4.dp)
+              .testTag(HomeScreenTestTags.OFFLINE_BANNER),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text(
+        HomeScreenTexts.OFFLINE_ALERTS,
+        style = jakarta(12, 16f, FontWeight.Medium, SpottedTheme.colors.ink),
+    )
+    TextButton(
+        onClick = onRetryClick,
+        modifier = Modifier.testTag(HomeScreenTestTags.OFFLINE_RETRY),
+    ) {
+      Text(HomeScreenTexts.RETRY, color = SpottedTheme.colors.blue)
+    }
   }
 }
 

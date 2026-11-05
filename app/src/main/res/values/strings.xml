@@ -47,4 +47,5 @@
     <string name="cancel">Cancel</string>
     <string name="sighting_photo_add">Add Photo</string>
     <string name="sighting_photo_retake">Retake</string>
+    <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
 </resources>

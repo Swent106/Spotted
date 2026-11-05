@@ -1,5 +1,6 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.sighting
 
 import android.net.Uri
@@ -67,6 +68,8 @@ object ReportSightingScreenTestTags {
   const val SUBMIT_BUTTON = "sightingSubmitButton"
   const val LOADER = "sightingLoader"
   const val ERROR_MESSAGE = "sightingErrorMessage"
+  const val PHOTO_CHECKING = "sighting_photoChecking"
+  const val PHOTO_WARNING = "sighting_photoWarning"
 }
 
 @Composable
@@ -130,6 +133,7 @@ fun ReportSightingContent(
               Modifier.align(Alignment.TopEnd)
                   .padding(16.dp)
                   .testTag(ReportSightingScreenTestTags.PHOTO_BUTTON),
+          enabled = !state.isSubmitting && !photoPickerActions.isPicking,
       ) {
         Text(
             stringResource(
@@ -154,6 +158,28 @@ fun ReportSightingContent(
               style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
           )
         }
+      }
+      if (state.photoCheck == PhotoCheck.CHECKING) {
+        CircularProgressIndicator(
+            modifier =
+                Modifier.align(Alignment.Center)
+                    .size(36.dp)
+                    .testTag(ReportSightingScreenTestTags.PHOTO_CHECKING)
+                    .semantics { contentDescription = "Checking the photo" },
+            color = SpottedTheme.colors.onAccent,
+        )
+      }
+      if (state.photoCheck == PhotoCheck.NO_ANIMAL) {
+        Text(
+            stringResource(R.string.sighting_photo_no_animal),
+            style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
+            modifier =
+                Modifier.align(Alignment.BottomStart)
+                    .padding(16.dp)
+                    .background(SpottedTheme.colors.surface, RoundedCornerShape(100.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .testTag(ReportSightingScreenTestTags.PHOTO_WARNING),
+        )
       }
     }
 

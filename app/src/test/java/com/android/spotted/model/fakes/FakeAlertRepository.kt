@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.fakes
 
 import com.android.spotted.model.Location
@@ -11,6 +12,8 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
   private var nextId = 0
 
   var failure: Throwable? = null
+  var cachedAlerts: List<Alert> = emptyList()
+  var cachedAlertsFailure: Throwable? = null
 
   val publishedAlerts: List<Alert>
     get() = alerts.values.toList()
@@ -89,6 +92,26 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
             .filter { it.status == AlertStatus.OPEN }
             .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
             .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+            .toList()
+    return Result.success(nearbyAlerts)
+  }
+
+  override suspend fun getCachedOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+      limit: Int,
+  ): Result<List<Alert>> {
+    cachedAlertsFailure?.let {
+      return Result.failure(it)
+    }
+    if (limit <= 0) return Result.failure(IllegalArgumentException("limit must be positive"))
+    val nearbyAlerts =
+        cachedAlerts
+            .asSequence()
+            .filter { it.status == AlertStatus.OPEN }
+            .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
+            .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+            .take(limit)
             .toList()
     return Result.success(nearbyAlerts)
   }

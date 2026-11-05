@@ -61,6 +61,7 @@ fun PetPhotoPicker(
     onPhotoError: () -> Unit,
     modifier: Modifier = Modifier,
     canTakePhoto: Boolean = rememberDeviceHasCamera(),
+    isSaving: Boolean = false,
 ) {
   val actions =
       rememberPhotoPickerActions(
@@ -74,6 +75,7 @@ fun PetPhotoPicker(
       onTakePhoto = actions.takePhoto,
       onRemovePhoto = { onPhotoSelected(null) },
       canTakePhoto = canTakePhoto,
+      enabled = !isSaving && !actions.isPicking,
       modifier = modifier,
   )
 }
@@ -99,6 +101,7 @@ fun PetPhotoPickerContent(
     onRemovePhoto: () -> Unit,
     modifier: Modifier = Modifier,
     canTakePhoto: Boolean = true,
+    enabled: Boolean = true,
 ) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -128,12 +131,14 @@ fun PetPhotoPickerContent(
             stringResource(R.string.pet_photo_upload),
             PetPhotoPickerTestTags.ADD_BUTTON,
             onPickPhoto,
+            enabled,
         )
         if (canTakePhoto) {
           PhotoButton(
               stringResource(R.string.photo_take),
               PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
               onTakePhoto,
+              enabled,
           )
         }
       } else {
@@ -141,18 +146,21 @@ fun PetPhotoPickerContent(
             stringResource(R.string.photo_change),
             PetPhotoPickerTestTags.CHANGE_BUTTON,
             onPickPhoto,
+            enabled,
         )
         if (canTakePhoto) {
           PhotoButton(
               stringResource(R.string.photo_take),
               PetPhotoPickerTestTags.TAKE_PHOTO_BUTTON,
               onTakePhoto,
+              enabled,
           )
         }
         PhotoButton(
             stringResource(R.string.photo_remove),
             PetPhotoPickerTestTags.REMOVE_BUTTON,
             onRemovePhoto,
+            enabled,
         )
       }
     }
@@ -160,7 +168,7 @@ fun PetPhotoPickerContent(
 }
 
 @Composable
-private fun PhotoButton(text: String, testTag: String, onClick: () -> Unit) {
+private fun PhotoButton(text: String, testTag: String, onClick: () -> Unit, enabled: Boolean) {
   val shape = RoundedCornerShape(14.dp)
   Box(
       contentAlignment = Alignment.Center,
@@ -169,7 +177,7 @@ private fun PhotoButton(text: String, testTag: String, onClick: () -> Unit) {
               .clip(shape)
               .background(SpottedTheme.colors.surface)
               .border(1.5.dp, SpottedTheme.colors.buttonBorder, shape)
-              .clickable(role = Role.Button, onClick = onClick)
+              .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
               .padding(vertical = 12.dp)
               .testTag(testTag),
   ) {

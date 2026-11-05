@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
@@ -34,9 +35,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,6 +58,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -83,6 +89,8 @@ object HomeScreenTestTags {
   const val ALERTS_ERROR = "home_alertsError"
   const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
+  const val OFFLINE_BANNER = "home_offlineBanner"
+  const val OFFLINE_RETRY = "home_offlineRetry"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
   const val ADD_PET_BUTTON = "home_addPetButton"
   const val AVATAR = "home_avatar"
@@ -107,6 +115,7 @@ object HomeScreenTexts {
   const val NO_PETS = "No pets yet. Add one so people know how to care for them."
   const val NO_LOST_PETS = "No missing pets near you"
   const val RETRY = "Retry"
+  const val OFFLINE_ALERTS = "You're offline · showing the last 5 alerts"
   const val ADD_PET = "Add a pet"
 }
 
@@ -160,6 +169,16 @@ fun HomeScreenContent(
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
 ) {
+  var isOpeningPetProfile by remember { mutableStateOf(false) }
+  val lifecycleOwner = LocalLifecycleOwner.current
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) isOpeningPetProfile = false
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+
   Box(
       Modifier.fillMaxSize()
           .background(SpottedTheme.colors.homeBackground)
@@ -190,7 +209,12 @@ fun HomeScreenContent(
           onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
           onAddPetClick = onAddPetClick,
-          onPetClick = onPetClick,
+          onPetClick = { petId ->
+            if (!isOpeningPetProfile) {
+              isOpeningPetProfile = true
+              onPetClick(petId)
+            }
+          },
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),

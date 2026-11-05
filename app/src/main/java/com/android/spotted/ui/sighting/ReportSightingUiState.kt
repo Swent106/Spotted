@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
@@ -10,6 +11,14 @@ data class NearbyAlertOption(
     val photoUrl: String? = null,
     val species: Species? = null,
 )
+
+/** Where the check that the sighting photo shows an animal is at. */
+enum class PhotoCheck {
+  NONE,
+  CHECKING,
+  ANIMAL,
+  NO_ANIMAL,
+}
 
 data class ReportSightingUiState(
     val selectedSpecies: Species? = null,
@@ -24,12 +33,15 @@ data class ReportSightingUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val submitted: Boolean = false,
+    val photoCheck: PhotoCheck = PhotoCheck.NONE,
 ) {
   val canSubmit: Boolean
     get() =
         selectedSpecies != null &&
             location != null &&
             (selectedAlertId != null || isNoMatchingAlertSelected) &&
+            photoCheck != PhotoCheck.CHECKING &&
+            photoCheck != PhotoCheck.NO_ANIMAL &&
             !isSubmitting &&
             !submitted
 }

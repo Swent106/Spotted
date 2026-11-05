@@ -47,7 +47,8 @@ private val SpottedRankYou = Color(0xFF1B4FC0)
  * Each colour has the role of the `Spotted...` constant of the same name; [surface] is the
  * background of cards and dialogs, white in light mode. [warning] and [warningTint] are the amber
  * of notices (offline, pet found), [errorTint] the pale red behind error messages, and [onAccent]
- * the white of text and icons on blue or red buttons and on photos, in both modes.
+ * the white of text and icons on blue or red buttons and on photos, in both modes. [success] is the
+ * green of confirmed sightings.
  */
 @Immutable
 data class SpottedColors(
@@ -86,6 +87,7 @@ data class SpottedColors(
     val warningTint: Color,
     val errorTint: Color,
     val onAccent: Color,
+    val success: Color,
 )
 
 /** The Figma colours, as they are used today. */
@@ -126,6 +128,7 @@ val LightSpottedColors =
         warningTint = Color(0xFFFFF2DE),
         errorTint = Color(0xFFFCE9E9),
         onAccent = Color.White,
+        success = Color(0xFF1E8E3E),
     )
 
 /**
@@ -169,6 +172,7 @@ val DarkSpottedColors =
         warningTint = Color(0xFF3A2A10),
         errorTint = Color(0xFF3A1A1C),
         onAccent = Color.White,
+        success = Color(0xFF5BBF7A),
     )
 
 /**

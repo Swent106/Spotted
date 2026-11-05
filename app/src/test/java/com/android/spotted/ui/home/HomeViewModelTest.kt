@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import com.android.spotted.model.Location
@@ -196,6 +197,7 @@ class HomeViewModelTest {
         assertEquals(listOf(newer, older), state.lostPetsNearby.items)
         assertNull(state.lostPetsNearby.errorMessage)
         assertEquals(NOW, state.nowMillis)
+        assertFalse(state.isOffline)
       }
 
   @Test
@@ -222,6 +224,99 @@ class HomeViewModelTest {
         val lostPets = viewModel.uiState.value.lostPetsNearby
         assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, lostPets.errorMessage)
         assertFalse(lostPets.isEmpty)
+        assertFalse(viewModel.uiState.value.isOffline)
+      }
+
+  @Test
+  fun lostPets_usesCachedAlertsWhenOnlineLoadFails() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val cached = alert("cached")
+        alertRepository.failure = Exception("offline")
+        alertRepository.cachedAlerts = listOf(cached)
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(cached), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertTrue(state.isOffline)
+      }
+
+  @Test
+  fun lostPets_keepsErrorWhenCacheFailsOrIsEmpty() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        alertRepository.failure = Exception("offline")
+        alertRepository.cachedAlertsFailure = Exception("cache unavailable")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            viewModel.uiState.value.lostPetsNearby.errorMessage,
+        )
+        assertFalse(viewModel.uiState.value.isOffline)
+
+        alertRepository.cachedAlertsFailure = null
+        alertRepository.cachedAlerts = emptyList()
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val emptyCacheState = viewModel.uiState.value
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            emptyCacheState.lostPetsNearby.errorMessage,
+        )
+        assertTrue(emptyCacheState.lostPetsNearby.items.isEmpty())
+        assertFalse(emptyCacheState.isOffline)
+      }
+
+  @Test
+  fun lostPets_filtersOwnCachedAlertsBeforeApplyingDisplayLimit() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val ownAlerts =
+            listOf(
+                alert("mine-newer", ownerId = ALICE.uid, lostAtMillis = 8_000),
+                alert("mine-older", ownerId = ALICE.uid, lostAtMillis = 7_000),
+            )
+        val cachedNearbyAlerts = (1..6).map { alert("cached-$it", lostAtMillis = it * 1_000L) }
+        alertRepository.failure = Exception("offline")
+        alertRepository.cachedAlerts = ownAlerts + cachedNearbyAlerts
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(cachedNearbyAlerts.takeLast(5).reversed(), state.lostPetsNearby.items)
+        assertTrue(state.isOffline)
+      }
+
+  @Test
+  fun lostPets_retryAfterOfflineCacheShowsOnlineAlerts() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val cached = alert("cached")
+        val online = alert("online", lostAtMillis = 2_000)
+        alertRepository.cachedAlerts = listOf(cached)
+        publish(online)
+        alertRepository.failure = Exception("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isOffline)
+
+        alertRepository.failure = null
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf(online), state.lostPetsNearby.items)
+        assertNull(state.lostPetsNearby.errorMessage)
+        assertFalse(state.isOffline)
       }
 
   // ===================== Independent sections =====================
@@ -764,6 +859,7 @@ class HomeViewModelTest {
 
         assertEquals(listOf(newer, older), viewModel.uiState.value.lostPetsNearby.items)
       }
+
   // ===================== Distance to each lost pet =====================
 
   private fun viewModelWithLocation(

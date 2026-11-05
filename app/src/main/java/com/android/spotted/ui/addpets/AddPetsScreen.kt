@@ -169,6 +169,7 @@ fun AddPetsContent(
               photoUri = state.photoUri,
               onPhotoSelected = onPhotoChange,
               onPhotoError = onPhotoError,
+              isSaving = state.isSaving,
           )
         }
         // The details card is tighter than the others in the Figma

@@ -297,6 +297,14 @@ class PersonalInfoScreenTest {
   }
 
   @Test
+  fun saving_disablesPhotoControls() {
+    setContent(validState.copy(isSaving = true))
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.AVATAR).assertIsNotEnabled()
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.CHANGE_PHOTO).assertIsNotEnabled()
+  }
+
+  @Test
   fun personalInfoScreen_avatarOpensPhotoOptions_andCancelClosesThem() {
     val viewModel =
         PersonalInfoViewModel(
