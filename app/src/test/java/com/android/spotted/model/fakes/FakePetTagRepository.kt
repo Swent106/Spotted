@@ -4,11 +4,13 @@ package com.android.spotted.model.fakes
 import com.android.spotted.model.tag.PetTag
 import com.android.spotted.model.tag.PetTagRepository
 import com.android.spotted.model.tag.TagAlreadyLinkedException
+import com.android.spotted.model.user.UserProfile
 
 class FakePetTagRepository(
     private val ownerId: String = "owner-1",
     initialTags: List<PetTag> = emptyList(),
     private val now: () -> Long = { 0L },
+    private val ownerProfile: UserProfile = UserProfile(uid = ownerId, name = "", email = ""),
 ) : PetTagRepository {
   private val tags = initialTags.associateByTo(linkedMapOf()) { it.tagId }
 
@@ -31,6 +33,10 @@ class FakePetTagRepository(
             petId = petId,
             ownerId = ownerId,
             linkedAtMillis = now(),
+            showPhone = true,
+            showEmail = true,
+            contactPhone = ownerProfile.phone,
+            contactEmail = ownerProfile.email,
         )
     return Result.success(Unit)
   }
@@ -62,5 +68,37 @@ class FakePetTagRepository(
       return Result.failure(it)
     }
     return Result.success(tags.values.firstOrNull { it.petId == petId })
+  }
+
+  override suspend fun setVisibleContacts(
+      tagId: String,
+      showPhone: Boolean,
+      showEmail: Boolean,
+      phone: String?,
+      email: String?,
+  ): Result<Unit> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    if (!showPhone && !showEmail) {
+      return Result.failure(
+          IllegalArgumentException("At least one contact method must remain visible")
+      )
+    }
+    val tag =
+        tags[tagId] ?: return Result.failure(NoSuchElementException("Tag $tagId was not found"))
+    if (tag.ownerId != ownerId) {
+      return Result.failure(SecurityException("Tag $tagId is not owned by $ownerId"))
+    }
+    val contactPhone = if (showPhone) phone else null
+    val contactEmail = if (showEmail) email else null
+    tags[tagId] =
+        tag.copy(
+            showPhone = showPhone,
+            showEmail = showEmail,
+            contactPhone = contactPhone,
+            contactEmail = contactEmail,
+        )
+    return Result.success(Unit)
   }
 }

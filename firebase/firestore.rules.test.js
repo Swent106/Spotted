@@ -1117,7 +1117,17 @@ describe("Firestore sighting access rules", () => {
   }
 
   describe("pet tag access rules", () => {
-    const tag = (tagId, petId, ownerId, extra = {}) => ({ tagId, petId, ownerId, linkedAtMillis: 1000, ...extra });
+    const tag = (tagId, petId, ownerId, extra = {}) => ({
+      tagId,
+      petId,
+      ownerId,
+      linkedAtMillis: 1000,
+      showPhone: true,
+      showEmail: true,
+      contactPhone: "+41 79 123 45 67",
+      contactEmail: "jamie@example.com",
+      ...extra,
+    });
     const seedPet = (id, ownerId) =>
       testEnvironment.withSecurityRulesDisabled((context) =>
         setDoc(doc(context.firestore(), "pets", id), { ownerId }),
@@ -1127,11 +1137,15 @@ describe("Firestore sighting access rules", () => {
         setDoc(doc(context.firestore(), "petTags", id), tag(id, petId, ownerId)),
       );
 
-    it("allows signed-in reads and denies anonymous reads", async () => {
+    it("allows finder reads and denies anonymous reads", async () => {
       await seedTag("A1B2C3D4", "pet-1", "owner-1");
 
-      await assertSucceeds(getDoc(doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4")));
-      await assertSucceeds(getDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4")));
+      const ownerRead = getDoc(doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4"));
+      const finderRead = getDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4"));
+      await assertSucceeds(ownerRead);
+      const foundTag = await assertSucceeds(finderRead);
+      assert.equal(foundTag.data().contactPhone, "+41 79 123 45 67");
+      assert.equal(foundTag.data().contactEmail, "jamie@example.com");
       await assertFails(getDoc(doc(firestoreForUser(null), "petTags", "A1B2C3D4")));
     });
 
@@ -1174,6 +1188,12 @@ describe("Firestore sighting access rules", () => {
           tag("D1B2C3D4", "pet-1", "owner-1", { extraField: true }),
         ),
       );
+      await assertFails(
+        setDoc(
+          doc(firestoreForUser("owner-1"), "petTags", "E1B2C3D4"),
+          tag("E1B2C3D4", "pet-1", "owner-1", { address: "private address" }),
+        ),
+      );
     });
 
     it("lets owners move tags only between their own pets and keeps schema strict", async () => {
@@ -1191,6 +1211,65 @@ describe("Firestore sighting access rules", () => {
           doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4"),
           tag("A1B2C3D4", "pet-3", "owner-2"),
         ),
+      );
+    });
+
+    it("denies a hidden contact with a supplied value", async () => {
+      await seedPet("pet-1", "owner-1");
+      const ref = doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4");
+      await assertFails(
+        setDoc(
+          ref,
+          tag("A1B2C3D4", "pet-1", "owner-1", {
+            showEmail: false,
+            contactEmail: "hidden@example.com",
+          }),
+        ),
+      );
+    });
+
+    it("denies hiding both contacts", async () => {
+      await seedPet("pet-1", "owner-1");
+      await assertFails(
+        setDoc(
+          doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4"),
+          tag("A1B2C3D4", "pet-1", "owner-1", {
+            showPhone: false,
+            showEmail: false,
+            contactPhone: null,
+            contactEmail: null,
+          }),
+        ),
+      );
+    });
+
+    it("allows hiding either contact while keeping the other visible", async () => {
+      await seedPet("pet-1", "owner-1");
+      const ref = doc(firestoreForUser("owner-1"), "petTags", "A1B2C3D4");
+      await assertSucceeds(setDoc(ref, tag("A1B2C3D4", "pet-1", "owner-1")));
+
+      await assertSucceeds(updateDoc(ref, { showPhone: false, contactPhone: null }));
+      let updatedTag = (await getDoc(ref)).data();
+      assert.equal(updatedTag.showPhone, false);
+      assert.equal(updatedTag.contactPhone, null);
+      assert.equal(updatedTag.showEmail, true);
+
+      await assertSucceeds(updateDoc(ref, { showPhone: true, contactPhone: "+41 79 123 45 67" }));
+      await assertSucceeds(updateDoc(ref, { showEmail: false, contactEmail: null }));
+      updatedTag = (await getDoc(ref)).data();
+      assert.equal(updatedTag.showPhone, true);
+      assert.equal(updatedTag.showEmail, false);
+      assert.equal(updatedTag.contactEmail, null);
+    });
+
+    it("denies another user from changing tag contact visibility", async () => {
+      await seedTag("A1B2C3D4", "pet-1", "owner-1");
+
+      await assertFails(
+        updateDoc(doc(firestoreForUser("owner-2"), "petTags", "A1B2C3D4"), {
+          showPhone: false,
+          contactPhone: null,
+        }),
       );
     });
 

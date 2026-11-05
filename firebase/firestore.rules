@@ -243,8 +243,8 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
     }
 
-    // petTags/{tagId}: tagId (uppercase hex UID), petId, ownerId and
-    // linkedAtMillis are required. The four-field schema is strict.
+    // petTags/{tagId}: tagId (uppercase hex UID), petId, ownerId, linkedAtMillis,
+    // visibility flags, and nullable contact copies are required.
     match /petTags/{tagId} {
       function ownsPet(petId) {
         let petPath = /databases/$(database)/documents/pets/$(petId);
@@ -254,8 +254,12 @@ service cloud.firestore {
       }
 
       function isValidPetTag(data) {
-        return data.keys().hasAll(['tagId', 'petId', 'ownerId', 'linkedAtMillis'])
-          && data.keys().hasOnly(['tagId', 'petId', 'ownerId', 'linkedAtMillis'])
+        return data.keys().hasAll([
+                'tagId', 'petId', 'ownerId', 'linkedAtMillis',
+                'showPhone', 'showEmail', 'contactPhone', 'contactEmail'])
+          && data.keys().hasOnly([
+                'tagId', 'petId', 'ownerId', 'linkedAtMillis',
+                'showPhone', 'showEmail', 'contactPhone', 'contactEmail'])
           && data.tagId == tagId
           && data.tagId is string
           && data.tagId.matches('^[0-9A-F]{1,32}$')
@@ -266,7 +270,16 @@ service cloud.firestore {
           && data.ownerId.size() > 0
           && data.ownerId.size() <= 128
           && data.linkedAtMillis is int
-          && data.linkedAtMillis >=0; //copilot told me this doesn't prevent buffer overflow because:Firestore integers are bounded 64-bit values, and Kotlin reads this field as a Long
+          && data.linkedAtMillis >= 0
+          && data.showPhone is bool
+          && data.showEmail is bool
+          && (data.showPhone || data.showEmail)
+          && (data.showPhone || data.contactPhone == null)
+          && (data.showEmail || data.contactEmail == null)
+          && (data.contactPhone == null
+              || (data.contactPhone is string && data.contactPhone.size() <= 32)) //i'll think later how can this be locale specific
+          && (data.contactEmail == null
+              || (data.contactEmail is string && data.contactEmail.size() <= 254));
       }
 
       // Known UID lookups are allowed for signed-in users; collection queries are owner-scoped.

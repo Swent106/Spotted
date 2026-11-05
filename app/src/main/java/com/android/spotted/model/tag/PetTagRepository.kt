@@ -12,4 +12,12 @@ interface PetTagRepository {
   suspend fun getTag(tagId: String): Result<PetTag?>
 
   suspend fun getTagForPet(petId: String): Result<PetTag?>
+
+  suspend fun setVisibleContacts(
+      tagId: String,
+      showPhone: Boolean,
+      showEmail: Boolean,
+      phone: String?,
+      email: String?,
+  ): Result<Unit>
 }

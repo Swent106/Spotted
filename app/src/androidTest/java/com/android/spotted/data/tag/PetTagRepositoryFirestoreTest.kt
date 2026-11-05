@@ -2,8 +2,10 @@
 package com.android.spotted.data.tag
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.tag.PetTag
 import com.android.spotted.model.tag.TagAlreadyLinkedException
+import com.android.spotted.model.user.UserProfile
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -26,6 +28,8 @@ class PetTagRepositoryFirestoreTest {
   private lateinit var auth: FirebaseAuth
   private lateinit var firestore: FirebaseFirestore
   private lateinit var repository: PetTagRepositoryFirestore
+  private lateinit var userRepository: UserRepositoryFirestore
+  private lateinit var ownerId: String
   private val insertedPetIds = mutableListOf<String>()
   private val insertedTagIds = mutableListOf<String>()
   private var currentTimeMillis = 100L
@@ -37,6 +41,18 @@ class PetTagRepositoryFirestoreTest {
       firestore = FirebaseFirestore.getInstance()
       repository = PetTagRepositoryFirestore(firestore, auth) { currentTimeMillis }
       Tasks.await(auth.signInAnonymously())
+      ownerId = currentUserId()
+      userRepository = UserRepositoryFirestore(firestore)
+      userRepository
+          .saveUser(
+              UserProfile(
+                  uid = ownerId,
+                  name = "Jamie",
+                  phone = "+41 79 123 45 67",
+                  email = "jamie@example.com",
+              )
+          )
+          .getOrThrow()
     }
   }
 
@@ -45,6 +61,7 @@ class PetTagRepositoryFirestoreTest {
     withContext(Dispatchers.IO) {
       insertedTagIds.forEach { id -> emulatorRequest("DELETE", "petTags/$id") }
       insertedPetIds.forEach { id -> emulatorRequest("DELETE", "pets/$id") }
+      userRepository.deleteUser(ownerId)
       auth.signOut()
     }
   }
@@ -62,7 +79,16 @@ class PetTagRepositoryFirestoreTest {
 
     repository.linkTag(tagId, secondPetId).getOrThrow()
     assertEquals(
-        PetTag(tagId, secondPetId, currentUserId(), currentTimeMillis),
+        PetTag(
+            tagId,
+            secondPetId,
+            currentUserId(),
+            currentTimeMillis,
+            showPhone = true,
+            showEmail = true,
+            contactPhone = "+41 79 123 45 67",
+            contactEmail = "jamie@example.com",
+        ),
         repository.getTag(tagId).getOrThrow(),
     )
     assertNull(repository.getTagForPet(petId).getOrThrow())
@@ -121,6 +147,78 @@ class PetTagRepositoryFirestoreTest {
     assertTrue(repository.getTagForPet("pet-1").isFailure)
   }
 
+  @Test
+  fun setVisibleContacts_hidesPhoneAndStoresNullDespiteSuppliedValue() = runTest {
+    val tagId = linkTestTag()
+
+    repository
+        .setVisibleContacts(
+            tagId,
+            showPhone = false,
+            showEmail = true,
+            phone = "+41 79 123 45 67",
+            email = "jamie@example.com",
+        )
+        .getOrThrow()
+    var tag = requireNotNull(repository.getTag(tagId).getOrThrow())
+    assertTrue(!tag.showPhone)
+    assertNull(tag.contactPhone)
+    assertTrue(tag.showEmail)
+    assertEquals("jamie@example.com", tag.contactEmail)
+    val phoneSnapshot = Tasks.await(firestore.collection("petTags").document(tagId).get())
+    assertTrue(phoneSnapshot.contains("contactPhone"))
+    assertNull(phoneSnapshot.getString("contactPhone"))
+  }
+
+  @Test
+  fun setVisibleContacts_hidesEmailAndStoresNullDespiteSuppliedValue() = runTest {
+    val tagId = linkTestTag()
+    repository
+        .setVisibleContacts(
+            tagId,
+            showPhone = true,
+            showEmail = false,
+            phone = "+41 79 123 45 67",
+            email = "jamie@example.com",
+        )
+        .getOrThrow()
+    val tag = requireNotNull(repository.getTag(tagId).getOrThrow())
+    assertTrue(tag.showPhone)
+    assertEquals("+41 79 123 45 67", tag.contactPhone)
+    assertTrue(!tag.showEmail)
+    assertNull(tag.contactEmail)
+    val emailSnapshot = Tasks.await(firestore.collection("petTags").document(tagId).get())
+    assertTrue(emailSnapshot.contains("contactEmail"))
+    assertNull(emailSnapshot.getString("contactEmail"))
+  }
+
+  @Test
+  fun setVisibleContacts_refusesHidingBothWithoutChangingDocument() = runTest {
+    val tagId = linkTestTag()
+    val before = requireNotNull(repository.getTag(tagId).getOrThrow())
+    val result =
+        repository.setVisibleContacts(
+            tagId,
+            showPhone = false,
+            showEmail = false,
+            phone = "+41 79 123 45 67",
+            email = "jamie@example.com",
+        )
+    assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+    assertEquals(before, repository.getTag(tagId).getOrThrow())
+    val snapshot = Tasks.await(firestore.collection("petTags").document(tagId).get())
+    assertEquals(before.contactPhone, snapshot.getString("contactPhone"))
+    assertEquals(before.contactEmail, snapshot.getString("contactEmail"))
+  }
+
+  private suspend fun linkTestTag(): String {
+    val petId = addPet()
+    val tagId = "A1B2C3D4"
+    insertedTagIds += tagId
+    repository.linkTag(tagId, petId).getOrThrow()
+    return tagId
+  }
+
   private suspend fun addPet(): String {
     val id = "pet-${insertedPetIds.size + 1}"
     insertedPetIds += id
@@ -138,6 +236,10 @@ class PetTagRepositoryFirestoreTest {
             "petId" to mapOf("stringValue" to tag.petId),
             "ownerId" to mapOf("stringValue" to tag.ownerId),
             "linkedAtMillis" to mapOf("integerValue" to tag.linkedAtMillis.toString()),
+            "showPhone" to mapOf("booleanValue" to tag.showPhone),
+            "showEmail" to mapOf("booleanValue" to tag.showEmail),
+            "contactPhone" to contactField(tag.contactPhone),
+            "contactEmail" to contactField(tag.contactEmail),
         )
     val response =
         emulatorRequest(
@@ -147,6 +249,9 @@ class PetTagRepositoryFirestoreTest {
         )
     assertEquals(HttpURLConnection.HTTP_OK, response)
   }
+
+  private fun contactField(value: String?): Map<String, Any?> =
+      if (value == null) mapOf("nullValue" to null) else mapOf("stringValue" to value)
 
   private suspend fun seedMalformedTagBypassingRules(
       tagId: String,

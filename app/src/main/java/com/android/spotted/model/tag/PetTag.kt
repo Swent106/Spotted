@@ -6,4 +6,8 @@ data class PetTag(
     val petId: String,
     val ownerId: String,
     val linkedAtMillis: Long,
+    val showPhone: Boolean = true,
+    val showEmail: Boolean = true,
+    val contactPhone: String? = null,
+    val contactEmail: String? = null,
 )
