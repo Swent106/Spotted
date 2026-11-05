@@ -70,6 +70,17 @@ import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.theme.SpottedTheme
+import com.android.spotted.ui.components.RequestLocationPermissionOnce
+import com.android.spotted.ui.theme.SpottedAvatarBackground
+import com.android.spotted.ui.theme.SpottedError
+import com.android.spotted.ui.theme.SpottedHomeBackground
+import com.android.spotted.ui.theme.SpottedInk
+import com.android.spotted.ui.theme.SpottedLostRed
+import com.android.spotted.ui.theme.SpottedReportBorder
+import com.android.spotted.ui.theme.SpottedTabBarBorder
+import com.android.spotted.ui.theme.SpottedTabBorder
+import com.android.spotted.ui.theme.SpottedTabSelected
+import com.android.spotted.ui.theme.SpottedTextSecondary
 import com.android.spotted.ui.theme.jakarta
 
 /** Test tags of the Home screen (`<feature>_<element>`). */
@@ -139,6 +150,8 @@ fun HomeScreen(
   // a profile change (radius, home) shows up. The first time, the ViewModel has just loaded
   var shownBefore by rememberSaveable { mutableStateOf(false) }
   LaunchedEffect(Unit) { if (shownBefore) viewModel.refresh() else shownBefore = true }
+  // Once granted, reload so "600 m away" is measured from the GPS instead of the home area
+  RequestLocationPermissionOnce(onGranted = viewModel::refresh)
   HomeScreenContent(
       state = state,
       onReportMissingClick = onReportMissingClick,

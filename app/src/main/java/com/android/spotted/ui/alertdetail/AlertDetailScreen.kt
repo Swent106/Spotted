@@ -57,6 +57,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
+import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 
@@ -92,6 +93,8 @@ fun AlertDetailScreen(
     onBack: () -> Unit = {},
 ) {
   LaunchedEffect(alertId) { viewModel.loadAlert(alertId) }
+  // Once granted, reload so the distance is measured from the GPS instead of the home area
+  RequestLocationPermissionOnce { viewModel.loadAlert(alertId) }
   val state by viewModel.uiState.collectAsState()
   val context = LocalContext.current
   AlertDetailContent(
