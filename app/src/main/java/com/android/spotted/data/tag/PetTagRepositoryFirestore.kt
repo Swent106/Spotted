@@ -104,8 +104,6 @@ class PetTagRepositoryFirestore(
     require(showPhone || showEmail) { "At least one contact method must remain visible" }
     val contactPhone = if (showPhone) phone else null
     val contactEmail = if (showEmail) email else null
-    require(showPhone || contactPhone == null)
-    require(showEmail || contactEmail == null)
     withContext(Dispatchers.IO) {
       requireSignedInOwnerId()
       Tasks.await(

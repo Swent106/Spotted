@@ -92,8 +92,6 @@ class FakePetTagRepository(
     }
     val contactPhone = if (showPhone) phone else null
     val contactEmail = if (showEmail) email else null
-    check(showPhone || contactPhone == null)
-    check(showEmail || contactEmail == null)
     tags[tagId] =
         tag.copy(
             showPhone = showPhone,
