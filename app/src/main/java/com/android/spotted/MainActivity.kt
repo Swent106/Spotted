@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
@@ -34,6 +35,8 @@ import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
 import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.components.isResumed
+import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
@@ -167,7 +170,7 @@ fun NavGraphBuilder.addPetsDestination(
 ) {
   composable(Route.ADD_PETS) {
     addPetsContent(
-        { navController.popBackStack() },
+        { navController.popBackStackSafely() },
         {
           // Onboarding is over: Back from Home must not return to it
           navController.navigate(Route.HOME) {
@@ -236,51 +239,67 @@ fun NavGraphBuilder.homeDestinations(
       PersonalInfoScreen(onBack = onDone, onSaved = onDone)
     },
 ) {
-  composable(Route.HOME) {
+  // Every click below is ignored while a transition is running (the screen is not RESUMED), so
+  // two quick taps open one screen. Callbacks with an argument check the entry themselves, as
+  // dropUnlessResumed only wraps () -> Unit.
+  composable(Route.HOME) { entry ->
     homeContent(
         HomeNavigation(
-            onReportMissingClick = { navController.navigate(Route.REPORT_MISSING) },
-            onAlertClick = { alertId -> navController.navigate(Route.alertDetail(alertId)) },
-            onSeenPetClick = { alertId -> navController.navigate(Route.reportSighting(alertId)) },
-            onAddPetClick = { navController.navigate(Route.ADD_PET) },
-            onPetClick = { petId -> navController.navigate(Route.petProfile(petId)) },
-            onMapClick = { navController.navigate(Route.MAP) },
-            onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
-            onProfileClick = { navController.navigate(Route.PROFILE) },
+            onReportMissingClick =
+                dropUnlessResumed { navController.navigate(Route.REPORT_MISSING) },
+            onAlertClick = { alertId ->
+              if (entry.isResumed()) navController.navigate(Route.alertDetail(alertId))
+            },
+            onSeenPetClick = { alertId ->
+              if (entry.isResumed()) navController.navigate(Route.reportSighting(alertId))
+            },
+            onAddPetClick = dropUnlessResumed { navController.navigate(Route.ADD_PET) },
+            onPetClick = { petId ->
+              if (entry.isResumed()) navController.navigate(Route.petProfile(petId))
+            },
+            onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
+            onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
+            onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
         )
     )
   }
   composable(Route.PROFILE) {
     profileContent(
         HelperProfileNavigation(
-            onHomeClick = { navController.popBackStack(Route.HOME, inclusive = false) },
-            onMapClick = { navController.navigate(Route.MAP) },
-            onCameraClick = { navController.navigate(Route.NEW_SIGHTING) },
-            onEditProfileClick = { navController.navigate(Route.EDIT_PROFILE) },
+            onHomeClick =
+                dropUnlessResumed { navController.popBackStack(Route.HOME, inclusive = false) },
+            onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
+            onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
+            onEditProfileClick = dropUnlessResumed { navController.navigate(Route.EDIT_PROFILE) },
         )
     )
   }
-  composable(Route.EDIT_PROFILE) { editProfileContent { navController.popBackStack() } }
-  composable(Route.MAP) {
-    mapContent({ navController.popBackStack() }) { alertId ->
-      navController.navigate(Route.alertDetail(alertId))
+  composable(Route.EDIT_PROFILE) { editProfileContent { navController.popBackStackSafely() } }
+  composable(Route.MAP) { entry ->
+    mapContent({ navController.popBackStackSafely() }) { alertId ->
+      if (entry.isResumed()) navController.navigate(Route.alertDetail(alertId))
     }
   }
-  composable(Route.ADD_PET) { addPetContent { navController.popBackStack() } }
+  composable(Route.ADD_PET) { addPetContent { navController.popBackStackSafely() } }
   composable(Route.PET_PROFILE) { entry ->
     petProfileContent(entry.arguments?.getString(Route.PET_ID).orEmpty())
   }
-  composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStack() } }
+  composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStackSafely() } }
   composable(Route.ALERT_DETAIL) { entry ->
     val alertId = entry.arguments?.getString(Route.ALERT_ID).orEmpty()
-    alertDetailContent(alertId) { navController.navigate(Route.reportSighting(alertId)) }
+    alertDetailContent(
+        alertId,
+        dropUnlessResumed { navController.navigate(Route.reportSighting(alertId)) },
+    )
   }
   composable(Route.REPORT_SIGHTING) { entry ->
     reportSightingContent(entry.arguments?.getString(Route.ALERT_ID)) {
-      navController.popBackStack()
+      navController.popBackStackSafely()
     }
   }
-  composable(Route.NEW_SIGHTING) { reportSightingContent(null) { navController.popBackStack() } }
+  composable(Route.NEW_SIGHTING) {
+    reportSightingContent(null) { navController.popBackStackSafely() }
+  }
 }
 
 /** Where Home can send the user. */
