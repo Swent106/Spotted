@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import androidx.lifecycle.ViewModel
@@ -191,18 +192,37 @@ class HomeViewModel(
     // returns
     val result =
         alertRepository.getOpenAlertsNear(center, radiusKm).map { alerts ->
-          alerts
-              .filter { it.ownerId != uid }
-              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
+          sortNearbyAlerts(alerts, uid)
         }
+    val cachedAlerts =
+        if (result.isFailure) {
+          alertRepository
+              .getCachedOpenAlertsNear(
+                  center,
+                  radiusKm,
+                  limit = AlertRepository.MY_ALERTS_LIMIT,
+              )
+              .getOrNull()
+              ?.let { sortNearbyAlerts(it, uid).take(OFFLINE_ALERTS_LIMIT) }
+        } else {
+          null
+        }
+    val usingCache = !cachedAlerts.isNullOrEmpty()
+    val displayedResult = if (usingCache) Result.success(cachedAlerts.orEmpty()) else result
     updateFor(uid) {
       it.copy(
-          lostPetsNearby = it.lostPetsNearby.after(result, LOST_PETS_LOAD_FAILED),
-          nowMillis = if (result.isSuccess) now() else it.nowMillis,
+          lostPetsNearby = it.lostPetsNearby.after(displayedResult, LOST_PETS_LOAD_FAILED),
+          nowMillis = if (displayedResult.isSuccess) now() else it.nowMillis,
+          isOffline = usingCache,
       )
     }
-    return result.getOrNull()
+    return displayedResult.getOrNull()
   }
+
+  private fun sortNearbyAlerts(alerts: List<Alert>, uid: String): List<Alert> =
+      alerts
+          .filter { it.ownerId != uid }
+          .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
 
   /** The user's own open alerts, wherever their pet was lost, so the map always shows them. */
   private suspend fun loadOwnLostPets(uid: String) {
@@ -228,6 +248,7 @@ class HomeViewModel(
     const val PETS_LOAD_FAILED = "Couldn't load your pets. Please try again."
     const val LOST_PETS_LOAD_FAILED = "Couldn't load the lost pets near you. Please try again."
     const val SIGN_OUT_FAILED = "Couldn't sign out. Please try again."
+    private const val OFFLINE_ALERTS_LIMIT = 5
 
     /** Geneva city centre: used when the home area can't be found. */
     val DEFAULT_SEARCH_CENTER = Location(latitude = 46.2044, longitude = 6.1432)

@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.report
 
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -79,6 +80,12 @@ class ReportMissingContentTest {
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(published.toList())
+
+    override suspend fun getCachedOpenAlertsNear(
+        center: Location,
+        radiusKm: Double,
+        limit: Int,
+    ) = Result.success(published.take(limit))
 
     override suspend fun getOpenAlertsByOwner(ownerId: String) =
         Result.success(published.filter { it.ownerId == ownerId })

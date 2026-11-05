@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.alertdetail
 
 import android.content.Context
@@ -114,6 +115,12 @@ class AlertDetailScreenWiringTest {
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(listOf(alert))
+
+    override suspend fun getCachedOpenAlertsNear(
+        center: Location,
+        radiusKm: Double,
+        limit: Int,
+    ) = Result.success(listOf(alert).take(limit))
 
     override suspend fun getOpenAlertsByOwner(ownerId: String) =
         Result.success(listOf(alert).filter { it.ownerId == ownerId })
