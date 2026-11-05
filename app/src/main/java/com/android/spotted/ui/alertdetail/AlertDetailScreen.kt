@@ -385,12 +385,7 @@ private fun WarningCard(
       verticalAlignment = Alignment.CenterVertically,
   ) {
     Box(
-        modifier =
-            Modifier.size(30.dp)
-                .clip(CircleShape)
-                .background(
-                    if (warning) SpottedTheme.colors.surface else SpottedTheme.colors.surface
-                ),
+        modifier = Modifier.size(30.dp).clip(CircleShape).background(SpottedTheme.colors.surface),
         contentAlignment = Alignment.Center,
     ) {
       Text(
