@@ -47,7 +47,7 @@ import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
-import com.android.spotted.ui.theme.SampleAppTheme
+import com.android.spotted.ui.theme.SpottedTheme
 
 object Route {
   const val SIGNIN = "signin"
@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
             .build()
     )
     setContent {
-      SampleAppTheme {
+      SpottedTheme {
         Surface(
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,

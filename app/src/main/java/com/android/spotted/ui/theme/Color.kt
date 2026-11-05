@@ -1,14 +1,8 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.theme
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
-
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
 
 // Spotted palette (Figma "Spotted — App Screens")
 val SpottedBlue = Color(0xFF1B5BD7)
@@ -45,3 +39,120 @@ val SpottedBadgeLockedIcon = Color(0xFFA7ACB6)
 val SpottedTextMuted = Color(0xFF8D929B)
 val SpottedTextFaint = Color(0xFF9AA0AA)
 val SpottedRankYou = Color(0xFF1B4FC0)
+
+/**
+ * The Spotted palette for one appearance, light or dark. Screens read it through
+ * [SpottedTheme.colors], so they follow the system dark mode instead of using fixed light colours.
+ *
+ * Each colour has the role of the `Spotted...` constant of the same name; [surface] is the
+ * background of cards and dialogs, white in light mode.
+ */
+@Immutable
+data class SpottedColors(
+    val blue: Color,
+    val blueTint: Color,
+    val mapBackground: Color,
+    val ink: Color,
+    val inkSoft: Color,
+    val textSecondary: Color,
+    val textLabel: Color,
+    val inputBackground: Color,
+    val buttonBorder: Color,
+    val screenBackground: Color,
+    val avatarBackground: Color,
+    val error: Color,
+    val homeBackground: Color,
+    val lostRed: Color,
+    val reportBorder: Color,
+    val featuredPhotoBackground: Color,
+    val tabSelected: Color,
+    val tabBorder: Color,
+    val tabBarBorder: Color,
+    val profileBackground: Color,
+    val profileAvatar: Color,
+    val profileInitial: Color,
+    val statText: Color,
+    val logoutRed: Color,
+    val badgeEarned: Color,
+    val badgeLocked: Color,
+    val badgeLockedIcon: Color,
+    val textMuted: Color,
+    val textFaint: Color,
+    val rankYou: Color,
+    val surface: Color,
+)
+
+/** The Figma colours, as they are used today. */
+val LightSpottedColors =
+    SpottedColors(
+        blue = SpottedBlue,
+        blueTint = SpottedBlueTint,
+        mapBackground = SpottedMapBackground,
+        ink = SpottedInk,
+        inkSoft = SpottedInkSoft,
+        textSecondary = SpottedTextSecondary,
+        textLabel = SpottedTextLabel,
+        inputBackground = SpottedInputBackground,
+        buttonBorder = SpottedButtonBorder,
+        screenBackground = SpottedScreenBackground,
+        avatarBackground = SpottedAvatarBackground,
+        error = SpottedError,
+        homeBackground = SpottedHomeBackground,
+        lostRed = SpottedLostRed,
+        reportBorder = SpottedReportBorder,
+        featuredPhotoBackground = SpottedFeaturedPhotoBackground,
+        tabSelected = SpottedTabSelected,
+        tabBorder = SpottedTabBorder,
+        tabBarBorder = SpottedTabBarBorder,
+        profileBackground = SpottedProfileBackground,
+        profileAvatar = SpottedProfileAvatar,
+        profileInitial = SpottedProfileInitial,
+        statText = SpottedStatText,
+        logoutRed = SpottedLogoutRed,
+        badgeEarned = SpottedBadgeEarned,
+        badgeLocked = SpottedBadgeLocked,
+        badgeLockedIcon = SpottedBadgeLockedIcon,
+        textMuted = SpottedTextMuted,
+        textFaint = SpottedTextFaint,
+        rankYou = SpottedRankYou,
+        surface = Color.White,
+    )
+
+/**
+ * Dark mode, matching the "5 · Dark mode" frames of the Figma: near-black backgrounds, dark grey
+ * cards, light text, and the blue and red a bit brighter so they stay readable on dark.
+ */
+val DarkSpottedColors =
+    SpottedColors(
+        blue = Color(0xFF4D85F0),
+        blueTint = Color(0xFF16284A),
+        mapBackground = Color(0xFF15233F),
+        ink = Color(0xFFECEEF1),
+        inkSoft = Color(0xFFC9CED6),
+        textSecondary = Color(0xFFA3A9B3),
+        textLabel = Color(0xFF9AA1AC),
+        inputBackground = Color(0xFF262A31),
+        buttonBorder = Color(0xFF3A3F48),
+        screenBackground = Color(0xFF0E1013),
+        avatarBackground = Color(0xFF2A3138),
+        error = Color(0xFFF28B82),
+        homeBackground = Color(0xFF0E1013),
+        lostRed = Color(0xFFE35D5D),
+        reportBorder = Color(0xFFE35D5D),
+        featuredPhotoBackground = Color(0xFF3A2E22),
+        tabSelected = Color(0xFF4D85F0),
+        tabBorder = Color(0xFF3A3F48),
+        tabBarBorder = Color(0xFF2E333B),
+        profileBackground = Color(0xFF0E1013),
+        profileAvatar = Color(0xFF2A3140),
+        profileInitial = Color(0xFFC9D6F0),
+        statText = Color(0xFFD5E1FA),
+        logoutRed = Color(0xFFFF7B7B),
+        badgeEarned = Color(0xFF16284A),
+        badgeLocked = Color(0xFF262A31),
+        badgeLockedIcon = Color(0xFF6B717C),
+        textMuted = Color(0xFF7E848E),
+        textFaint = Color(0xFF6F7580),
+        rankYou = Color(0xFF7FA6F5),
+        surface = Color(0xFF1B1E24),
+    )
