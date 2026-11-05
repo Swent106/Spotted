@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepositoryLocal
@@ -28,18 +29,18 @@ class PetProfileScreenTest {
   fun loadingStateShowsSpinnerOnly() {
     showContent(PetProfileUiState(isLoading = true))
 
-    composeTestRule.onNodeWithTag("pet_profile_loading").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("pet_profile_name").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("pet_profile_error").assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.LOADING).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.NAME).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.ERROR).assertDoesNotExist()
   }
 
   @Test
   fun errorStateShowsMessageInsteadOfSpinner() {
     showContent(PetProfileUiState(isLoading = false, errorMessage = "Pet not found"))
 
-    composeTestRule.onNodeWithTag("pet_profile_error").assertTextEquals("Pet not found")
-    composeTestRule.onNodeWithTag("pet_profile_loading").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("pet_profile_name").assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.ERROR).assertTextEquals("Pet not found")
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.LOADING).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.NAME).assertDoesNotExist()
   }
 
   @Test
@@ -51,19 +52,38 @@ class PetProfileScreenTest {
         )
     )
 
-    composeTestRule.onNodeWithTag("pet_profile_name").assertTextEquals("Rex")
-    composeTestRule.onNodeWithTag("pet_profile_species").assertTextEquals("Species: CAT")
-    composeTestRule.onNodeWithTag("pet_profile_image").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("pet_profile_image_placeholder").assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.NAME).assertTextEquals("Rex")
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.SPECIES).assertTextEquals("Species: CAT")
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE_PLACEHOLDER).assertDoesNotExist()
+  }
+
+  @Test
+  fun tappingPhoto_opensViewerOnceUntilDismissed() {
+    showContent(
+        PetProfileUiState(
+            pet = rex.copy(photoUrl = "https://example.com/rex.jpg"),
+            isLoading = false,
+        )
+    )
+
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE).performClick()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.PHOTO_VIEWER).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.PHOTO_VIEWER_IMAGE).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.PHOTO_VIEWER_CLOSE).performClick()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.PHOTO_VIEWER).assertDoesNotExist()
+
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE).performClick()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.PHOTO_VIEWER).assertIsDisplayed()
   }
 
   @Test
   fun petWithoutPhotoShowsPlaceholder() {
     showContent(PetProfileUiState(pet = rex, isLoading = false))
 
-    composeTestRule.onNodeWithTag("pet_profile_image_placeholder").assertIsDisplayed()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE_PLACEHOLDER).assertIsDisplayed()
     composeTestRule.onNodeWithText("No Photo").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("pet_profile_image").assertDoesNotExist()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE).assertDoesNotExist()
   }
 
   @Test
@@ -75,7 +95,7 @@ class PetProfileScreenTest {
     composeTestRule.waitForIdle()
 
     composeTestRule
-        .onNodeWithTag("pet_profile_error")
+        .onNodeWithTag(PetProfileScreenTestTags.ERROR)
         .assertTextEquals("Pet with id missing was not found")
   }
 }

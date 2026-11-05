@@ -94,6 +94,17 @@ class HomeScreenContentTest {
   }
 
   @Test
+  fun petCard_ignoresRepeatedTapsUntilHomeResumes() {
+    setContent(HomeUiState(pets = HomeSection(listOf(LUNA))))
+    val card = scrollTo(HomeScreenTestTags.petCard(LUNA.id))
+
+    card.performClick()
+    card.performClick()
+
+    assertEquals(1, clicks["pet:${LUNA.id}"])
+  }
+
+  @Test
   fun addPetButton_isShownWithOrWithoutPets_andCallsBack() {
     setContent(HomeUiState(pets = HomeSection(listOf(LUNA))))
 
