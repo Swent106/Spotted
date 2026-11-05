@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.fakes
 
 import com.android.spotted.model.Location
@@ -6,9 +7,19 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 
+/**
+ * In-memory [AlertRepository] for tests. [observeOpenAlertsNear] is live: publishing, closing or
+ * deleting an alert emits again.
+ */
 class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepository {
-  private val alerts = linkedMapOf<String, Alert>()
+  private val alerts = MutableStateFlow<Map<String, Alert>>(emptyMap())
   private var nextId = 0
 
   var failure: Throwable? = null
@@ -16,7 +27,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
   var cachedAlertsFailure: Throwable? = null
 
   val publishedAlerts: List<Alert>
-    get() = alerts.values.toList()
+    get() = alerts.value.values.toList()
 
   override fun getNewId(): String = "alert-${++nextId}"
 
@@ -24,7 +35,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     failure?.let {
       return Result.failure(it)
     }
-    alerts[alert.id] = alert
+    alerts.update { it + (alert.id to alert) }
     return Result.success(Unit)
   }
 
@@ -32,7 +43,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     failure?.let {
       return Result.failure(it)
     }
-    return Result.success(alerts[id])
+    return Result.success(alerts.value[id])
   }
 
   override suspend fun getMyAlerts(ownerId: String): Result<List<Alert>> {
@@ -40,7 +51,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
       return Result.failure(it)
     }
     return Result.success(
-        alerts.values
+        alerts.value.values
             .filter { it.ownerId == ownerId }
             .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
             .take(AlertRepository.MY_ALERTS_LIMIT)
@@ -52,11 +63,12 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
       return Result.failure(it)
     }
     val alert =
-        alerts[alertId]
+        alerts.value[alertId]
             ?: return Result.failure(NoSuchElementException("No alert with id $alertId"))
     // Closing is one-way: an already closed alert keeps its original closing time
     if (alert.status == AlertStatus.CLOSED) return Result.success(Unit)
-    alerts[alertId] = alert.copy(status = AlertStatus.CLOSED, closedAtMillis = now())
+    val closed = alert.copy(status = AlertStatus.CLOSED, closedAtMillis = now())
+    alerts.update { it + (alertId to closed) }
     return Result.success(Unit)
   }
 
@@ -65,7 +77,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
       return Result.failure(it)
     }
     return Result.success(
-        alerts.values
+        alerts.value.values
             .filter { it.ownerId == ownerId && it.status == AlertStatus.OPEN }
             .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
     )
@@ -75,7 +87,7 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     failure?.let {
       return Result.failure(it)
     }
-    alerts.values.removeAll { it.ownerId == ownerId }
+    alerts.update { current -> current.filterValues { it.ownerId != ownerId } }
     return Result.success(Unit)
   }
 
@@ -86,14 +98,20 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     failure?.let {
       return Result.failure(it)
     }
-    val nearbyAlerts =
-        alerts.values
-            .asSequence()
-            .filter { it.status == AlertStatus.OPEN }
-            .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
-            .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-            .toList()
-    return Result.success(nearbyAlerts)
+    return Result.success(openAlertsNear(alerts.value.values, center, radiusKm))
+  }
+
+  override fun observeOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+  ): Flow<Result<List<Alert>>> {
+    failure?.let {
+      return flowOf(Result.failure(it))
+    }
+    return alerts
+        .map { openAlertsNear(it.values, center, radiusKm) }
+        .distinctUntilChanged()
+        .map { Result.success(it) }
   }
 
   override suspend fun getCachedOpenAlertsNear(
@@ -105,14 +123,17 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
       return Result.failure(it)
     }
     if (limit <= 0) return Result.failure(IllegalArgumentException("limit must be positive"))
-    val nearbyAlerts =
-        cachedAlerts
-            .asSequence()
-            .filter { it.status == AlertStatus.OPEN }
-            .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
-            .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-            .take(limit)
-            .toList()
-    return Result.success(nearbyAlerts)
+    return Result.success(openAlertsNear(cachedAlerts, center, radiusKm).take(limit))
   }
+
+  /** The open alerts within the inclusive [radiusKm] of [center], newest first, ties by id. */
+  private fun openAlertsNear(
+      alerts: Collection<Alert>,
+      center: Location,
+      radiusKm: Double,
+  ): List<Alert> =
+      alerts
+          .filter { it.status == AlertStatus.OPEN }
+          .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
+          .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
 }
