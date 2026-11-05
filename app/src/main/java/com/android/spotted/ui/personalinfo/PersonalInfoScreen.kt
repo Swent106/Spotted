@@ -149,6 +149,7 @@ fun PersonalInfoContent(
     onHomeLocationChange: (Location) -> Unit,
     onAlertRadiusSelect: (Int) -> Unit,
     onCreateProfileClick: () -> Unit,
+    isPickingPhoto: Boolean = false,
 ) {
   Box(
       Modifier.fillMaxSize()
@@ -171,7 +172,7 @@ fun PersonalInfoContent(
           modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
       ) {
         Header(state.isEditing, onBackClick)
-        Avatar(state.photoUri, onChangePhotoClick)
+        Avatar(state.photoUri, onChangePhotoClick, !state.isSaving && !isPickingPhoto)
         IdentityCard(state, onUsernameChange, onFirstNameChange, onLastNameChange)
         HomeLocationCard(
             state,
@@ -232,7 +233,7 @@ private fun Header(isEditing: Boolean, onBackClick: () -> Unit) {
 }
 
 @Composable
-private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
+private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit, enabled: Boolean) {
   Column(
       verticalArrangement = Arrangement.spacedBy(8.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
@@ -241,6 +242,7 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
     Box(
         Modifier.size(96.dp)
             .clickable(
+                enabled = enabled,
                 onClickLabel = stringResource(R.string.photo_change),
                 onClick = onChangePhotoClick,
             )
@@ -281,7 +283,7 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit) {
         stringResource(R.string.profile_photo_change_optional),
         style = jakarta(12, 16, Bold, SpottedBlue),
         modifier =
-            Modifier.clickable(role = Role.Button, onClick = onChangePhotoClick)
+            Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onChangePhotoClick)
                 .testTag(PersonalInfoScreenTestTags.CHANGE_PHOTO),
     )
   }
@@ -531,6 +533,7 @@ fun PersonalInfoScreen(
 
   PersonalInfoContent(
       state = state,
+      isPickingPhoto = photoPickerActions.isPicking,
       onBackClick = onBack,
       onChangePhotoClick = {
         cameraError = false
@@ -558,6 +561,7 @@ fun PersonalInfoScreen(
         hasPhoto = state.photoUri != null,
         canTakePhoto = remember(context) { CameraPhotoFile.deviceHasCamera(context) },
         cameraError = cameraError,
+        enabled = !state.isSaving && !photoPickerActions.isPicking,
         onPickPhoto = {
           cameraError = false
           showPhotoOptions = false
@@ -586,6 +590,7 @@ internal fun PhotoOptionsDialog(
     hasPhoto: Boolean,
     canTakePhoto: Boolean,
     cameraError: Boolean = false,
+    enabled: Boolean = true,
     onPickPhoto: () -> Unit,
     onTakePhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
@@ -611,12 +616,14 @@ internal fun PhotoOptionsDialog(
               stringResource(R.string.profile_photo_choose_gallery),
               PersonalInfoScreenTestTags.PHOTO_FROM_GALLERY,
               onPickPhoto,
+              enabled,
           )
           if (canTakePhoto) {
             PhotoOption(
                 stringResource(R.string.photo_take),
                 PersonalInfoScreenTestTags.PHOTO_FROM_CAMERA,
                 onTakePhoto,
+                enabled,
             )
           }
           if (hasPhoto) {
@@ -624,6 +631,7 @@ internal fun PhotoOptionsDialog(
                 stringResource(R.string.photo_remove),
                 PersonalInfoScreenTestTags.PHOTO_REMOVE,
                 onRemovePhoto,
+                enabled,
             )
           }
         }
@@ -634,8 +642,12 @@ internal fun PhotoOptionsDialog(
 }
 
 @Composable
-private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit) {
-  TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(testTag)) {
+private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit, enabled: Boolean) {
+  TextButton(
+      onClick = onClick,
+      enabled = enabled,
+      modifier = Modifier.fillMaxWidth().testTag(testTag),
+  ) {
     Text(text, style = jakarta(15, 20, Bold, SpottedBlue), modifier = Modifier.fillMaxWidth())
   }
 }

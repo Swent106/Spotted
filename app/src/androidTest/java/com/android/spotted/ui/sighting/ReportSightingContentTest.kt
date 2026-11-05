@@ -112,6 +112,7 @@ class ReportSightingContentTest {
         .onNodeWithTag(ReportSightingScreenTestTags.LOADER)
         .performScrollTo()
         .assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_BUTTON).assertIsNotEnabled()
   }
 
   @Test

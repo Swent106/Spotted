@@ -129,6 +129,7 @@ fun ReportSightingContent(
               Modifier.align(Alignment.TopEnd)
                   .padding(16.dp)
                   .testTag(ReportSightingScreenTestTags.PHOTO_BUTTON),
+          enabled = !state.isSubmitting && !photoPickerActions.isPicking,
       ) {
         Text(
             stringResource(

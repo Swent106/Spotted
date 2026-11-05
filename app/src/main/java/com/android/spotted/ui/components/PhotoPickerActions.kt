@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 
 internal data class PhotoPickerActions(
+    val isPicking: Boolean,
     val pickFromGallery: () -> Unit,
     val takePhoto: () -> Unit,
 )
@@ -28,8 +29,10 @@ internal fun rememberPhotoPickerActions(
 ): PhotoPickerActions {
   val context = LocalContext.current
   val currentOnPhotoSelected by rememberUpdatedState(onPhotoSelected)
+  var isPicking by rememberSaveable { mutableStateOf(false) }
   val galleryLauncher =
       rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
+        isPicking = false
         // A null result means the user closed the picker, so keep the current photo.
         if (uri != null) currentOnPhotoSelected(uri)
       }
@@ -39,6 +42,7 @@ internal fun rememberPhotoPickerActions(
   var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
   val cameraLauncher =
       rememberLauncherForActivityResult(TakePicture()) { saved ->
+        isPicking = false
         val uri = pendingCameraUri ?: return@rememberLauncherForActivityResult
         pendingCameraUri = null
         if (saved) {
@@ -50,19 +54,27 @@ internal fun rememberPhotoPickerActions(
       }
 
   return PhotoPickerActions(
+      isPicking = isPicking,
       pickFromGallery = {
-        galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        if (!isPicking) {
+          isPicking = true
+          galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        }
       },
       takePhoto = {
-        val uri = CameraPhotoFile.newPhotoUri(context)
-        pendingCameraUri = uri
-        try {
-          cameraLauncher.launch(uri)
-        } catch (e: ActivityNotFoundException) {
-          pendingCameraUri = null
-          // No camera app can write this newly created file, so delete it instead of leaking it.
-          context.contentResolver.delete(uri, null, null)
-          onCameraUnavailable()
+        if (!isPicking) {
+          val uri = CameraPhotoFile.newPhotoUri(context)
+          pendingCameraUri = uri
+          isPicking = true
+          try {
+            cameraLauncher.launch(uri)
+          } catch (e: ActivityNotFoundException) {
+            isPicking = false
+            pendingCameraUri = null
+            // No camera app can write this newly created file, so delete it instead of leaking it.
+            context.contentResolver.delete(uri, null, null)
+            onCameraUnavailable()
+          }
         }
       },
   )
