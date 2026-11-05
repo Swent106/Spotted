@@ -10,8 +10,16 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -263,6 +271,67 @@ class AlertRepositoryFirestoreInstrumentedTest {
     }
   }
 
+  @Test
+  fun observeOpenAlertsNear_emitsAlertsPublishedAfterCollectionStarts() = runBlocking {
+    val center = Location(latitude = 44.0, longitude = 4.0)
+    val before = publishOpenAlert(center)
+
+    withTimeout(TIMEOUT_MILLIS) {
+      val updates = repository.observeOpenAlertsNear(center, radiusKm = 1.0).produceIn(this)
+      updates.awaitAlertIds { before.id in it }
+
+      val far = publishOpenAlert(Location(latitude = 44.5, longitude = 4.5))
+      val after =
+          publishOpenAlert(Location(latitude = 44.0001, longitude = 4.0), lostAtMillis = 2000L)
+      val ids = updates.awaitAlertIds { after.id in it }
+
+      assertTrue("Far alert should NOT be emitted", far.id !in ids)
+      assertEquals(listOf(after.id, before.id), ids.filter { it == after.id || it == before.id })
+      updates.cancel()
+    }
+  }
+
+  @Test
+  fun observeOpenAlertsNear_stopsListeningWhenCollectorIsCancelled() = runBlocking {
+    val center = Location(latitude = 43.0, longitude = 3.0)
+    val before = publishOpenAlert(center)
+    val received = CopyOnWriteArrayList<List<String>>()
+
+    withTimeout(TIMEOUT_MILLIS) {
+      val listening = CompletableDeferred<Unit>()
+      val collector = launch {
+        repository.observeOpenAlertsNear(center, radiusKm = 1.0).collect { result ->
+          val ids = result.getOrThrow().map { it.id }
+          received += ids
+          if (before.id in ids) listening.complete(Unit)
+        }
+      }
+      listening.await()
+      collector.cancelAndJoin()
+      val receivedBeforeCancel = received.toList()
+
+      val after = publishOpenAlert(center, lostAtMillis = 2000L)
+      // A new listener sees the change, so the cancelled one would have received it by now too
+      repository.observeOpenAlertsNear(center, radiusKm = 1.0).first { result ->
+        result.getOrThrow().any { it.id == after.id }
+      }
+
+      assertEquals(receivedBeforeCancel, received.toList())
+    }
+  }
+
+  /**
+   * Skips emissions until [done] holds for their alert ids (local writes can emit several times).
+   */
+  private suspend fun ReceiveChannel<Result<List<Alert>>>.awaitAlertIds(
+      done: (List<String>) -> Boolean
+  ): List<String> {
+    while (true) {
+      val ids = receive().getOrThrow().map { it.id }
+      if (done(ids)) return ids
+    }
+  }
+
   /** Seeds a pet and publishes an open alert for it at [location], owned by the signed-in user. */
   private suspend fun publishOpenAlert(location: Location, lostAtMillis: Long = 1000L): Alert {
     val ownerId = auth.currentUser!!.uid
@@ -337,5 +406,9 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     assertTrue("Query should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
     assertEquals(listOf(newest.id, middle.id, oldest.id), result.getOrThrow().map { it.id })
+  }
+
+  private companion object {
+    const val TIMEOUT_MILLIS = 10_000L
   }
 }

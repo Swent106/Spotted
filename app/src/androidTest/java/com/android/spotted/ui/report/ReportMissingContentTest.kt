@@ -23,6 +23,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.ui.components.MapPickerTestTags
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -80,6 +81,9 @@ class ReportMissingContentTest {
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(published.toList())
+
+    override fun observeOpenAlertsNear(center: Location, radiusKm: Double) =
+        flowOf(Result.success(published.toList()))
 
     override suspend fun getCachedOpenAlertsNear(
         center: Location,
