@@ -39,6 +39,8 @@ import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
+import com.android.spotted.ui.myalert.MyAlertScreen
+import com.android.spotted.ui.myalert.MyAlertViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -70,8 +72,13 @@ object Route {
   const val PET_ID = "petId"
   private const val PET = "pet"
   const val PET_PROFILE = "$PET/{$PET_ID}"
+  /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
+  private const val MY_ALERT_BASE = "my_alert"
+  const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
 
   fun petProfile(petId: String) = "$PET/$petId"
+
+  fun myAlert(alertId: String) = "$MY_ALERT_BASE/$alertId"
 
   fun alertDetail(alertId: String) = "$ALERT/$alertId"
 
@@ -187,8 +194,9 @@ fun NavGraphBuilder.addPetsDestination(
  * missing screen, [alertDetailContent] an alert's detail, [addPetContent] Add pets opened from
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
- * profile (Profile tab) and [editProfileContent] the profile form it opens; tests replace them to
- * use hand-built states instead of the real ViewModels.
+ * profile (Profile tab), [editProfileContent] the profile form it opens and [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
+ * instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -199,9 +207,16 @@ fun NavGraphBuilder.homeDestinations(
           onSeenPetClick = navigation.onSeenPetClick,
           onAddPetClick = navigation.onAddPetClick,
           onPetClick = navigation.onPetClick,
+          onMissingPetClick = navigation.onMissingPetClick,
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
+      )
+    },
+    myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
+      MyAlertScreen(
+          viewModel = viewModel(key = alertId, factory = MyAlertViewModel.Factory(alertId)),
+          onBack = onBack,
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -257,6 +272,9 @@ fun NavGraphBuilder.homeDestinations(
             onPetClick = { petId ->
               if (entry.isResumed()) navController.navigate(Route.petProfile(petId))
             },
+            onMissingPetClick = { alertId ->
+              if (entry.isResumed()) navController.navigate(Route.myAlert(alertId))
+            },
             onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
             onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
@@ -300,6 +318,11 @@ fun NavGraphBuilder.homeDestinations(
   composable(Route.NEW_SIGHTING) {
     reportSightingContent(null) { navController.popBackStackSafely() }
   }
+  composable(Route.MY_ALERT) { entry ->
+    myAlertContent(entry.arguments?.getString(Route.ALERT_ID).orEmpty()) {
+      navController.popBackStackSafely()
+    }
+  }
 }
 
 /** Where Home can send the user. */
@@ -309,6 +332,8 @@ data class HomeNavigation(
     val onSeenPetClick: (alertId: String) -> Unit,
     val onAddPetClick: () -> Unit = {},
     val onPetClick: (petId: String) -> Unit = {},
+    /** Opens My alert for one of the user's missing pets. */
+    val onMissingPetClick: (alertId: String) -> Unit = {},
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
