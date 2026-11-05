@@ -49,11 +49,7 @@ import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.ui.components.createMapView
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedBlue
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedMapBackground
-import com.android.spotted.ui.theme.SpottedScreenBackground
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -126,7 +122,7 @@ fun MyAlertContent(
   Column(
       modifier =
           Modifier.fillMaxSize()
-              .background(SpottedScreenBackground)
+              .background(SpottedTheme.colors.screenBackground)
               .verticalScroll(rememberScrollState())
               .padding(16.dp)
               .testTag(MyAlertScreenTestTags.SCREEN),
@@ -134,11 +130,11 @@ fun MyAlertContent(
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       TextButton(onClick = onBack, modifier = Modifier.testTag(MyAlertScreenTestTags.BACK_BUTTON)) {
-        Text("<", style = jakarta(20, 24f, 700, 0xFF14161A))
+        Text("<", style = jakarta(20, 24f, 700, SpottedTheme.colors.ink))
       }
       Text(
           state.alert?.let { "${it.petName} is missing" } ?: "My alert",
-          style = jakarta(22, 28f, 700, 0xFF14161A),
+          style = jakarta(22, 28f, 700, SpottedTheme.colors.ink),
       )
     }
 
@@ -162,15 +158,15 @@ fun MyAlertContent(
             Modifier.fillMaxWidth()
                 .height(240.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(SpottedMapBackground)
+                .background(SpottedTheme.colors.mapBackground)
                 .testTag(MyAlertScreenTestTags.MAP),
         )
 
-        Text("LATEST SIGHTINGS", style = jakarta(12, 16f, 700, 0xFF6B7280))
+        Text("LATEST SIGHTINGS", style = jakarta(12, 16f, 700, SpottedTheme.colors.textLabel))
         if (state.sightings.isEmpty()) {
           Text(
               "No sightings yet. You'll see them here as soon as someone reports one.",
-              style = jakarta(13, 18f, 500, 0xFF5F6672),
+              style = jakarta(13, 18f, 500, SpottedTheme.colors.textSecondary),
               modifier = Modifier.testTag(MyAlertScreenTestTags.NO_SIGHTINGS),
           )
         }
@@ -185,14 +181,14 @@ fun MyAlertContent(
 
         Button(
             onClick = { askPetHome = true },
-            colors = ButtonDefaults.buttonColors(containerColor = SpottedBlue),
+            colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
             shape = RoundedCornerShape(16.dp),
             modifier =
                 Modifier.fillMaxWidth()
                     .height(56.dp)
                     .testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
         ) {
-          Text("My pet is home", style = jakarta(16, 20f, 700, 0xFFFFFFFF))
+          Text("My pet is home", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
         }
       }
     }
@@ -232,7 +228,7 @@ fun MyAlertContent(
 private fun ErrorMessage(message: String) {
   Text(
       message,
-      style = jakarta(14, 20f, 600, 0xFFD93025),
+      style = jakarta(14, 20f, 600, SpottedTheme.colors.error),
       modifier = Modifier.testTag(MyAlertScreenTestTags.ERROR),
   )
 }
@@ -249,7 +245,7 @@ private fun SightingRow(
   Column(
       modifier =
           Modifier.fillMaxWidth()
-              .background(Color.White, RoundedCornerShape(16.dp))
+              .background(SpottedTheme.colors.surface, RoundedCornerShape(16.dp))
               .padding(12.dp)
               // Dismissed sightings stay in the list, greyed out
               .alpha(if (dismissed) DISMISSED_ALPHA else 1f)
@@ -258,14 +254,16 @@ private fun SightingRow(
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Box(
-          Modifier.size(28.dp).clip(CircleShape).background(SpottedBlue),
+          Modifier.size(28.dp).clip(CircleShape).background(SpottedTheme.colors.blue),
           contentAlignment = Alignment.Center,
       ) {
-        Text("$number", style = jakarta(13, 16f, 700, 0xFFFFFFFF))
+        Text("$number", style = jakarta(13, 16f, 700, SpottedTheme.colors.onAccent))
       }
       Spacer(Modifier.width(12.dp))
       Box(
-          Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(SpottedAvatarBackground)
+          Modifier.size(48.dp)
+              .clip(RoundedCornerShape(10.dp))
+              .background(SpottedTheme.colors.avatarBackground)
       ) {
         sighting.photoUrl?.let { url ->
           AsyncImage(
@@ -278,8 +276,14 @@ private fun SightingRow(
       }
       Spacer(Modifier.width(12.dp))
       Column(Modifier.weight(1f)) {
-        Text(formatTime(sighting.seenAtMillis), style = jakarta(14, 18f, 700, 0xFF14161A))
-        Text(formatPlace(sighting.location), style = jakarta(12, 16f, 500, 0xFF5F6672))
+        Text(
+            formatTime(sighting.seenAtMillis),
+            style = jakarta(14, 18f, 700, SpottedTheme.colors.ink),
+        )
+        Text(
+            formatPlace(sighting.location),
+            style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
+        )
       }
       StatusChip(sighting)
     }
@@ -287,7 +291,7 @@ private fun SightingRow(
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             onClick = onConfirm,
-            colors = ButtonDefaults.buttonColors(containerColor = SpottedBlue),
+            colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
             modifier = Modifier.weight(1f).testTag(MyAlertScreenTestTags.confirm(sighting.id)),
         ) {
           Text("It's my pet")
@@ -307,13 +311,13 @@ private fun SightingRow(
 private fun StatusChip(sighting: Sighting) {
   val (label, color) =
       when (sighting.status) {
-        SightingStatus.PENDING -> "To review" to SpottedBlue
-        SightingStatus.CONFIRMED -> "Confirmed" to CONFIRMED_GREEN
-        SightingStatus.DISMISSED -> "Dismissed" to SpottedError
+        SightingStatus.PENDING -> "To review" to SpottedTheme.colors.blue
+        SightingStatus.CONFIRMED -> "Confirmed" to SpottedTheme.colors.success
+        SightingStatus.DISMISSED -> "Dismissed" to SpottedTheme.colors.error
       }
   Text(
       label,
-      style = jakarta(11, 14f, 700, color.toArgb().toLong() and 0xFFFFFFFFL),
+      style = jakarta(11, 14f, 700, color),
       modifier =
           Modifier.background(color.copy(alpha = 0.12f), RoundedCornerShape(100.dp))
               .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -346,15 +350,21 @@ private fun MyAlertMap(
     mapView.controller.setZoom(MAP_ZOOM)
     mapView.controller.setCenter(GeoPoint(center.latitude, center.longitude))
   }
+  // Read here: the likely area is drawn by osmdroid, outside of Compose
+  val areaColor = SpottedTheme.colors.error
   AndroidView(
       factory = { mapView },
       modifier = modifier,
-      update = { map -> map.showSightings(markers, likelyArea) },
+      update = { map -> map.showSightings(markers, likelyArea, areaColor) },
   )
 }
 
 /** Replaces the markers and the likely-area circle. */
-private fun MapView.showSightings(markers: List<SightingMarker>, likelyArea: LikelyArea?) {
+private fun MapView.showSightings(
+    markers: List<SightingMarker>,
+    likelyArea: LikelyArea?,
+    areaColor: Color,
+) {
   overlays.removeAll { it is Marker || it is Polygon }
   likelyArea?.let { area ->
     overlays.add(
@@ -365,8 +375,8 @@ private fun MapView.showSightings(markers: List<SightingMarker>, likelyArea: Lik
                   GeoPoint(area.center.latitude, area.center.longitude),
                   area.radiusMeters,
               )
-          fillPaint.color = SpottedError.copy(alpha = 0.15f).toArgb()
-          outlinePaint.color = SpottedError.toArgb()
+          fillPaint.color = areaColor.copy(alpha = 0.15f).toArgb()
+          outlinePaint.color = areaColor.toArgb()
           outlinePaint.strokeWidth = 4f
         }
     )
@@ -392,4 +402,3 @@ private fun formatPlace(location: Location): String =
 
 private const val MAP_ZOOM = 15.0
 private const val DISMISSED_ALPHA = 0.45f
-private val CONFIRMED_GREEN = Color(0xFF1E8E3E)

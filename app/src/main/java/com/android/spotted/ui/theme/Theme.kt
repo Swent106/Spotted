@@ -12,7 +12,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -28,13 +27,13 @@ private fun SpottedColors.toColorScheme(dark: Boolean): ColorScheme {
   val base = if (dark) darkColorScheme() else lightColorScheme()
   return base.copy(
       primary = blue,
-      onPrimary = Color.White,
+      onPrimary = onAccent,
       primaryContainer = blueTint,
       onPrimaryContainer = blue,
       secondary = inkSoft,
       onSecondary = surface,
       error = error,
-      onError = Color.White,
+      onError = onAccent,
       background = screenBackground,
       onBackground = ink,
       surface = surface,

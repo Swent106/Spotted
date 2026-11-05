@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.petprofile
 
@@ -18,7 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -28,6 +28,8 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.model.Pet.Pet
+import com.android.spotted.ui.theme.SpottedIllustration
+import com.android.spotted.ui.theme.SpottedTheme
 
 object PetProfileScreenTestTags {
   const val IMAGE = "pet_profile_image"
@@ -86,7 +88,7 @@ fun PetProfileContent(state: PetProfileUiState, modifier: Modifier = Modifier) {
       Box(
           modifier =
               Modifier.fillMaxSize()
-                  .background(Color.Black)
+                  .background(SpottedIllustration.cameraBackground)
                   .testTag(PetProfileScreenTestTags.PHOTO_VIEWER),
           contentAlignment = Alignment.Center,
       ) {
@@ -98,7 +100,7 @@ fun PetProfileContent(state: PetProfileUiState, modifier: Modifier = Modifier) {
         )
         Text(
             text = "Close",
-            color = Color.White,
+            color = SpottedTheme.colors.onAccent,
             modifier =
                 Modifier.align(Alignment.TopEnd)
                     .padding(24.dp)
