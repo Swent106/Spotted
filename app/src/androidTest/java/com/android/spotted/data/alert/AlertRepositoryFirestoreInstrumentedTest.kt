@@ -245,6 +245,12 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     firestore.disableNetwork().await()
     try {
+      val onlineQuery = repository.getOpenAlertsNear(center, radiusKm = 1.0)
+      assertTrue(
+          "Server query should fail without a network connection",
+          onlineQuery.isFailure,
+      )
+
       val cached = repository.getCachedOpenAlertsNear(center, radiusKm = 1.0)
 
       assertTrue(

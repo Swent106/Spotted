@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import androidx.lifecycle.ViewModel
@@ -195,9 +196,14 @@ class HomeViewModel(
         }
     val cachedAlerts =
         if (result.isFailure) {
-          alertRepository.getCachedOpenAlertsNear(center, radiusKm).getOrNull()?.let {
-            sortNearbyAlerts(it, uid)
-          }
+          alertRepository
+              .getCachedOpenAlertsNear(
+                  center,
+                  radiusKm,
+                  limit = AlertRepository.MY_ALERTS_LIMIT,
+              )
+              .getOrNull()
+              ?.let { sortNearbyAlerts(it, uid).take(OFFLINE_ALERTS_LIMIT) }
         } else {
           null
         }
@@ -242,6 +248,7 @@ class HomeViewModel(
     const val PETS_LOAD_FAILED = "Couldn't load your pets. Please try again."
     const val LOST_PETS_LOAD_FAILED = "Couldn't load the lost pets near you. Please try again."
     const val SIGN_OUT_FAILED = "Couldn't sign out. Please try again."
+    private const val OFFLINE_ALERTS_LIMIT = 5
 
     /** Geneva city centre: used when the home area can't be found. */
     val DEFAULT_SEARCH_CENTER = Location(latitude = 46.2044, longitude = 6.1432)

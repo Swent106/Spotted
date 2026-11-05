@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.alert
 
 import android.util.Log
@@ -151,7 +152,11 @@ class AlertRepositoryFirestore(
   override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double): Result<List<Alert>> {
     return try {
       val snapshot =
-          db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100).get().await()
+          db.collection(collectionPath)
+              .whereEqualTo("status", "OPEN")
+              .limit(100)
+              .get(Source.SERVER)
+              .await()
 
       val alerts = snapshot.toAlerts()
       // Filter by distance and sort by lostAtMillis (descending) locally

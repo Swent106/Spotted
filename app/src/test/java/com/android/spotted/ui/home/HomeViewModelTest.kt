@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.home
 
 import com.android.spotted.model.Location
@@ -244,7 +245,7 @@ class HomeViewModelTest {
       }
 
   @Test
-  fun lostPets_keepsErrorWhenOnlineAndCacheLoadsFailOrAreEmpty() =
+  fun lostPets_keepsErrorWhenCacheFailsOrIsEmpty() =
       runTest(testDispatcher) {
         signIn(ALICE)
         alertRepository.failure = Exception("offline")
@@ -253,24 +254,45 @@ class HomeViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, state.lostPetsNearby.errorMessage)
-        assertFalse(state.isOffline)
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            viewModel.uiState.value.lostPetsNearby.errorMessage,
+        )
+        assertFalse(viewModel.uiState.value.isOffline)
+
+        alertRepository.cachedAlertsFailure = null
+        alertRepository.cachedAlerts = emptyList()
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val emptyCacheState = viewModel.uiState.value
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            emptyCacheState.lostPetsNearby.errorMessage,
+        )
+        assertTrue(emptyCacheState.lostPetsNearby.items.isEmpty())
+        assertFalse(emptyCacheState.isOffline)
       }
 
   @Test
-  fun lostPets_keepsErrorWhenOnlineAndCacheIsEmpty() =
+  fun lostPets_filtersOwnCachedAlertsBeforeApplyingDisplayLimit() =
       runTest(testDispatcher) {
         signIn(ALICE)
+        val ownAlerts =
+            listOf(
+                alert("mine-newer", ownerId = ALICE.uid, lostAtMillis = 8_000),
+                alert("mine-older", ownerId = ALICE.uid, lostAtMillis = 7_000),
+            )
+        val cachedNearbyAlerts = (1..6).map { alert("cached-$it", lostAtMillis = it * 1_000L) }
         alertRepository.failure = Exception("offline")
+        alertRepository.cachedAlerts = ownAlerts + cachedNearbyAlerts
 
         val viewModel = viewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, state.lostPetsNearby.errorMessage)
-        assertTrue(state.lostPetsNearby.items.isEmpty())
-        assertFalse(state.isOffline)
+        assertEquals(cachedNearbyAlerts.takeLast(5).reversed(), state.lostPetsNearby.items)
+        assertTrue(state.isOffline)
       }
 
   @Test
