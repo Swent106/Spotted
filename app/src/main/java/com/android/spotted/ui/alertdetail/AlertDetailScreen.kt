@@ -55,9 +55,9 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
-import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
 

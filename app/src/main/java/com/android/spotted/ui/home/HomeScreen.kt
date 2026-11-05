@@ -69,18 +69,8 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
-import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
-import com.android.spotted.ui.theme.SpottedAvatarBackground
-import com.android.spotted.ui.theme.SpottedError
-import com.android.spotted.ui.theme.SpottedHomeBackground
-import com.android.spotted.ui.theme.SpottedInk
-import com.android.spotted.ui.theme.SpottedLostRed
-import com.android.spotted.ui.theme.SpottedReportBorder
-import com.android.spotted.ui.theme.SpottedTabBarBorder
-import com.android.spotted.ui.theme.SpottedTabBorder
-import com.android.spotted.ui.theme.SpottedTabSelected
-import com.android.spotted.ui.theme.SpottedTextSecondary
+import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
 /** Test tags of the Home screen (`<feature>_<element>`). */
