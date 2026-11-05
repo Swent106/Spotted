@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
 /** Remembers whether the location permission was already asked since the app started. */
-private object LocationPermissionSession {
+internal object LocationPermissionSession {
   /** Set once the request is shown, so a refusal is respected until the next launch. */
   @Volatile var asked: Boolean = false
 }
