@@ -802,6 +802,7 @@ describe("Firestore sighting access rules", () => {
 
   for (const testCase of createCases) {
     it(`sighting create: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedAlert("alert-1", "owner-1");
       const db = firestoreForUser(testCase.userId);
       const operation = setDoc(
         doc(db, "sightings", "sighting-1"),
@@ -1029,6 +1030,7 @@ describe("Firestore sighting access rules", () => {
   });
 
   it("sighting status: a new sighting must be pending", async () => {
+    await seedAlert("alert-1", "owner-1");
     const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
 
     await assertFails(setDoc(ref, sighting("sighting-1", "user-1", { status: "CONFIRMED" })));
@@ -1071,6 +1073,7 @@ describe("Firestore sighting access rules", () => {
   });
 
   it("sighting update: reporter can link a sighting that had no alert", async () => {
+    await seedAlert("alert-1", "owner-1");
     await seedSighting("sighting-1", "user-1", { alertId: null });
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       const { alertId, ...withoutAlert } = sighting("sighting-2", "user-1");
@@ -1080,6 +1083,22 @@ describe("Firestore sighting access rules", () => {
 
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-1"), { alertId: "alert-1" }));
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-2"), { alertId: "alert-1" }));
+  });
+
+  it("sighting update: linking to the reporter's own alert is denied", async () => {
+    await seedAlert("alert-1", "user-1");
+    await seedSighting("sighting-1", "user-1", { alertId: null });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { alertId: "alert-1" }));
+  });
+
+  it("sighting update: moving the time more than 5 minutes ahead is denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { seenAtMillis: Date.now() + fiveMinutesMillis + 60 * 1000 }));
   });
 
   const boundaryCases = [
@@ -1102,6 +1121,8 @@ describe("Firestore sighting access rules", () => {
     const shown = JSON.stringify(testCase.value);
     const label = shown.length > 40 ? `${shown.length - 2} characters` : shown;
     it(`sighting create: ${testCase.field} ${label} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      // A new sighting needs its alert to exist; for the alertId cases, that alert is the one tested
+      await seedAlert(testCase.field === "alertId" ? testCase.value : "alert-1", "owner-1");
       const db = firestoreForUser("user-1");
       const operation = setDoc(
         doc(db, "sightings", "sighting-1"),
@@ -1115,6 +1136,72 @@ describe("Firestore sighting access rules", () => {
       }
     });
   }
+
+  // Plausibility of a new sighting: not in the future, and only on an open alert of another user.
+
+  const fiveMinutesMillis = 5 * 60 * 1000;
+
+  it("sighting create: seen up to 5 minutes ahead is allowed", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+    // A second of margin for the time between Date.now() and the emulator's request.time
+    const seenAtMillis = Date.now() + fiveMinutesMillis - 1000;
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { seenAtMillis })),
+    );
+  });
+
+  it("sighting create: seen more than 5 minutes ahead is denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+    const seenAtMillis = Date.now() + fiveMinutesMillis + 60 * 1000;
+
+    await assertFails(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { seenAtMillis })),
+    );
+  });
+
+  it("sighting create: on an open alert of another user is allowed", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: on the reporter's own alert is denied", async () => {
+    await seedAlert("alert-1", "user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertFails(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: on a missing alert is denied", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertFails(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: on a closed alert is denied", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "alerts", "alert-1"), {
+        id: "alert-1",
+        ownerId: "owner-1",
+        status: "CLOSED",
+      });
+    });
+    const db = firestoreForUser("user-1");
+
+    await assertFails(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: without an alert skips the alert checks", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { alertId: null })),
+    );
+  });
 
   describe("pet tag access rules", () => {
     const tag = (tagId, petId, ownerId, extra = {}) => ({
