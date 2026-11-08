@@ -187,6 +187,10 @@ class ReportSightingViewModel(
     }
   }
 
+  fun setHeadingDegrees(headingDegrees: Double?) {
+    _uiState.update { it.copy(headingDegrees = headingDegrees) }
+  }
+
   fun clearErrorMessage() {
     _uiState.update { it.copy(errorMessage = null) }
   }
@@ -224,6 +228,7 @@ class ReportSightingViewModel(
                 seenAtMillis = nowMillis,
                 species = species,
                 alertId = alertId,
+                headingDegrees = currentState.headingDegrees,
             )
 
         // Checked before the photo is uploaded, so nothing is uploaded for a refused sighting

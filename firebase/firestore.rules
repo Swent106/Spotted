@@ -12,8 +12,8 @@ service cloud.firestore {
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
     // behaviors, and note; existing pet authorization rules are unchanged.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
-    // and optional photoUrl, alertId and status; only the reporter may change or
-    // delete them, until the owner of the linked alert reviews the status.
+    // and optional photoUrl, alertId, status and headingDegrees; only the reporter
+    // may change or delete them, until the linked alert's owner reviews the status.
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -164,7 +164,7 @@ service cloud.firestore {
         return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
           && d.keys().hasOnly([
                 'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
-                'status'])
+                'status', 'headingDegrees'])
           && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED']
           && d.id == sightingId
           && d.reporterId is string
@@ -174,7 +174,10 @@ service cloud.firestore {
           && (!('photoUrl' in d) || d.photoUrl == null
               || (d.photoUrl is string && d.photoUrl.size() <= 2048))
           && (!('alertId' in d) || d.alertId == null
-              || (d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128));
+              || (d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128))
+          && (!('headingDegrees' in d) || d.headingDegrees == null
+              || (d.headingDegrees is number
+                  && d.headingDegrees >= 0 && d.headingDegrees < 360));
       }
 
       allow get: if request.auth != null;

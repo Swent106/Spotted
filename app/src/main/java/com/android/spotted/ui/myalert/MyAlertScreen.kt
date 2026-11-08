@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.myalert
 
 import androidx.compose.foundation.background
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +52,7 @@ import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.ui.components.createMapView
+import com.android.spotted.ui.sighting.directionLabelForHeading
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
@@ -303,6 +306,23 @@ private fun SightingRow(
             formatPlace(sighting.location),
             style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
         )
+        sighting.headingDegrees?.let { heading ->
+          Row(
+              modifier = Modifier.testTag("alertDetail_sightingDirection_${sighting.id}"),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+          ) {
+            Text(
+                text = "↑",
+                modifier = Modifier.graphicsLayer { rotationZ = heading.toFloat() },
+                style = jakarta(14, 18f, 700, SpottedTheme.colors.blue),
+            )
+            Text(
+                "Went ${directionLabelForHeading(heading)}",
+                style = jakarta(11, 15f, 600, SpottedTheme.colors.blue),
+            )
+          }
+        }
       }
       StatusChip(sighting)
     }

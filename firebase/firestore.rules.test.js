@@ -977,6 +977,29 @@ describe("Firestore sighting access rules", () => {
     });
   }
 
+  it("sighting create: accepts only nullable headings in the range [0, 360)", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+
+    for (const [index, headingDegrees] of [null, 0, 45.5, 359.9].entries()) {
+      await assertSucceeds(
+        setDoc(
+          doc(db, "sightings", `valid-heading-${index}`),
+          sighting(`valid-heading-${index}`, "user-1", { headingDegrees }),
+        ),
+      );
+    }
+
+    for (const [index, headingDegrees] of [-0.1, 360, "NE"].entries()) {
+      await assertFails(
+        setDoc(
+          doc(db, "sightings", `invalid-heading-${index}`),
+          sighting(`invalid-heading-${index}`, "user-1", { headingDegrees }),
+        ),
+      );
+    }
+  });
+
   const statusCases = [
     { who: "alert owner", userId: "owner-1", allowed: true },
     { who: "reporter", userId: "user-1", allowed: false },
