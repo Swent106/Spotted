@@ -71,6 +71,34 @@ class NfcTagScanTest {
   }
 
   @Test
+  fun pausingAndResumingRestartsTheScanCollection() {
+    val reader = FakeTagReader()
+    val received = mutableListOf<ScannedTag>()
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+        NfcTagScanEffect(reader) { received += it }
+      }
+    }
+
+    moveTo(Lifecycle.State.RESUMED)
+    assertEquals(1, reader.activeScanners)
+    reader.emitScan(firstTag)
+    composeTestRule.waitForIdle()
+
+    moveTo(Lifecycle.State.STARTED)
+    assertEquals(0, reader.activeScanners)
+    reader.emitScan(secondTag)
+    composeTestRule.waitForIdle()
+    assertEquals(listOf(firstTag), received)
+
+    moveTo(Lifecycle.State.RESUMED)
+    assertEquals(1, reader.activeScanners)
+    reader.emitScan(secondTag)
+    composeTestRule.waitForIdle()
+    assertEquals(listOf(firstTag, secondTag), received)
+  }
+
+  @Test
   fun leavingTheScreenStopsTheReader() {
     val reader = FakeTagReader()
     var shown by mutableStateOf(true)
@@ -86,6 +114,105 @@ class NfcTagScanTest {
     composeTestRule.waitForIdle()
 
     assertEquals(0, reader.activeScanners)
+  }
+
+  @Test
+  fun unsupportedReaderCompletesScanningWithoutEmittingATag() {
+    val received = mutableListOf<ScannedTag>()
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+        NfcTagScanEffect(UnsupportedTagReader) { received += it }
+      }
+    }
+
+    moveTo(Lifecycle.State.RESUMED)
+    composeTestRule.waitForIdle()
+
+    assertTrue(received.isEmpty())
+  }
+
+  @Test
+  fun changingReaderWhileResumedStopsTheOldReaderAndUsesTheNewOne() {
+    val firstReader = FakeTagReader()
+    val secondReader = FakeTagReader()
+    var reader by mutableStateOf<TagReader>(firstReader)
+    val received = mutableListOf<ScannedTag>()
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+        NfcTagScanEffect(reader) { received += it }
+      }
+    }
+    moveTo(Lifecycle.State.RESUMED)
+    assertEquals(1, firstReader.activeScanners)
+    assertEquals(0, secondReader.activeScanners)
+
+    composeTestRule.runOnIdle { reader = secondReader }
+    composeTestRule.waitForIdle()
+
+    assertEquals(0, firstReader.activeScanners)
+    assertEquals(1, secondReader.activeScanners)
+    firstReader.emitScan(firstTag)
+    secondReader.emitScan(secondTag)
+    composeTestRule.waitForIdle()
+    assertEquals(listOf(secondTag), received)
+  }
+
+  @Test
+  fun changingLifecycleOwnerRestartsCollectionForTheNewOwner() {
+    val firstOwner = TestLifecycleOwner()
+    val secondOwner = TestLifecycleOwner()
+    val reader = FakeTagReader()
+    var currentOwner by mutableStateOf<LifecycleOwner>(firstOwner)
+    val received = mutableListOf<ScannedTag>()
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalLifecycleOwner provides currentOwner) {
+        NfcTagScanEffect(reader) { received += it }
+      }
+    }
+    composeTestRule.runOnIdle {
+      firstOwner.moveTo(Lifecycle.State.RESUMED)
+      secondOwner.moveTo(Lifecycle.State.RESUMED)
+    }
+    composeTestRule.waitForIdle()
+    assertEquals(1, reader.activeScanners)
+
+    composeTestRule.runOnIdle { firstOwner.moveTo(Lifecycle.State.STARTED) }
+    composeTestRule.waitForIdle()
+    assertEquals(0, reader.activeScanners)
+
+    composeTestRule.runOnIdle { currentOwner = secondOwner }
+    composeTestRule.waitForIdle()
+
+    assertEquals(1, reader.activeScanners)
+    reader.emitScan(firstTag)
+    composeTestRule.waitForIdle()
+    assertEquals(listOf(firstTag), received)
+  }
+
+  @Test
+  fun recompositionUsesTheLatestScanCallback() {
+    val reader = FakeTagReader()
+    val firstCallbackScans = mutableListOf<ScannedTag>()
+    val latestCallbackScans = mutableListOf<ScannedTag>()
+    var onTagScanned by mutableStateOf<(ScannedTag) -> Unit>({ firstCallbackScans += it })
+    composeTestRule.setContent {
+      CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+        NfcTagScanEffect(reader, onTagScanned)
+      }
+    }
+    moveTo(Lifecycle.State.RESUMED)
+    reader.emitScan(firstTag)
+    composeTestRule.waitForIdle()
+    assertEquals(listOf(firstTag), firstCallbackScans)
+
+    composeTestRule.runOnIdle { onTagScanned = { latestCallbackScans += it } }
+    composeTestRule.waitForIdle()
+    reader.emitScan(secondTag)
+    composeTestRule.waitForIdle()
+
+    assertEquals(listOf(firstTag), firstCallbackScans)
+    assertEquals(listOf(secondTag), latestCallbackScans)
+    assertEquals(1, reader.activeScanners)
   }
 
   @Test
