@@ -6,10 +6,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,14 +55,13 @@ object SignInScreenTestTags {
  * Stateless Sign-In screen: shows a loader while [SignInUiState.isLoading] and the error message on
  * failure.
  *
- * The screen fills the available space and scrolls vertically, so every element stays reachable on
- * small screens.
+ * The screen never scrolls: flexible spaces share the free height, so the content fits and stays
+ * centred. In landscape (wider than tall) the illustration goes on the left and the sign-in part on
+ * the right.
  */
 @Composable
 fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
-
-  // Screen
-  Column(
+  BoxWithConstraints(
       modifier =
           Modifier.fillMaxSize()
               .background(SpottedTheme.colors.screenBackground)
@@ -72,120 +69,172 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
                   painterResource(R.drawable.background_textures),
                   contentScale = ContentScale.Crop,
               )
-              .verticalScroll(rememberScrollState())
               .testTag(SignInScreenTestTags.SCREEN)
   ) {
-    // Top
-    Column(
-        verticalArrangement = Arrangement.spacedBy(22.dp),
-        modifier =
-            Modifier.fillMaxWidth().padding(start = 24.dp, top = 72.dp, end = 24.dp, bottom = 8.dp),
-    ) {
-      // Brand
+    if (maxWidth > maxHeight) {
       Row(
-          horizontalArrangement = Arrangement.spacedBy(12.27.dp),
+          horizontalArrangement = Arrangement.spacedBy(24.dp),
           verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.height(54.dp),
+          modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 12.dp),
       ) {
-        Image(
-            painterResource(R.drawable.spotted_logo),
-            contentDescription = "Logo Spotted",
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier.width(53.dp),
-        )
-        Text("Spotted", style = jakarta(27, 35.59f, 800, SpottedTheme.colors.ink))
-      }
-      // Heading
-      Column(
-          verticalArrangement = Arrangement.spacedBy(10.dp),
-          modifier = Modifier.fillMaxWidth(),
-      ) {
-        Text(
-            "Nobody finds a lost pet alone",
-            Modifier.fillMaxWidth(),
-            style = jakarta(30, 37f, 800, SpottedTheme.colors.ink),
-        )
-        Text(
-            "Sign in to post an alert for your own pet, and to be told when one goes missing close to you.",
-            Modifier.fillMaxWidth(),
-            style = jakarta(15, 20f, 500, SpottedTheme.colors.textSecondary),
-        )
-      }
-      // Hero
-      Hero()
-    }
-    // Bottom
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-    ) {
-      Row(
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          modifier =
-              Modifier.fillMaxWidth()
-                  .height(59.dp)
-                  .background(SpottedTheme.colors.inputBackground, RoundedCornerShape(100.dp))
-                  .padding(start = 14.dp, end = 16.dp),
-      ) {
-        Image(
-            painterResource(R.drawable.ic_watching),
-            contentDescription = null,
-            modifier = Modifier.padding(1.dp).size(18.dp),
-            contentScale = ContentScale.None,
-        )
-        Text(
-            "1 240 people already watching out in Geneva",
-            style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
-        )
-      }
-      Spacer(Modifier.height(30.dp))
-
-      if (state.isLoading) {
-        Box(Modifier.height(64.dp), contentAlignment = Alignment.Center) {
-          CircularProgressIndicator(
-              modifier =
-                  Modifier.size(40.dp).testTag(SignInScreenTestTags.LOADER).semantics {
-                    contentDescription = "Signing in"
-                  },
-              color = SpottedTheme.colors.ink,
-          )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            modifier = Modifier.weight(1f),
+        ) {
+          Hero()
+          CommunityCount()
         }
-      } else {
-        GoogleSignInButton(onSignInClick)
+        Column(
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+        ) {
+          Brand()
+          Spacer(Modifier.height(12.dp))
+          Heading()
+          Spacer(Modifier.height(16.dp))
+          SignInAction(state, onSignInClick)
+          Spacer(Modifier.height(16.dp))
+          Footer()
+        }
       }
-
-      state.errorMessage?.let { message ->
-        Spacer(Modifier.height(8.dp))
-        Text(
-            message,
-            Modifier.fillMaxWidth().testTag(SignInScreenTestTags.ERROR_MESSAGE),
-            style = jakarta(13, 18f, 600, SpottedTheme.colors.error, TextAlign.Center),
-        )
+    } else {
+      Column(
+          modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+      ) {
+        Spacer(Modifier.weight(1f))
+        Brand()
+        Spacer(Modifier.height(22.dp))
+        Heading()
+        Spacer(Modifier.height(22.dp))
+        Hero(Modifier.align(Alignment.CenterHorizontally))
+        Spacer(Modifier.weight(1f))
+        CommunityCount()
+        Spacer(Modifier.height(24.dp))
+        SignInAction(state, onSignInClick)
+        Spacer(Modifier.weight(1f))
+        Footer()
       }
-
-      // Fixed height instead of weight(1f): weight does not work in a scrollable column
-      Spacer(Modifier.height(48.dp))
-      Text(
-          "Why an account? It keeps alerts tied to a real owner, so only you can confirm sightings of your pet.",
-          Modifier.fillMaxWidth(),
-          style = jakarta(12, 16f, 500, SpottedTheme.colors.textLabel, TextAlign.Center),
-      )
-      Spacer(Modifier.height(34.dp))
-      Text(
-          "By continuing you accept the terms and the privacy notice",
-          Modifier.fillMaxWidth(),
-          style = jakarta(11, 14f, 500, SpottedTheme.colors.textFaint, TextAlign.Center),
-      )
-      Spacer(Modifier.height(24.dp))
     }
   }
 }
 
 @Composable
-private fun Hero() {
+private fun Brand() {
+  Row(
+      horizontalArrangement = Arrangement.spacedBy(12.27.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      modifier = Modifier.height(54.dp),
+  ) {
+    Image(
+        painterResource(R.drawable.spotted_logo),
+        contentDescription = "Logo Spotted",
+        contentScale = ContentScale.FillBounds,
+        modifier = Modifier.width(53.dp),
+    )
+    Text("Spotted", style = jakarta(27, 35.59f, 800, SpottedTheme.colors.ink))
+  }
+}
+
+@Composable
+private fun Heading() {
+  Column(
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    Text(
+        "Nobody finds a lost pet alone",
+        Modifier.fillMaxWidth(),
+        style = jakarta(30, 37f, 800, SpottedTheme.colors.ink),
+    )
+    Text(
+        "Sign in to post an alert for your own pet, and to be told when one goes missing close to you.",
+        Modifier.fillMaxWidth(),
+        style = jakarta(15, 20f, 500, SpottedTheme.colors.textSecondary),
+    )
+  }
+}
+
+@Composable
+private fun CommunityCount() {
+  Row(
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      modifier =
+          Modifier.fillMaxWidth()
+              .height(59.dp)
+              .background(SpottedTheme.colors.inputBackground, RoundedCornerShape(100.dp))
+              .padding(start = 14.dp, end = 16.dp),
+  ) {
+    Image(
+        painterResource(R.drawable.ic_watching),
+        contentDescription = null,
+        modifier = Modifier.padding(1.dp).size(18.dp),
+        contentScale = ContentScale.None,
+    )
+    Text(
+        "1 240 people already watching out in Geneva",
+        style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
+    )
+  }
+}
+
+/** The Google button, or a loader in its place while signing in, and the error below. */
+@Composable
+private fun SignInAction(state: SignInUiState, onSignInClick: () -> Unit) {
+  Column(
+      horizontalAlignment = Alignment.CenterHorizontally,
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    if (state.isLoading) {
+      Box(Modifier.height(64.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            modifier =
+                Modifier.size(40.dp).testTag(SignInScreenTestTags.LOADER).semantics {
+                  contentDescription = "Signing in"
+                },
+            color = SpottedTheme.colors.ink,
+        )
+      }
+    } else {
+      GoogleSignInButton(onSignInClick)
+    }
+
+    state.errorMessage?.let { message ->
+      Spacer(Modifier.height(8.dp))
+      Text(
+          message,
+          Modifier.fillMaxWidth().testTag(SignInScreenTestTags.ERROR_MESSAGE),
+          style = jakarta(13, 18f, 600, SpottedTheme.colors.error, TextAlign.Center),
+      )
+    }
+  }
+}
+
+@Composable
+private fun Footer() {
+  Column(
+      verticalArrangement = Arrangement.spacedBy(12.dp),
+      modifier = Modifier.fillMaxWidth(),
+  ) {
+    Text(
+        "Why an account? It keeps alerts tied to a real owner, so only you can confirm sightings of your pet.",
+        Modifier.fillMaxWidth(),
+        style = jakarta(12, 16f, 500, SpottedTheme.colors.textLabel, TextAlign.Center),
+    )
+    Text(
+        "By continuing you accept the terms and the privacy notice",
+        Modifier.fillMaxWidth(),
+        style = jakarta(11, 14f, 500, SpottedTheme.colors.textFaint, TextAlign.Center),
+    )
+  }
+}
+
+@Composable
+private fun Hero(modifier: Modifier = Modifier) {
   Box(
-      Modifier.width(342.dp)
+      modifier
+          .width(342.dp)
           .height(220.dp)
           .clip(RoundedCornerShape(27.dp))
           .background(SpottedIllustration.bubbleBlue)
@@ -344,6 +393,12 @@ private fun SignInContentPreview() {
 @Preview(name = "Small screen", showBackground = true, widthDp = 320, heightDp = 640)
 @Composable
 private fun SignInContentSmallPreview() {
+  SignInContent(state = SignInUiState(), onSignInClick = {})
+}
+
+@Preview(name = "Landscape", showBackground = true, widthDp = 844, heightDp = 390)
+@Composable
+private fun SignInContentLandscapePreview() {
   SignInContent(state = SignInUiState(), onSignInClick = {})
 }
 

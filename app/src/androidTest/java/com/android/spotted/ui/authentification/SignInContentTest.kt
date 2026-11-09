@@ -1,12 +1,16 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.authentification
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.auth.User
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -15,8 +19,7 @@ import org.junit.Test
  * UI tests for the stateless [SignInContent].
  *
  * Each test renders the screen with a hand-built [SignInUiState] (no ViewModel, no Firebase) and
- * checks what is shown. Elements in the lower part of the screen are scrolled into view first, so
- * the tests also pass on small screens (e.g. the CI emulator).
+ * checks what is shown. The screen does not scroll, so every element is checked where it is.
  */
 class SignInContentTest {
 
@@ -27,14 +30,28 @@ class SignInContentTest {
   }
 
   @Test
+  fun screen_doesNotScroll() {
+    setContent(SignInUiState())
+
+    composeTestRule
+        .onNodeWithTag(SignInScreenTestTags.SCREEN)
+        .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.ScrollBy))
+  }
+
+  @Test
+  fun signedIn_keepsLoader_andNoGoogleButton() {
+    setContent(SignInUiState(isLoading = true, user = User("uid", "a@b.ch")))
+
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
   fun idleState_showsGoogleButton_withoutLoaderOrError() {
     setContent(SignInUiState())
 
     composeTestRule.onNodeWithTag(SignInScreenTestTags.SCREEN).assertIsDisplayed()
-    composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .assertIsDisplayed()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertIsDisplayed()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).assertDoesNotExist()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE).assertDoesNotExist()
   }
@@ -43,7 +60,7 @@ class SignInContentTest {
   fun loadingState_showsLoader_andHidesGoogleButton() {
     setContent(SignInUiState(isLoading = true))
 
-    composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).assertIsDisplayed()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertDoesNotExist()
   }
 
@@ -53,7 +70,6 @@ class SignInContentTest {
 
     composeTestRule
         .onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE)
-        .performScrollTo()
         .assertIsDisplayed()
         .assertTextEquals("Sign-in cancelled")
   }
@@ -62,10 +78,7 @@ class SignInContentTest {
   fun errorState_keepsGoogleButton_soTheUserCanRetry() {
     setContent(SignInUiState(errorMessage = "Network error"))
 
-    composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .assertIsDisplayed()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertIsDisplayed()
     composeTestRule.onNodeWithTag(SignInScreenTestTags.LOADER).assertDoesNotExist()
   }
 
@@ -74,10 +87,7 @@ class SignInContentTest {
     var clicks = 0
     setContent(SignInUiState(), onSignInClick = { clicks++ })
 
-    composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .performClick()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).performClick()
 
     assertEquals(1, clicks)
   }
@@ -87,9 +97,6 @@ class SignInContentTest {
     val viewModel = SignInViewModel(FakeAuthRepository())
     composeTestRule.setContent { SignInScreen(viewModel = viewModel) }
 
-    composeTestRule
-        .onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON)
-        .performScrollTo()
-        .assertIsDisplayed()
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertIsDisplayed()
   }
 }
