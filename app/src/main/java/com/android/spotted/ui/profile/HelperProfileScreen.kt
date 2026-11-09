@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -188,7 +191,8 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
             Modifier.align(Alignment.CenterStart)
                 // Leaves room for the account button on the right
                 .padding(end = 56.dp)
-                .clip(RoundedCornerShape(19.dp))
+                // Half the avatar's height: the round photo fits the card's rounded end
+                .clip(RoundedCornerShape(28.dp))
                 .background(SpottedTheme.colors.surface)
                 .padding(end = 16.dp),
     ) {
@@ -425,15 +429,16 @@ internal fun AccountOptionsDialog(
       title = { Text("Your account", style = jakarta(18, 24f, FontWeight.ExtraBold, colors.ink)) },
       text = {
         Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
-          TextButton(
+          // Full width and 48 dp high: the M1 report found it too small to tap
+          Button(
               onClick = onSignOut,
-              modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.SIGN_OUT),
+              colors = ButtonDefaults.buttonColors(containerColor = colors.blue),
+              modifier =
+                  Modifier.fillMaxWidth()
+                      .heightIn(min = 48.dp)
+                      .testTag(HelperProfileTestTags.SIGN_OUT),
           ) {
-            Text(
-                "Sign out",
-                style = jakarta(15, 20f, FontWeight.SemiBold, colors.blue),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Text("Sign out", style = jakarta(15, 20f, FontWeight.SemiBold, colors.onAccent))
           }
           TextButton(
               onClick = onDeleteAccount,
