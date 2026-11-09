@@ -14,6 +14,7 @@ service cloud.firestore {
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
     // and optional photoUrl, alertId, status and headingDegrees (null or 0..359);
     // only the reporter may change or delete them until the alert owner reviews it.
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -178,6 +179,7 @@ service cloud.firestore {
           && (!('headingDegrees' in d) || d.headingDegrees == null
               || (d.headingDegrees is int
                   && d.headingDegrees >= 0 && d.headingDegrees <= 359));
+
       }
 
       allow get: if request.auth != null;
@@ -197,10 +199,27 @@ service cloud.firestore {
           && get(alertPath).data.ownerId == request.auth.uid;
       }
 
+      // A new sighting is at most 5 minutes in the future (clocks are not always in sync).
+      function notInTheFuture(d) {
+        return d.seenAtMillis <= request.time.toMillis() + 300000;
+      }
+
+      // A new sighting may only be linked to an open alert of another user.
+      function canBeLinkedTo(d) {
+        let alertId = d.get('alertId', null);
+        let alertPath = /databases/$(database)/documents/alerts/$(alertId);
+        return alertId == null
+          || (exists(alertPath)
+              && get(alertPath).data.status == 'OPEN'
+              && get(alertPath).data.ownerId != request.auth.uid);
+      }
+
       allow create: if request.auth != null
           && validSighting(request.resource.data)
           && request.resource.data.reporterId == request.auth.uid
-          && statusOf(request.resource.data) == 'PENDING';
+          && statusOf(request.resource.data) == 'PENDING'
+          && notInTheFuture(request.resource.data)
+          && canBeLinkedTo(request.resource.data);
 
       // Once linked to an alert, a sighting stays on it (it may still be linked later).
       function alertIdKept() {
@@ -209,15 +228,25 @@ service cloud.firestore {
           || request.resource.data.get('alertId', null) == savedAlertId;
       }
 
+      // A sighting linked to an alert later gets the same checks as on create. When the alert
+      // stays the same (e.g. it has closed since), the edit isn't refused.
+      function linkedAlertAllowed() {
+        return request.resource.data.get('alertId', null) == resource.data.get('alertId', null)
+          || canBeLinkedTo(request.resource.data);
+      }
+
       // The author may change their sighting until the alert owner reviews it. It stays theirs,
-      // on the same alert, and they cannot review it themselves.
+      // on the same alert, and they cannot review it themselves. It gets the same plausibility
+      // checks as on create, so they cannot be bypassed by creating first and editing after.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
           && statusOf(resource.data) == 'PENDING'
           && validSighting(request.resource.data)
           && request.resource.data.reporterId == resource.data.reporterId
           && statusOf(request.resource.data) == 'PENDING'
-          && alertIdKept();
+          && alertIdKept()
+          && notInTheFuture(request.resource.data)
+          && linkedAlertAllowed();
 
       // The owner of the linked alert may confirm or dismiss it, and change nothing else.
       // The status stays explicit once reviewed (it cannot be deleted).

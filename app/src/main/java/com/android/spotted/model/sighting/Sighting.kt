@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.sighting
 
 import com.android.spotted.model.Location

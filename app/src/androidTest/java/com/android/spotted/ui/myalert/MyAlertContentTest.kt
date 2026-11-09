@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.myalert
 
 import androidx.compose.foundation.layout.Box
@@ -6,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -226,6 +228,17 @@ class MyAlertContentTest {
     setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withPhoto)))
 
     node(MyAlertScreenTestTags.sighting(withPhoto.id)).performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun sightingWithDirection_showsArrowAndCompassLabel() {
+    val withDirection = PENDING.copy(headingDegrees = 45.0)
+    setContent(
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withDirection))
+    )
+
+    node("alertDetail_sightingDirection_${withDirection.id}").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithText("Went NE").performScrollTo().assertIsDisplayed()
   }
 
   private companion object {

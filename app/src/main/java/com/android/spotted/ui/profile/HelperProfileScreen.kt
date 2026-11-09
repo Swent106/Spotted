@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.profile
 
 import androidx.compose.foundation.Image
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -61,6 +64,7 @@ object HelperProfileTestTags {
   const val NAME = "helperProfile_name"
   const val AREA = "helperProfile_area"
   const val ACCOUNT_BUTTON = "helperProfile_accountButton"
+  const val ACCOUNT_BUTTON_VISUAL = "helperProfile_accountButtonVisual"
   const val PETS_BROUGHT_HOME = "helperProfile_petsBroughtHome"
   const val EDIT_PROFILE = "helperProfile_editProfile"
   const val ERROR = "helperProfile_error"
@@ -207,7 +211,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
               model = url,
               contentDescription = "Profile photo",
               contentScale = ContentScale.Crop,
-              modifier = Modifier.matchParentSize(),
+              modifier = Modifier.matchParentSize().clip(CircleShape),
           )
         }
       }
@@ -227,7 +231,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
         )
       }
     }
-    // 36 x 21 dp red pill as in Figma, inside a 48 dp touch target
+    // 48 x 32 dp red pill inside a 48 dp touch target
     Box(
         contentAlignment = Alignment.Center,
         modifier =
@@ -244,15 +248,16 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
       Box(
           contentAlignment = Alignment.Center,
           modifier =
-              Modifier.width(36.dp)
-                  .height(21.dp)
+              Modifier.width(48.dp)
+                  .height(32.dp)
                   .clip(RoundedCornerShape(10.dp))
-                  .background(SpottedTheme.colors.logoutRed),
+                  .background(SpottedTheme.colors.logoutRed)
+                  .testTag(HelperProfileTestTags.ACCOUNT_BUTTON_VISUAL),
       ) {
         Image(
             painterResource(R.drawable.ic_logout),
             contentDescription = "Sign out",
-            modifier = Modifier.size(10.dp),
+            modifier = Modifier.size(14.dp),
         )
       }
     }
@@ -427,12 +432,16 @@ internal fun AccountOptionsDialog(
         Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
           TextButton(
               onClick = onSignOut,
-              modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.SIGN_OUT),
+              modifier =
+                  Modifier.fillMaxWidth()
+                      .heightIn(min = 56.dp)
+                      .testTag(HelperProfileTestTags.SIGN_OUT),
           ) {
             Text(
                 "Sign out",
-                style = jakarta(15, 20f, FontWeight.SemiBold, colors.blue),
+                style = jakarta(16, 22f, FontWeight.SemiBold, colors.blue),
                 modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
             )
           }
           TextButton(
