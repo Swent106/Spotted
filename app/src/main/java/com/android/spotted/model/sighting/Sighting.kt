@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.sighting
 
 import com.android.spotted.model.Location
@@ -18,6 +19,7 @@ import com.android.spotted.model.Pet.Species
  * @property photoUrl Download URL of the photo, if the passerby took one.
  * @property alertId Id of the lost-pet alert this sighting is linked to, if any.
  * @property status What the owner of the linked alert decided about this sighting.
+ * @property headingDegrees Direction of travel clockwise from north, or null when unknown.
  */
 data class Sighting(
     val id: String,
@@ -28,6 +30,7 @@ data class Sighting(
     val photoUrl: String? = null,
     val alertId: String? = null,
     val status: SightingStatus = SightingStatus.PENDING,
+    val headingDegrees: Double? = null,
 )
 
 /**

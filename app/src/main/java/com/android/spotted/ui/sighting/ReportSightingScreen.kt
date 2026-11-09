@@ -81,6 +81,7 @@ fun ReportSightingContent(
     onLocationClick: () -> Unit = {},
     onAlertSelected: (String) -> Unit = {},
     onNoMatchSelected: () -> Unit = {},
+    onDirectionSelected: (Double?) -> Unit = {},
     onSubmitClick: () -> Unit = {},
     onBack: (() -> Unit)? = null,
 ) {
@@ -332,6 +333,11 @@ fun ReportSightingContent(
         RadioSelectionIndicator(isSelected = state.isNoMatchingAlertSelected)
       }
 
+      DirectionPicker(
+          selectedHeadingDegrees = state.headingDegrees,
+          onDirectionSelected = onDirectionSelected,
+      )
+
       // Offline Banner
       if (state.isOffline) {
         Row(
@@ -521,6 +527,7 @@ fun ReportSightingScreen(
       },
       onAlertSelected = viewModel::selectAlert,
       onNoMatchSelected = viewModel::selectNoMatchingAlert,
+      onDirectionSelected = viewModel::setHeadingDegrees,
       onSubmitClick = viewModel::submitSighting,
       onBack = onBack,
   )

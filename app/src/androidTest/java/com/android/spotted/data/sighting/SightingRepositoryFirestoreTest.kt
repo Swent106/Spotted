@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.sighting
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -81,6 +82,7 @@ class SightingRepositoryFirestoreTest {
             id = repository.getNewId(),
             alertId = alertId,
             photoUrl = "https://example.test/milo.jpg",
+            headingDegrees = 45.0,
         )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
@@ -352,6 +354,11 @@ class SightingRepositoryFirestoreTest {
             .put("photoUrl", stringOrNull(sighting.photoUrl))
             .put("alertId", stringOrNull(sighting.alertId))
             .put("status", JSONObject().put("stringValue", sighting.status.name))
+            .put(
+                "headingDegrees",
+                sighting.headingDegrees?.let { JSONObject().put("doubleValue", it) }
+                    ?: JSONObject().put("nullValue", JSONObject.NULL),
+            )
     seedBypassingRules(collection = "sightings", id = sighting.id, fields = fields)
   }
 
@@ -447,6 +454,7 @@ class SightingRepositoryFirestoreTest {
       seenAtMillis: Long = 1_000L,
       species: Species = Species.DOG,
       photoUrl: String? = null,
+      headingDegrees: Double? = null,
   ): Sighting {
     insertedSightingIds += id
     return Sighting(
@@ -457,6 +465,7 @@ class SightingRepositoryFirestoreTest {
         species = species,
         photoUrl = photoUrl,
         alertId = alertId,
+        headingDegrees = headingDegrees,
     )
   }
 }

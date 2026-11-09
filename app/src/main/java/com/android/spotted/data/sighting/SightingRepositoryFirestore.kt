@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.sighting
 
 import com.android.spotted.model.Location
@@ -118,10 +119,11 @@ class SightingRepositoryFirestore(
     var photoUrl: String? = null
     var alertId: String? = null
     var status: String? = null
+    var headingDegrees: Double? = null
 
     /**
-     * Returns null when the document is missing required data or has an unknown species or status.
-     * Sightings saved before the status existed have none: they count as [SightingStatus.PENDING].
+     * Returns null when required data or an enum value is invalid. Sightings saved before status or
+     * heading were introduced have neither: they count as pending and have no known direction.
      */
     fun toSighting(documentId: String): Sighting? {
       val savedLocation = location ?: return null
@@ -140,6 +142,7 @@ class SightingRepositoryFirestore(
           photoUrl = photoUrl,
           alertId = alertId,
           status = savedStatus,
+          headingDegrees = headingDegrees,
       )
     }
 
@@ -158,6 +161,7 @@ class SightingRepositoryFirestore(
             photoUrl = sighting.photoUrl
             alertId = sighting.alertId
             status = sighting.status.name
+            headingDegrees = sighting.headingDegrees
           }
     }
   }
