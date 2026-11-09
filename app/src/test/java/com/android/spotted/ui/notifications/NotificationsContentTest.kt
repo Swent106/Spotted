@@ -2,7 +2,6 @@
 package com.android.spotted.ui.notifications
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -63,17 +62,30 @@ class NotificationsContentTest {
   fun empty_showsNoNewSightings() {
     setContent(NotificationsUiState(isLoading = false))
 
-    node(NotificationsScreenTestTags.EMPTY).assertTextEquals("No new sightings")
+    node(NotificationsScreenTestTags.EMPTY).assertIsDisplayed()
+    composeTestRule.onNodeWithText("No new sightings").assertIsDisplayed()
+    node(NotificationsScreenTestTags.RETRY).assertDoesNotExist()
     node(NotificationsScreenTestTags.LIST).assertDoesNotExist()
   }
 
   @Test
-  fun errorWithoutAList_showsOnlyTheError() {
-    setContent(NotificationsUiState(isLoading = false, errorMessage = "Couldn't load."))
+  fun errorWithoutAList_showsTheErrorCard_andRetry() {
+    var retried = 0
+    composeTestRule.setContent {
+      NotificationsContent(
+          state = NotificationsUiState(isLoading = false, errorMessage = "Couldn't load."),
+          nowMillis = NOW,
+          onRetry = { retried++ },
+      )
+    }
 
-    node(NotificationsScreenTestTags.ERROR).assertTextEquals("Couldn't load.")
+    node(NotificationsScreenTestTags.ERROR).assertIsDisplayed()
+    composeTestRule.onNodeWithText("Couldn't load.").assertIsDisplayed()
     node(NotificationsScreenTestTags.EMPTY).assertDoesNotExist()
     node(NotificationsScreenTestTags.LIST).assertDoesNotExist()
+
+    node(NotificationsScreenTestTags.RETRY).performClick()
+    assertEquals(1, retried)
   }
 
   @Test
