@@ -88,6 +88,24 @@ class PhotoRepositoryFirestoreTest {
   }
 
   @Test
+  fun deletePetPhoto_whenOwnerDoesNotMatch_returnsFailureAndKeepsThePhoto() = runTest {
+    val petId = newPhotoId()
+    withContext(Dispatchers.IO) {
+      Tasks.await(
+          firestore
+              .collection(PhotoRepositoryFirestore.PHOTOS_COLLECTION)
+              .document(petId)
+              .set(mapOf("ownerId" to ownerId, "contentType" to "image/jpeg", "data" to ""))
+      )
+    }
+
+    val result = repository.deletePetPhoto("another-owner", petId)
+
+    assertTrue(result.isFailure)
+    assertEquals(ownerId, savedDocument(petId)["ownerId"])
+  }
+
+  @Test
   fun uploadPetPhoto_withABigImage_shrinksItToTheMaximumSide() = runTest {
     val petId = newPhotoId()
 

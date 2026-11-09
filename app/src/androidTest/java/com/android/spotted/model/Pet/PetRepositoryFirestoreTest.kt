@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
+import com.android.spotted.model.photo.FakePhotoRepository
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -132,6 +133,21 @@ class PetRepositoryFirestoreTest {
               .exists()
       )
     }
+  }
+
+  @Test
+  fun deletePet_whenPhotoDeletionFails_returnsFailureAndKeepsThePet() = runTest {
+    val pet = pet(id = repository.getNewId(), ownerId = currentUserId(), photoUrl = "fake://photo")
+    insertedPetIds += pet.id
+    repository.addPet(pet).getOrThrow()
+    val failingPhotoRepository =
+        FakePhotoRepository().apply { failure = IllegalStateException("photo deletion failed") }
+    val failingRepository = PetRepositoryFirestore(firestore, failingPhotoRepository)
+
+    val result = failingRepository.deletePet(pet.id)
+
+    assertTrue(result.isFailure)
+    assertEquals(pet, repository.getPet(pet.id).getOrThrow())
   }
 
   @Test
