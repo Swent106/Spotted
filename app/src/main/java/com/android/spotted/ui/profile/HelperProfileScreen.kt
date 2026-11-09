@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.profile
 
 import androidx.compose.foundation.Image
@@ -23,8 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,6 +64,7 @@ object HelperProfileTestTags {
   const val NAME = "helperProfile_name"
   const val AREA = "helperProfile_area"
   const val ACCOUNT_BUTTON = "helperProfile_accountButton"
+  const val ACCOUNT_BUTTON_VISUAL = "helperProfile_accountButtonVisual"
   const val PETS_BROUGHT_HOME = "helperProfile_petsBroughtHome"
   const val EDIT_PROFILE = "helperProfile_editProfile"
   const val ERROR = "helperProfile_error"
@@ -212,7 +212,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
               model = url,
               contentDescription = "Profile photo",
               contentScale = ContentScale.Crop,
-              modifier = Modifier.matchParentSize(),
+              modifier = Modifier.matchParentSize().clip(CircleShape),
           )
         }
       }
@@ -232,7 +232,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
         )
       }
     }
-    // 36 x 21 dp red pill as in Figma, inside a 48 dp touch target
+    // 48 x 32 dp red pill inside a 48 dp touch target
     Box(
         contentAlignment = Alignment.Center,
         modifier =
@@ -249,15 +249,16 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
       Box(
           contentAlignment = Alignment.Center,
           modifier =
-              Modifier.width(36.dp)
-                  .height(21.dp)
+              Modifier.width(48.dp)
+                  .height(32.dp)
                   .clip(RoundedCornerShape(10.dp))
-                  .background(SpottedTheme.colors.logoutRed),
+                  .background(SpottedTheme.colors.logoutRed)
+                  .testTag(HelperProfileTestTags.ACCOUNT_BUTTON_VISUAL),
       ) {
         Image(
             painterResource(R.drawable.ic_logout),
             contentDescription = "Sign out",
-            modifier = Modifier.size(10.dp),
+            modifier = Modifier.size(14.dp),
         )
       }
     }
@@ -430,16 +431,19 @@ internal fun AccountOptionsDialog(
       title = { Text("Your account", style = jakarta(18, 24f, FontWeight.ExtraBold, colors.ink)) },
       text = {
         Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
-          // Full width and 48 dp high: the M1 report found it too small to tap
-          Button(
+          TextButton(
               onClick = onSignOut,
-              colors = ButtonDefaults.buttonColors(containerColor = colors.blue),
               modifier =
                   Modifier.fillMaxWidth()
-                      .heightIn(min = 48.dp)
+                      .heightIn(min = 56.dp)
                       .testTag(HelperProfileTestTags.SIGN_OUT),
           ) {
-            Text("Sign out", style = jakarta(15, 20f, FontWeight.SemiBold, colors.onAccent))
+            Text(
+                "Sign out",
+                style = jakarta(16, 22f, FontWeight.SemiBold, colors.blue),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
           }
           TextButton(
               onClick = onDeleteAccount,
