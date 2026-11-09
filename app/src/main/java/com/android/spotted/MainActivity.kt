@@ -45,6 +45,7 @@ import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
+import com.android.spotted.ui.notifications.NotificationsScreen
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -82,6 +83,8 @@ object Route {
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
+  /** New sightings on all the owner's alerts, opened from the Home bell. */
+  const val NOTIFICATIONS = "notifications"
 
   fun petProfile(petId: String) = "$PET/$petId"
 
@@ -261,8 +264,15 @@ fun NavGraphBuilder.homeDestinations(
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
+          onNotificationsClick = navigation.onNotificationsClick,
       )
     },
+    notificationsContent:
+        @Composable
+        (onBack: () -> Unit, onOpenAlert: (alertId: String) -> Unit) -> Unit =
+        { onBack, onOpenAlert ->
+          NotificationsScreen(onBack = onBack, onOpenAlert = onOpenAlert)
+        },
     myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
       MyAlertScreen(
           viewModel = viewModel(key = alertId, factory = MyAlertViewModel.Factory(alertId)),
@@ -346,8 +356,15 @@ fun NavGraphBuilder.homeDestinations(
             onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
             onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
+            onNotificationsClick =
+                dropUnlessResumed { navController.navigate(Route.NOTIFICATIONS) },
         )
     )
+  }
+  composable(Route.NOTIFICATIONS) { entry ->
+    notificationsContent({ navController.popBackStackSafely() }) { alertId ->
+      if (entry.isResumed()) navController.navigate(Route.myAlert(alertId))
+    }
   }
   composable(Route.PROFILE) {
     profileContent(
@@ -416,4 +433,6 @@ data class HomeNavigation(
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
+    /** Opens the Notifications screen (the bell). */
+    val onNotificationsClick: () -> Unit = {},
 )
