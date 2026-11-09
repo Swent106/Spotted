@@ -33,6 +33,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -266,7 +267,12 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit, enabled: B
                   .background(SpottedTheme.colors.blue)
                   .border(3.dp, SpottedTheme.colors.surface, CircleShape),
       ) {
-        Text("+", style = jakarta(16, 18, FontWeight.ExtraBold, SpottedTheme.colors.onAccent))
+        Icon(
+            painterResource(R.drawable.ic_plus),
+            contentDescription = null,
+            tint = SpottedTheme.colors.onAccent,
+            modifier = Modifier.size(14.dp),
+        )
       }
     }
     Text(

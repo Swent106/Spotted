@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -441,16 +442,11 @@ private fun AddPetsFooter(
                 )
                 .testTag(AddPetsScreenTestTags.ADD_ANOTHER_BUTTON),
     ) {
-      Text(
-          "+",
-          style =
-              jakarta(
-                  26,
-                  28f,
-                  800,
-                  if (state.canSave) SpottedTheme.colors.blue
-                  else SpottedTheme.colors.blue.copy(alpha = 0.4f),
-              ),
+      Icon(
+          painterResource(R.drawable.ic_plus),
+          contentDescription = null,
+          tint = SpottedTheme.colors.blue.copy(alpha = if (state.canSave) 1f else 0.4f),
+          modifier = Modifier.size(22.dp),
       )
     }
   }
