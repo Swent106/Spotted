@@ -819,6 +819,7 @@ describe("Firestore sighting access rules", () => {
   }
 
   it("sighting create: allows a document without headingDegrees", async () => {
+    await seedAlert("alert-1", "owner-1");
     const db = firestoreForUser("user-1");
     const sightingWithoutHeading = sighting("sighting-1", "user-1");
     delete sightingWithoutHeading.headingDegrees;
@@ -997,7 +998,7 @@ describe("Firestore sighting access rules", () => {
     await seedAlert("alert-1", "owner-1");
     const db = firestoreForUser("user-1");
 
-    for (const [index, headingDegrees] of [null, 0, 45.5, 359.9].entries()) {
+    for (const [index, headingDegrees] of [null, 0, 45, 359].entries()) {
       await assertSucceeds(
         setDoc(
           doc(db, "sightings", `valid-heading-${index}`),
@@ -1006,7 +1007,7 @@ describe("Firestore sighting access rules", () => {
       );
     }
 
-    for (const [index, headingDegrees] of [-0.1, 360, "NE"].entries()) {
+    for (const [index, headingDegrees] of [-1, 360, 45.5, "NE"].entries()) {
       await assertFails(
         setDoc(
           doc(db, "sightings", `invalid-heading-${index}`),

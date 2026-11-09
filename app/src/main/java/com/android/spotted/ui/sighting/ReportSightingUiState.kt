@@ -30,7 +30,6 @@ data class ReportSightingUiState(
     val direction: Int? = null,
     val locationAddress: String = "Tap to set location",
     val photoUri: String? = null,
-    val headingDegrees: Int? = null,
     val detectedSpecies: Species? = null,
     val nearbyAlerts: List<NearbyAlertOption> = emptyList(),
     val isOffline: Boolean = false,

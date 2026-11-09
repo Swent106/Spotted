@@ -83,7 +83,7 @@ class SightingRepositoryFirestoreTest {
             id = repository.getNewId(),
             alertId = alertId,
             photoUrl = "https://example.test/milo.jpg",
-            headingDegrees = 45.0,
+            headingDegrees = 45,
         )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
@@ -358,7 +358,7 @@ class SightingRepositoryFirestoreTest {
             .put("status", JSONObject().put("stringValue", sighting.status.name))
             .put(
                 "headingDegrees",
-                sighting.headingDegrees?.let { JSONObject().put("doubleValue", it) }
+                sighting.headingDegrees?.let { JSONObject().put("integerValue", it.toString()) }
                     ?: JSONObject().put("nullValue", JSONObject.NULL),
             )
     seedBypassingRules(collection = "sightings", id = sighting.id, fields = fields)

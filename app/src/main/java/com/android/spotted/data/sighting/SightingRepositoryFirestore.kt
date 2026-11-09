@@ -120,7 +120,7 @@ class SightingRepositoryFirestore(
     var alertId: String? = null
     var status: String? = null
     var headingDegrees: Int? = null
-    
+
     /**
      * Returns null when required data or an enum value is invalid. Sightings saved before status or
      * heading were introduced have neither: they count as pending and have no known direction.

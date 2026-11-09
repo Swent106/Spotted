@@ -192,10 +192,6 @@ class ReportSightingViewModel(
     }
   }
 
-  fun setHeadingDegrees(headingDegrees: Double?) {
-    _uiState.update { it.copy(headingDegrees = headingDegrees) }
-  }
-
   fun clearErrorMessage() {
     _uiState.update { it.copy(errorMessage = null) }
   }
@@ -225,7 +221,7 @@ class ReportSightingViewModel(
         val nowMillis = now()
         val alertId =
             if (currentState.isNoMatchingAlertSelected) null else currentState.selectedAlertId
-        val sighting =
+        val plausibilitySighting =
             Sighting(
                 id = sightingId,
                 reporterId = reporterId,
@@ -233,11 +229,11 @@ class ReportSightingViewModel(
                 seenAtMillis = nowMillis,
                 species = species,
                 alertId = alertId,
-                headingDegrees = currentState.headingDegrees,
+                headingDegrees = currentState.direction,
             )
 
         // Checked before the photo is uploaded, so nothing is uploaded for a refused sighting
-        val refusal = alertId?.let { implausibilityMessage(sighting, it, nowMillis) }
+        val refusal = alertId?.let { implausibilityMessage(plausibilitySighting, it, nowMillis) }
         if (refusal != null) {
           _uiState.update { it.copy(isSubmitting = false, errorMessage = refusal) }
           return@launch

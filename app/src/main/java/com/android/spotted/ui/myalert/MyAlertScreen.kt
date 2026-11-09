@@ -318,7 +318,7 @@ private fun SightingRow(
                 style = jakarta(14, 18f, 700, SpottedTheme.colors.blue),
             )
             Text(
-                "Went ${directionLabelForHeading(heading)}",
+                "Went ${directionLabelForHeading(heading.toDouble())}",
                 style = jakarta(11, 15f, 600, SpottedTheme.colors.blue),
             )
           }
