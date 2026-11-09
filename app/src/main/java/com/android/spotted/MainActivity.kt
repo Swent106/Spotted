@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
+import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
@@ -39,6 +40,7 @@ import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
 import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.components.RequestNotificationPermissionOnce
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
@@ -47,6 +49,7 @@ import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
+import com.android.spotted.ui.notifications.SightingNotifierViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -100,6 +103,10 @@ class MainActivity : ComponentActivity() {
 
   private val mainViewModel: MainViewModel by viewModels { MainViewModel.Factory }
 
+  private val sightingNotifierViewModel: SightingNotifierViewModel by viewModels {
+    SightingNotifierViewModel.Factory(SystemNotifier(applicationContext))
+  }
+
   /** The route of a notification the user tapped, until it has been opened. */
   private var notificationRoute by mutableStateOf<String?>(null)
 
@@ -120,6 +127,8 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,
         ) {
+          val notifierState by sightingNotifierViewModel.uiState.collectAsState()
+          if (notifierState.isSignedIn) RequestNotificationPermissionOnce()
           SpottedApp(
               viewModel = mainViewModel,
               notificationRoute = notificationRoute,
