@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.fakes
 
 import com.android.spotted.model.tag.PetTag
@@ -14,9 +15,14 @@ class FakePetTagRepository(
 ) : PetTagRepository {
   private val tags = initialTags.associateByTo(linkedMapOf()) { it.tagId }
 
+  private var lastId = 0
+
   var failure: Throwable? = null
   val linkedTags: List<PetTag>
     get() = tags.values.toList()
+
+  /** Predictable ids in the real format: 32 uppercase hex characters (…0001, …0002, ...). */
+  override fun getNewId(): String = "%032X".format(++lastId)
 
   override suspend fun linkTag(tagId: String, petId: String): Result<Unit> {
     failure?.let {
