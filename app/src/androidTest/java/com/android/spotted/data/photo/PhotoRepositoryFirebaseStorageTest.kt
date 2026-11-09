@@ -8,7 +8,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -69,6 +71,28 @@ class PhotoRepositoryFirebaseStorageTest {
           Tasks.await(storage.reference.child(path).getBytes(MAX_DOWNLOAD_BYTES))
         }
     assertArrayEquals(PHOTO_BYTES, storedBytes)
+  }
+
+  @Test
+  fun deletePetPhoto_removesTheUploadedPhotoAndMissingPhotoIsSuccessful() = runTest {
+    val petId = "pet-${UUID.randomUUID()}"
+    val path = PhotoRepositoryFirebaseStorage.petPhotoPath(ownerId, petId)
+    uploadedPaths += path
+    repository.uploadPetPhoto(ownerId, petId, Uri.fromFile(localPhoto).toString()).getOrThrow()
+
+    assertTrue(repository.deletePetPhoto(ownerId, petId).isSuccess)
+    uploadedPaths.remove(path)
+    assertTrue(repository.deletePetPhoto(ownerId, petId).isSuccess)
+    val storageException =
+        try {
+          Tasks.await(storage.reference.child(path).getMetadata())
+          null
+        } catch (exception: Exception) {
+          generateSequence(exception as Throwable?) { it.cause }
+              .filterIsInstance<StorageException>()
+              .firstOrNull()
+        }
+    assertEquals(StorageException.ERROR_OBJECT_NOT_FOUND, storageException?.errorCode)
   }
 
   @Test

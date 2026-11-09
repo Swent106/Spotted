@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.report
 
 import com.android.spotted.model.Location
@@ -83,6 +84,8 @@ class ReportMissingViewModelTest {
     override fun getNewId() = "unused"
 
     override suspend fun addPet(pet: Pet) = Result.failure<Unit>(Exception("offline"))
+
+    override suspend fun updatePet(pet: Pet) = Result.failure<Unit>(Exception("offline"))
 
     override suspend fun getPet(id: String) = Result.failure<Pet>(Exception("offline"))
 

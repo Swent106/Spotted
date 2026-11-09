@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -75,6 +76,15 @@ class PhotoRepositoryFirestoreTest {
     val image = decode(saved["data"] as String)
     assertEquals(120, image.width)
     assertEquals(80, image.height)
+  }
+
+  @Test
+  fun deletePetPhoto_removesTheDocumentAndMissingPhotoIsSuccessful() = runTest {
+    val petId = newPhotoId()
+    repository.uploadPetPhoto(ownerId, petId, jpeg(width = 40, height = 40)).getOrThrow()
+
+    assertTrue(repository.deletePetPhoto(ownerId, petId).isSuccess)
+    assertTrue(repository.deletePetPhoto(ownerId, petId).isSuccess)
   }
 
   @Test

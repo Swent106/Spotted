@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.Pet
 
 interface PetRepository {
@@ -5,10 +6,12 @@ interface PetRepository {
 
   suspend fun addPet(pet: Pet): Result<Unit>
 
+  suspend fun updatePet(pet: Pet): Result<Unit>
+
   suspend fun getPet(id: String): Result<Pet>
 
   suspend fun getPetsByOwner(ownerId: String): Result<List<Pet>>
 
-  /** Deletes the pet [id]. Deleting a pet that doesn't exist succeeds. */
+  /** Deletes the pet [id] and its photo. */
   suspend fun deletePet(id: String): Result<Unit>
 }

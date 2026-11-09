@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -35,6 +36,27 @@ class PhotoRepositoryFirestore(
       petId: String,
       localUri: String,
   ): Result<String> = upload(photoId = petId, ownerId = ownerId, localUri = localUri)
+
+  override suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit> =
+      try {
+        withContext(Dispatchers.IO) {
+          val photo = firestore.collection(PHOTOS_COLLECTION).document(petId)
+          val snapshot = Tasks.await(photo.get())
+          when {
+            !snapshot.exists() -> Result.success(Unit)
+            snapshot.getString("ownerId") != ownerId ->
+                Result.failure(SecurityException("Pet photo $petId belongs to another owner"))
+            else -> {
+              Tasks.await(photo.delete())
+              Result.success(Unit)
+            }
+          }
+        }
+      } catch (exception: CancellationException) {
+        throw exception
+      } catch (exception: Exception) {
+        Result.failure(exception)
+      }
 
   override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
       upload(photoId = profilePhotoId(userId), ownerId = userId, localUri = localUri)

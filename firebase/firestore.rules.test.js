@@ -193,6 +193,16 @@ describe("Firestore security rules", () => {
     });
   }
 
+  it("another user cannot update or delete a pet", async () => {
+    await seedPet("pet-1", "owner-1");
+    const otherUserDb = firestoreForUser("owner-2");
+
+    await assertFails(updateDoc(doc(otherUserDb, "pets", "pet-1"), { name: "Changed" }));
+    await assertFails(deleteDoc(doc(otherUserDb, "pets", "pet-1")));
+    const ownerPet = await getDoc(doc(firestoreForUser("owner-1"), "pets", "pet-1"));
+    assert.deepEqual(ownerPet.data(), { ownerId: "owner-1", name: "Pet pet-1" });
+  });
+
   it("denies reads and writes to unmatched collections", async () => {
     const ownerDb = testEnvironment.authenticatedContext("owner-1").firestore();
 
