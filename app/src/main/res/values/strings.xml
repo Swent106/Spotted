@@ -68,4 +68,8 @@
     <string name="sighting_photo_add">Add Photo</string>
     <string name="sighting_photo_retake">Retake</string>
     <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
+    <string name="notification_channel_sightings">Sightings</string>
+    <string name="notification_channel_nearby_alerts">Nearby alerts</string>
+    <string name="notification_sighting_title">Someone saw %1$s</string>
+    <string name="notification_sighting_text">Tap to review this sighting</string>
 </resources>
