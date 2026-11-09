@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
-    if (savedInstanceState == null) notificationRoute = intent.getStringExtra(EXTRA_ROUTE)
+    if (savedInstanceState == null) notificationRoute = notificationRouteOf(intent)
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
+    notificationRouteOf(intent)?.let { notificationRoute = it }
   }
 
   /**
@@ -161,6 +161,17 @@ class MainActivity : ComponentActivity() {
           }
         }
     )
+  }
+}
+
+/**
+ * The route a notification asks [intent] to open, if any. A relaunch from Recents repeats the old
+ * intent, so it opens nothing. MainActivity is exported, so only the alert screens are allowed.
+ */
+internal fun notificationRouteOf(intent: Intent): String? {
+  if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
+  return intent.getStringExtra(EXTRA_ROUTE)?.takeIf {
+    it.startsWith(Route.myAlert("")) || it.startsWith(Route.alertDetail(""))
   }
 }
 
