@@ -33,7 +33,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,6 +68,7 @@ import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedTheme
@@ -201,23 +201,7 @@ private fun Header(isEditing: Boolean, onBackClick: (() -> Unit)?) {
       modifier = Modifier.fillMaxWidth(),
   ) {
     if (onBackClick != null) {
-      val back = stringResource(R.string.personal_info_back)
-      Box(
-          contentAlignment = Alignment.Center,
-          modifier =
-              Modifier.size(40.dp)
-                  .clip(RoundedCornerShape(20.dp))
-                  .background(SpottedTheme.colors.surface)
-                  .clickable(onClickLabel = back, role = Role.Button, onClick = onBackClick)
-                  .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
-      ) {
-        Icon(
-            painterResource(R.drawable.ic_arrow_back),
-            contentDescription = back,
-            tint = SpottedTheme.colors.ink,
-            modifier = Modifier.size(20.dp),
-        )
-      }
+      SpottedBackButton(onClick = onBackClick, testTag = PersonalInfoScreenTestTags.BACK_BUTTON)
     }
     Column(Modifier.weight(1f)) {
       Text(

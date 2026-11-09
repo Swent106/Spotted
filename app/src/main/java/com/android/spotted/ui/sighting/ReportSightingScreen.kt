@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
@@ -60,6 +61,7 @@ import java.util.Locale
 
 object ReportSightingScreenTestTags {
   const val SCREEN = "sightingScreen"
+  const val BACK_BUTTON = "sightingBackButton"
   const val PHOTO_AREA = "sightingPhotoArea"
   const val PHOTO_BUTTON = "sightingPhotoButton"
   const val LOCATION_CARD = "sightingLocationCard"
@@ -80,6 +82,7 @@ fun ReportSightingContent(
     onAlertSelected: (String) -> Unit = {},
     onNoMatchSelected: () -> Unit = {},
     onSubmitClick: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
   val photoPickerActions =
       rememberPhotoPickerActions(onPhotoSelected = onPhotoSelected, onCameraUnavailable = {})
@@ -121,6 +124,15 @@ fun ReportSightingContent(
               style = jakarta(14, 18f, 600, SpottedTheme.colors.textMuted),
           )
         }
+      }
+
+      // Back to the previous screen, over the photo as in Alert detail
+      onBack?.let {
+        SpottedBackButton(
+            onClick = it,
+            testTag = ReportSightingScreenTestTags.BACK_BUTTON,
+            modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+        )
       }
 
       // Retake / Add Photo Button in top right
@@ -481,6 +493,7 @@ private fun CheckIcon(modifier: Modifier = Modifier) {
 fun ReportSightingScreen(
     viewModel: ReportSightingViewModel = viewModel(factory = ReportSightingViewModel.Factory),
     onSubmitted: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
   val state by viewModel.uiState.collectAsState()
 
@@ -509,5 +522,6 @@ fun ReportSightingScreen(
       onAlertSelected = viewModel::selectAlert,
       onNoMatchSelected = viewModel::selectNoMatchingAlert,
       onSubmitClick = viewModel::submitSighting,
+      onBack = onBack,
   )
 }

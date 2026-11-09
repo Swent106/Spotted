@@ -29,7 +29,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
@@ -248,26 +248,7 @@ private fun AddPetsHeader(
       verticalAlignment = Alignment.CenterVertically,
       modifier = Modifier.fillMaxWidth(),
   ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier.size(40.dp)
-                .clip(CircleShape)
-                .background(SpottedTheme.colors.surface)
-                .clickable(
-                    onClickLabel = stringResource(R.string.add_pets_back),
-                    role = Role.Button,
-                    onClick = onBackClick,
-                )
-                .testTag(AddPetsScreenTestTags.BACK_BUTTON),
-    ) {
-      Icon(
-          painterResource(R.drawable.ic_arrow_back),
-          contentDescription = stringResource(R.string.add_pets_back),
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(20.dp),
-      )
-    }
+    SpottedBackButton(onClick = onBackClick, testTag = AddPetsScreenTestTags.BACK_BUTTON)
     Column(Modifier.weight(1f)) {
       Text(
           stringResource(R.string.add_pets_screen_title),
