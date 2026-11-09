@@ -493,7 +493,14 @@ private fun PetCard(pet: Pet, missing: Boolean, onClick: () -> Unit) {
           .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
           .testTag(HomeScreenTestTags.petCard(pet.id))
   ) {
-    Column(Modifier.weight(1f).padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp)) {
+    // Name and status centred in the card's height, not stuck to its top
+    Column(
+        verticalArrangement = Arrangement.Center,
+        modifier =
+            Modifier.weight(1f)
+                .fillMaxHeight()
+                .padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp),
+    ) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             pet.name,

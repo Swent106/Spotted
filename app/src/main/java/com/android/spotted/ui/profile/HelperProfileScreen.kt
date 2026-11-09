@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -444,11 +445,13 @@ internal fun AccountOptionsDialog(
               onClick = onDeleteAccount,
               modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.DELETE_ACCOUNT),
           ) {
-            Column(Modifier.fillMaxWidth()) {
+            // Centred like the Sign out button above it
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
               Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, colors.error))
               Text(
                   "Removes your profile from Spotted. You can sign in again to start over.",
                   style = jakarta(12, 16f, FontWeight.Medium, colors.textSecondary),
+                  textAlign = TextAlign.Center,
               )
             }
           }

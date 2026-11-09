@@ -653,6 +653,7 @@ private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit, enab
     Text(
         text,
         style = jakarta(15, 20, Bold, SpottedTheme.colors.blue),
+        textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
   }
