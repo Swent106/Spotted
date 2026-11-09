@@ -248,6 +248,7 @@ class ReportSightingViewModelTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5197, 6.6323))
     viewModel.setPhotoUri("content://media/dog.jpg")
+    viewModel.setHeadingDegrees(45.0)
     viewModel.selectNoMatchingAlert()
 
     assertTrue(viewModel.uiState.value.canSubmit)
@@ -264,6 +265,7 @@ class ReportSightingViewModelTest {
     assertEquals("fake_uid_from_token", saved.reporterId)
     assertEquals(fixedTimestamp, saved.seenAtMillis)
     assertEquals(Species.DOG, saved.species)
+    assertEquals(45.0, saved.headingDegrees)
     assertNull(saved.alertId)
     assertNotNull("Photo URL should be saved from photo repository", saved.photoUrl)
   }

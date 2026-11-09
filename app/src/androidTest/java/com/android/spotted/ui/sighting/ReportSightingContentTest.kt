@@ -73,6 +73,44 @@ class ReportSightingContentTest {
   }
 
   @Test
+  fun directionButtons_andNoIdea_reportTheirDegrees() {
+    val selectedDirections = mutableListOf<Double?>()
+    composeTestRule.setContent {
+      DirectionPickerContent(
+          hasCompass = false,
+          compassHeadingDegrees = null,
+          selectedHeadingDegrees = null,
+          onDirectionSelected = selectedDirections::add,
+      )
+    }
+
+    listOf("n", "ne", "e", "se", "s", "sw", "w", "nw").forEachIndexed { index, label ->
+      composeTestRule.onNodeWithTag("sighting_direction_$label").performClick()
+      assertEquals(index * 45.0, selectedDirections.last())
+    }
+    composeTestRule.onNodeWithTag("sighting_noIdea").performClick()
+    assertEquals(null, selectedDirections.last())
+    composeTestRule.onNodeWithTag("sighting_useCompass").assertDoesNotExist()
+  }
+
+  @Test
+  fun useCompass_passesTheLiveHeading() {
+    var selectedHeading: Double? = null
+    composeTestRule.setContent {
+      DirectionPickerContent(
+          hasCompass = true,
+          compassHeadingDegrees = 73.5,
+          selectedHeadingDegrees = null,
+          onDirectionSelected = { selectedHeading = it },
+      )
+    }
+
+    composeTestRule.onNodeWithTag("sighting_useCompass").performClick()
+
+    assertEquals(73.5, selectedHeading)
+  }
+
+  @Test
   fun submitButton_disabledWhenNoOptionSelected() {
     val state = ReportSightingUiState(location = Location(46.5, 6.6))
 

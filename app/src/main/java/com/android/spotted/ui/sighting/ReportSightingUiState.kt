@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
@@ -27,6 +28,7 @@ data class ReportSightingUiState(
     val location: Location? = null,
     val locationAddress: String = "Tap to set location",
     val photoUri: String? = null,
+    val headingDegrees: Double? = null,
     val detectedSpecies: Species? = null,
     val nearbyAlerts: List<NearbyAlertOption> = emptyList(),
     val isOffline: Boolean = false,
