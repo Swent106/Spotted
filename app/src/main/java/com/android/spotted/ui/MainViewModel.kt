@@ -17,7 +17,7 @@ class MainViewModel(
     private val userRepository: UserRepository,
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow(StartDestination.SIGNIN)
+  private val _uiState = MutableStateFlow(StartDestination.LOADING)
   val uiState: StateFlow<StartDestination> = _uiState.asStateFlow()
 
   init {
