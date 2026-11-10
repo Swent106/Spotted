@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
+import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
@@ -89,8 +91,13 @@ class MainActivity : ComponentActivity() {
 
   private val mainViewModel: MainViewModel by viewModels { MainViewModel.Factory }
 
+  /** The route of a notification the user tapped, until it has been opened. */
+  private var notificationRoute by mutableStateOf<String?>(null)
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // After a rotation the intent is still the old one, already handled
+    if (savedInstanceState == null) notificationRoute = intent.getStringExtra(EXTRA_ROUTE)
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
@@ -103,10 +110,21 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,
         ) {
-          SpottedApp(viewModel = mainViewModel)
+          SpottedApp(
+              viewModel = mainViewModel,
+              notificationRoute = notificationRoute,
+              onNotificationRouteOpened = { notificationRoute = null },
+          )
         }
       }
     }
+  }
+
+  /** The app was already running when a notification was tapped (it is `singleTop`). */
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
   }
 }
 
@@ -114,11 +132,14 @@ class MainActivity : ComponentActivity() {
 fun SpottedApp(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier,
+    notificationRoute: String? = null,
+    onNotificationRouteOpened: () -> Unit = {},
 ) {
   val destination by viewModel.uiState.collectAsState()
   val navController = rememberNavController()
 
   StartRouting(destination, navController)
+  NotificationRouting(notificationRoute, destination, navController, onNotificationRouteOpened)
 
   NavHost(
       navController = navController,
@@ -161,6 +182,28 @@ fun StartRouting(destination: StartDestination, navController: NavController) {
       popUpTo(0) { inclusive = true }
       launchSingleTop = true
     }
+  }
+}
+
+/**
+ * Opens the [route] of a tapped notification, above Home. It waits for Home, so a cold start isn't
+ * undone by [StartRouting] clearing the back stack. Must come after [StartRouting].
+ */
+@Composable
+fun NotificationRouting(
+    route: String?,
+    destination: StartDestination,
+    navController: NavController,
+    onOpened: () -> Unit,
+) {
+  LaunchedEffect(route, destination) {
+    if (route == null || destination != StartDestination.HOME) return@LaunchedEffect
+    try {
+      navController.navigate(route) { launchSingleTop = true }
+    } catch (_: IllegalArgumentException) {
+      // MainActivity is exported, so the route may come from another app and not exist
+    }
+    onOpened()
   }
 }
 

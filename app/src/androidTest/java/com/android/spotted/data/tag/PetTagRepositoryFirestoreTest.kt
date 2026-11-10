@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.tag
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -128,6 +129,20 @@ class PetTagRepositoryFirestoreTest {
     assertTrue(repository.unlinkTag("A1B2C3D4").exceptionOrNull() is IllegalStateException)
     assertTrue(repository.getTag("A1B2C3D4").exceptionOrNull() is IllegalStateException)
     assertTrue(repository.getTagForPet("pet-1").exceptionOrNull() is IllegalStateException)
+  }
+
+  @Test
+  fun getNewId_isUniqueAndAcceptedAsATagId() = runTest {
+    val first = repository.getNewId()
+    val second = repository.getNewId()
+
+    assertTrue(first.matches(Regex("[0-9A-F]{32}")))
+    assertTrue(first != second)
+    // The security rules accept it: a tag can be linked with it.
+    val petId = addPet()
+    insertedTagIds += first
+    repository.linkTag(first, petId).getOrThrow()
+    assertEquals(petId, repository.getTag(first).getOrThrow()?.petId)
   }
 
   @Test
