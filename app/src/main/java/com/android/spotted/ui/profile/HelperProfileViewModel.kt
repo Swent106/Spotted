@@ -77,7 +77,9 @@ class HelperProfileViewModel(
   /** Signs out; the profile is kept for the next sign-in. */
   fun signOut() {
     if (_uiState.value.isLeaving) return
-    _uiState.update { it.copy(isLeaving = true, errorMessage = null) }
+    _uiState.update {
+      it.copy(isLeaving = true, errorMessage = null, isDeleteConfirmationVisible = false)
+    }
     viewModelScope.launch {
       authRepository.signOut().onFailure {
         _uiState.update { it.copy(isLeaving = false, errorMessage = SIGN_OUT_FAILED) }
