@@ -10,6 +10,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.ui.editpet.EditPetViewModel
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -90,7 +93,9 @@ class PetProfileScreenTest {
   fun screenLoadsPetFromViewModel() {
     val repository = PetRepositoryLocal()
     val viewModel = PetProfileViewModel(repository)
-    composeTestRule.setContent { PetProfileScreen(viewModel, petId = "missing") }
+    val deleteViewModel =
+        EditPetViewModel("missing", repository, FakeAlertRepository(), FakePhotoRepository())
+    composeTestRule.setContent { PetProfileScreen(viewModel, "missing", deleteViewModel) }
 
     composeTestRule.waitForIdle()
 

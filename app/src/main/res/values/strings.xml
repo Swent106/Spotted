@@ -46,6 +46,13 @@
     <string name="edit_pet_save">Save changes</string>
     <string name="pet_profile_subtitle">Your pet</string>
     <string name="pet_profile_edit">Edit %1$s</string>
+    <string name="pet_profile_delete">Delete %1$s</string>
+    <string name="pet_profile_delete_title">Delete %1$s?</string>
+    <string name="pet_profile_delete_message">%1$s’s profile and photo will be removed for good. This can’t be undone.</string>
+    <string name="pet_profile_keep">Keep %1$s</string>
+    <string name="pet_profile_refused_title">%1$s is still reported missing</string>
+    <string name="pet_profile_refused_message">Close %1$s’s alert before deleting this profile: mark them as home in My alert, or cancel the alert.</string>
+    <string name="pet_profile_ok">OK</string>
     <string name="personal_info_back">Back</string>
     <string name="personal_info_title_create">Create your profile</string>
     <string name="personal_info_title_edit">Edit your profile</string>
