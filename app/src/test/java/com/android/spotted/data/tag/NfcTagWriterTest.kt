@@ -1,17 +1,21 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.tag
 
+import android.nfc.FormatException
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.TagLostException
+import android.nfc.tech.Ndef
+import android.nfc.tech.NdefFormatable
 import androidx.activity.ComponentActivity
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.tag.TagUri
 import com.android.spotted.model.tag.TagWriteError
 import com.android.spotted.model.tag.TagWriteException
 import com.android.spotted.model.tag.TagWriteOutcome
+import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -23,10 +27,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.Mockito.mockStatic
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -54,6 +61,7 @@ class NfcTagWriterTest {
       override val isWritable: Boolean = true,
       override val maxSize: Int = 137, // NTAG213
       val writeError: Exception? = null,
+      val closeError: IOException? = null,
   ) : NdefConnection {
     var written: NdefMessage? = null
     var closed = false
@@ -67,6 +75,7 @@ class NfcTagWriterTest {
 
     override fun close() {
       closed = true
+      closeError?.let { throw it }
     }
   }
 
@@ -146,6 +155,29 @@ class NfcTagWriterTest {
     val tag = FakeConnection(writeError = SecurityException("Tag is out of date"))
 
     assertEquals(TagWriteError.TAG_LOST, errorOf(writeSpottedUrl(tag, newId)))
+  }
+
+  @Test
+  fun malformedTagIsUnsupported() {
+    val tag = FakeConnection(writeError = FormatException("bad NDEF"))
+
+    assertEquals(TagWriteError.UNSUPPORTED, errorOf(writeSpottedUrl(tag, newId)))
+    assertTrue(tag.closed)
+  }
+
+  @Test
+  fun tagGoneWhenClosingStillKeepsTheWriteResult() {
+    val tag = FakeConnection(closeError = IOException("tag gone"))
+
+    assertEquals(TagWriteOutcome.Written(newId), writeSpottedUrl(tag, newId).getOrThrow())
+  }
+
+  @Test
+  fun defaultAdapterIsThePhonesOne() = runTest {
+    // Robolectric's phone has no NFC turned on, so the write fails at once.
+    val result = NfcTagWriter(activity).writeOnNextTap(newId)
+
+    assertEquals(TagWriteError.NFC_UNAVAILABLE, errorOf(result))
   }
 
   @Test
@@ -229,5 +261,116 @@ class NfcTagWriterTest {
 
     assertTrue(result.exceptionOrNull() is IllegalArgumentException)
     verify(adapter, never()).enableReaderMode(any(), any(), any(), anyOrNull())
+  }
+
+  // openNdefConnection: the real NDEF technologies, mocked since they need a chip
+
+  /** Runs [block] with a tag whose NDEF technologies are [ndef] and [formatable]. */
+  private fun <T> withTagTech(ndef: Ndef?, formatable: NdefFormatable?, block: (Tag) -> T): T {
+    val tag = mock<Tag>()
+    mockStatic(Ndef::class.java).use { ndefStatic ->
+      mockStatic(NdefFormatable::class.java).use { formatableStatic ->
+        ndefStatic.`when`<Ndef?> { Ndef.get(tag) }.thenReturn(ndef)
+        formatableStatic.`when`<NdefFormatable?> { NdefFormatable.get(tag) }.thenReturn(formatable)
+        return block(tag)
+      }
+    }
+  }
+
+  @Test
+  fun ndefTagIsReadFromWhatAndroidCachedAndWrittenAfterConnecting() {
+    val message = urlMessage(TagUri.forTag(newId))
+    val ndef =
+        mock<Ndef> {
+          on { cachedNdefMessage } doReturn message
+          on { isWritable } doReturn true
+          on { maxSize } doReturn 137
+          on { isConnected } doReturn false
+        }
+
+    withTagTech(ndef, formatable = null) { tag ->
+      val connection = openNdefConnection(tag)!!
+      assertEquals(message, connection.readMessage())
+      assertTrue(connection.isWritable)
+      assertEquals(137, connection.maxSize)
+
+      connection.write(message)
+      connection.close()
+    }
+
+    inOrder(ndef) {
+      verify(ndef).connect()
+      verify(ndef).writeNdefMessage(message)
+      verify(ndef).close()
+    }
+  }
+
+  @Test
+  fun ndefTagAlreadyConnectedIsNotConnectedAgain() {
+    val message = urlMessage(TagUri.forTag(newId))
+    val ndef = mock<Ndef> { on { isConnected } doReturn true }
+
+    withTagTech(ndef, formatable = null) { tag -> openNdefConnection(tag)!!.write(message) }
+
+    verify(ndef, never()).connect()
+    verify(ndef).writeNdefMessage(message)
+  }
+
+  @Test
+  fun blankFormatableTagIsFormattedWithTheMessage() {
+    val message = urlMessage(TagUri.forTag(newId))
+    val formatable = mock<NdefFormatable> { on { isConnected } doReturn false }
+
+    withTagTech(ndef = null, formatable) { tag ->
+      val connection = openNdefConnection(tag)!!
+      assertNull(connection.readMessage())
+      assertTrue(connection.isWritable)
+      assertEquals(Int.MAX_VALUE, connection.maxSize)
+
+      connection.write(message)
+      connection.close()
+    }
+
+    inOrder(formatable) {
+      verify(formatable).connect()
+      verify(formatable).format(message)
+      verify(formatable).close()
+    }
+  }
+
+  @Test
+  fun formatableTagAlreadyConnectedIsNotConnectedAgain() {
+    val message = urlMessage(TagUri.forTag(newId))
+    val formatable = mock<NdefFormatable> { on { isConnected } doReturn true }
+
+    withTagTech(ndef = null, formatable) { tag -> openNdefConnection(tag)!!.write(message) }
+
+    verify(formatable, never()).connect()
+    verify(formatable).format(message)
+  }
+
+  @Test
+  fun tagThatIsNeitherNdefNorFormatableHasNoConnection() {
+    withTagTech(ndef = null, formatable = null) { tag -> assertNull(openNdefConnection(tag)) }
+  }
+
+  @Test
+  fun blankNdefTagGetsTheSpottedUrlThroughTheRealConnection() {
+    val ndef =
+        mock<Ndef> {
+          on { cachedNdefMessage } doReturn null
+          on { isWritable } doReturn true
+          on { maxSize } doReturn 137
+        }
+
+    val result =
+        withTagTech(ndef, formatable = null) { tag ->
+          writeSpottedUrl(openNdefConnection(tag), newId)
+        }
+
+    assertEquals(TagWriteOutcome.Written(newId), result.getOrThrow())
+    val written = argumentCaptor<NdefMessage>().apply { verify(ndef).writeNdefMessage(capture()) }
+    assertEquals(TagUri.forTag(newId), written.firstValue.records.single().toUri().toString())
+    verify(ndef).close()
   }
 }
