@@ -6,13 +6,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -145,12 +143,16 @@ private fun AlertsError(message: String, onRetryClick: () -> Unit) {
 /** "GENEVA · 3 KM AROUND YOU" and "⚠ 2 pets missing near you". */
 @Composable
 private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
-  Box(
-      Modifier.padding(top = 16.dp)
-          .fillMaxWidth()
-          .height(58.dp)
-          .clip(RoundedCornerShape(16.dp))
-          .background(SpottedTheme.colors.surface)
+  // Padded and aligned instead of fixed offsets, so the label, the icon and the title line up
+  // (M1: "some buttons and texts are not centered")
+  Column(
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+      modifier =
+          Modifier.padding(top = 16.dp)
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(16.dp))
+              .background(SpottedTheme.colors.surface)
+              .padding(horizontal = 14.dp, vertical = 10.dp),
   ) {
     Text(
         areaLabel(homeArea, alertRadiusKm),
@@ -164,18 +166,22 @@ private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
             ),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.offset(9.dp, 4.dp).padding(end = 18.dp),
     )
-    Image(
-        painterResource(R.drawable.ic_warning),
-        contentDescription = null,
-        modifier = Modifier.offset(9.dp, 14.dp).size(33.dp),
-    )
-    Text(
-        "$count ${if (count == 1) "pet" else "pets"} missing near you",
-        style = jakarta(17, 34f, FontWeight.ExtraBold, SpottedTheme.colors.ink),
-        modifier = Modifier.offset(47.dp, 16.dp).testTag(HomeScreenTestTags.ALERTS_TITLE),
-    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Image(
+          painterResource(R.drawable.ic_warning),
+          contentDescription = null,
+          modifier = Modifier.size(26.dp),
+      )
+      Text(
+          "$count ${if (count == 1) "pet" else "pets"} missing near you",
+          style = jakarta(17, 22f, FontWeight.ExtraBold, SpottedTheme.colors.ink),
+          modifier = Modifier.testTag(HomeScreenTestTags.ALERTS_TITLE),
+      )
+    }
   }
 }
 

@@ -287,10 +287,14 @@ fun NavGraphBuilder.homeDestinations(
           val viewModel: ReportSightingViewModel =
               viewModel(factory = ReportSightingViewModel.Factory)
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
-          ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone)
+          ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone, onBack = onDone)
         },
     petProfileContent: @Composable (petId: String) -> Unit = { petId ->
-      PetProfileScreen(viewModel = viewModel(factory = PetProfileViewModel.Factory), petId = petId)
+      PetProfileScreen(
+          viewModel = viewModel(factory = PetProfileViewModel.Factory),
+          petId = petId,
+          onBack = { navController.popBackStackSafely() },
+      )
     },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
       EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)

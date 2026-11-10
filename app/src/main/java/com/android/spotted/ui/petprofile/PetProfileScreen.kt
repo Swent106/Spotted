@@ -28,6 +28,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.android.spotted.R
 import com.android.spotted.model.Pet.Pet
+import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
 
@@ -41,24 +42,56 @@ object PetProfileScreenTestTags {
   const val SPECIES = "pet_profile_species"
   const val LOADING = "pet_profile_loading"
   const val ERROR = "pet_profile_error"
+  const val BACK_BUTTON = "pet_profile_back_button"
 }
 
 @Composable
-fun PetProfileScreen(viewModel: PetProfileViewModel, petId: String, modifier: Modifier = Modifier) {
+fun PetProfileScreen(
+    viewModel: PetProfileViewModel,
+    petId: String,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+) {
   LaunchedEffect(petId) { viewModel.loadPet(petId) }
 
   val state by viewModel.uiState.collectAsState()
 
-  PetProfileContent(state = state, modifier = modifier)
+  PetProfileContent(state = state, modifier = modifier, onBack = onBack)
 }
 
+/**
+ * The pet's photo, name and species; with [onBack], a top bar to go back to the previous screen.
+ */
 @Composable
-fun PetProfileContent(state: PetProfileUiState, modifier: Modifier = Modifier) {
+fun PetProfileContent(
+    state: PetProfileUiState,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+) {
   var isPhotoViewerOpen by remember { mutableStateOf(false) }
   LaunchedEffect(state.pet?.id, state.pet?.photoUrl) { isPhotoViewerOpen = false }
 
+  Column(modifier.fillMaxSize().padding(16.dp)) {
+    onBack?.let {
+      SpottedTopBar(
+          title = stringResource(R.string.pet_profile_title),
+          onBack = it,
+          backTestTag = PetProfileScreenTestTags.BACK_BUTTON,
+      )
+    }
+    PetProfileBody(state, onPhotoClick = { if (!isPhotoViewerOpen) isPhotoViewerOpen = true })
+  }
+
+  val photoUrl = state.pet?.photoUrl
+  if (isPhotoViewerOpen && photoUrl != null) {
+    PhotoViewer(photoUrl, onClose = { isPhotoViewerOpen = false })
+  }
+}
+
+@Composable
+private fun ColumnScope.PetProfileBody(state: PetProfileUiState, onPhotoClick: () -> Unit) {
   Column(
-      modifier = modifier.fillMaxSize().padding(16.dp),
+      modifier = Modifier.weight(1f).fillMaxWidth(),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,
   ) {
@@ -71,43 +104,40 @@ fun PetProfileContent(state: PetProfileUiState, modifier: Modifier = Modifier) {
               color = MaterialTheme.colorScheme.error,
               modifier = Modifier.testTag(PetProfileScreenTestTags.ERROR),
           )
-      state.pet != null ->
-          PetDetails(
-              pet = state.pet,
-              onPhotoClick = { if (!isPhotoViewerOpen) isPhotoViewerOpen = true },
-          )
+      state.pet != null -> PetDetails(pet = state.pet, onPhotoClick = onPhotoClick)
     }
   }
+}
 
-  val photoUrl = state.pet?.photoUrl
-  if (isPhotoViewerOpen && photoUrl != null) {
-    Dialog(
-        onDismissRequest = { isPhotoViewerOpen = false },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+/** The pet's photo full screen, closed with "Close" or Back. */
+@Composable
+private fun PhotoViewer(photoUrl: String, onClose: () -> Unit) {
+  Dialog(
+      onDismissRequest = onClose,
+      properties = DialogProperties(usePlatformDefaultWidth = false),
+  ) {
+    Box(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(SpottedIllustration.cameraBackground)
+                .testTag(PetProfileScreenTestTags.PHOTO_VIEWER),
+        contentAlignment = Alignment.Center,
     ) {
-      Box(
+      AsyncImage(
+          model = photoUrl,
+          contentDescription = stringResource(R.string.pet_profile_photo_description),
+          contentScale = ContentScale.Fit,
+          modifier = Modifier.fillMaxWidth().testTag(PetProfileScreenTestTags.PHOTO_VIEWER_IMAGE),
+      )
+      Text(
+          text = "Close",
+          color = SpottedTheme.colors.onAccent,
           modifier =
-              Modifier.fillMaxSize()
-                  .background(SpottedIllustration.cameraBackground)
-                  .testTag(PetProfileScreenTestTags.PHOTO_VIEWER),
-          contentAlignment = Alignment.Center,
-      ) {
-        AsyncImage(
-            model = photoUrl,
-            contentDescription = stringResource(R.string.pet_profile_photo_description),
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().testTag(PetProfileScreenTestTags.PHOTO_VIEWER_IMAGE),
-        )
-        Text(
-            text = "Close",
-            color = SpottedTheme.colors.onAccent,
-            modifier =
-                Modifier.align(Alignment.TopEnd)
-                    .padding(24.dp)
-                    .clickable { isPhotoViewerOpen = false }
-                    .testTag(PetProfileScreenTestTags.PHOTO_VIEWER_CLOSE),
-        )
-      }
+              Modifier.align(Alignment.TopEnd)
+                  .padding(24.dp)
+                  .clickable(onClick = onClose)
+                  .testTag(PetProfileScreenTestTags.PHOTO_VIEWER_CLOSE),
+      )
     }
   }
 }

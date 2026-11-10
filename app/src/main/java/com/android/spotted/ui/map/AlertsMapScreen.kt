@@ -13,14 +13,10 @@ import android.graphics.drawable.Drawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -36,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -51,6 +46,7 @@ import com.android.spotted.R
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.components.DefaultMapCenter
 import com.android.spotted.ui.components.PIN_TIP_Y
+import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.components.createMapView
 import com.android.spotted.ui.home.HomeScreenTexts
 import com.android.spotted.ui.home.HomeViewModel
@@ -105,24 +101,12 @@ fun AlertsMapContent(
           .statusBarsPadding()
           .testTag(AlertsMapTestTags.SCREEN)
   ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-    ) {
-      IconButton(onClick = onBack, modifier = Modifier.testTag(AlertsMapTestTags.BACK)) {
-        // Tinted with the theme's ink, like the title: untinted, it turned white in dark mode and
-        // vanished on the fixed light background
-        Icon(
-            painterResource(R.drawable.ic_arrow_back),
-            contentDescription = "Back",
-            tint = SpottedTheme.colors.ink,
-        )
-      }
-      Text(
-          "Lost pets near you",
-          style = jakarta(20, 26f, FontWeight.SemiBold, SpottedTheme.colors.ink),
-      )
-    }
+    SpottedTopBar(
+        title = "Lost pets near you",
+        onBack = onBack,
+        backTestTag = AlertsMapTestTags.BACK,
+        modifier = Modifier.padding(16.dp),
+    )
     Box(
         Modifier.fillMaxSize()
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)

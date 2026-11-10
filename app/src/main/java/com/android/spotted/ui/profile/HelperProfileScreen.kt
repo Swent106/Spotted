@@ -192,7 +192,8 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
             Modifier.align(Alignment.CenterStart)
                 // Leaves room for the account button on the right
                 .padding(end = 56.dp)
-                .clip(RoundedCornerShape(19.dp))
+                // Half the avatar's height: the round photo fits the card's rounded end
+                .clip(RoundedCornerShape(28.dp))
                 .background(SpottedTheme.colors.surface)
                 .padding(end = 16.dp),
     ) {
@@ -448,11 +449,13 @@ internal fun AccountOptionsDialog(
               onClick = onDeleteAccount,
               modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.DELETE_ACCOUNT),
           ) {
-            Column(Modifier.fillMaxWidth()) {
+            // Centred like the Sign out button above it
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
               Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, colors.error))
               Text(
                   "Removes your profile from Spotted. You can sign in again to start over.",
                   style = jakarta(12, 16f, FontWeight.Medium, colors.textSecondary),
+                  textAlign = TextAlign.Center,
               )
             }
           }
