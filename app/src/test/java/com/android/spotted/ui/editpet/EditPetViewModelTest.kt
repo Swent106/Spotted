@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.editpet
 
@@ -12,6 +13,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.model.photo.PhotoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -35,6 +37,7 @@ class EditPetViewModelTest {
   private lateinit var petRepository: ConfigurablePetRepository
   private lateinit var alertRepository: FakeAlertRepository
   private lateinit var photoRepository: FakePhotoRepository
+  private lateinit var photos: RecordingPhotoRepository
 
   @Before
   fun setUp() {
@@ -43,6 +46,7 @@ class EditPetViewModelTest {
     petRepository = ConfigurablePetRepository(localPetRepository)
     alertRepository = FakeAlertRepository()
     photoRepository = FakePhotoRepository()
+    photos = RecordingPhotoRepository(photoRepository)
   }
 
   @After
@@ -81,9 +85,10 @@ class EditPetViewModelTest {
   @Test
   fun loadPet_whenMissingShowsErrorAndCannotSave() =
       runTest(testDispatcher) {
-        val viewModel = EditPetViewModel("missing", petRepository, alertRepository, photoRepository)
+        val viewModel = EditPetViewModel("missing", petRepository, alertRepository, photos)
         advanceUntilIdle()
 
+        assertTrue(viewModel.uiState.value.loadFailed)
         assertEquals(R.string.edit_pet_load_error, viewModel.uiState.value.errorMessage)
         assertFalse(viewModel.uiState.value.isLoading)
         assertFalse(viewModel.uiState.value.canSave)
@@ -95,6 +100,7 @@ class EditPetViewModelTest {
 
     assertTrue(completeForm.canSave)
     assertFalse(completeForm.copy(isLoading = true).canSave)
+    assertFalse(completeForm.copy(loadFailed = true).canSave)
     assertFalse(completeForm.copy(saving = true).canSave)
     assertFalse(completeForm.copy(deleted = true).canSave)
     assertFalse(completeForm.copy(species = null).canSave)
@@ -125,7 +131,9 @@ class EditPetViewModelTest {
         assertEquals(setOf(Behavior.STRESSED_IN_CROWDS), updated.behaviors)
         assertEquals(pet.photoUrl, updated.photoUrl)
         assertTrue(photoRepository.uploadedPhotos.isEmpty())
+        assertEquals(0, photos.deleteCalls)
         assertFalse(viewModel.uiState.value.saving)
+        assertTrue(viewModel.uiState.value.saved)
         assertNull(viewModel.uiState.value.errorMessage)
       }
 
@@ -142,11 +150,12 @@ class EditPetViewModelTest {
         val updated = localPetRepository.getPet(pet.id).getOrThrow()
         assertEquals("content://photos/new", photoRepository.uploadedPhotos[updated.photoUrl])
         assertTrue(updated.photoUrl != pet.photoUrl)
+        assertEquals(0, photos.deleteCalls)
         assertNull(viewModel.uiState.value.errorMessage)
       }
 
   @Test
-  fun save_whenPhotoIsRemovedClearsThePetPhotoUrl() =
+  fun save_whenPhotoIsRemovedClearsTheUrlAndDeletesThePhoto() =
       runTest(testDispatcher) {
         val pet = pet().copy(photoUrl = "firestore://photos/pet-1")
         val viewModel = loadedViewModel(pet)
@@ -156,7 +165,46 @@ class EditPetViewModelTest {
         advanceUntilIdle()
 
         assertNull(localPetRepository.getPet(pet.id).getOrThrow().photoUrl)
+        assertEquals(listOf(pet.ownerId to pet.id), photos.deletedPhotos)
+        assertTrue(viewModel.uiState.value.saved)
         assertNull(viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun save_whenPhotoDeletionFailsShowsErrorAndRetriesOnTheNextSave() =
+      runTest(testDispatcher) {
+        val pet = pet().copy(photoUrl = "firestore://photos/pet-1")
+        val viewModel = loadedViewModel(pet)
+        photos.deleteFailure = IllegalStateException("delete failed")
+        viewModel.onPhotoChanged(null)
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(R.string.edit_pet_photo_delete_error, viewModel.uiState.value.errorMessage)
+        assertFalse(viewModel.uiState.value.saved)
+        assertFalse(viewModel.uiState.value.saving)
+
+        photos.deleteFailure = null
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(2, photos.deleteCalls)
+        assertTrue(viewModel.uiState.value.saved)
+        assertNull(localPetRepository.getPet(pet.id).getOrThrow().photoUrl)
+      }
+
+  @Test
+  fun save_withoutAPhotoNeverDeletesOne() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(pet())
+        viewModel.onNameChanged("Changed")
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(0, photos.deleteCalls)
+        assertTrue(viewModel.uiState.value.saved)
       }
 
   @Test
@@ -172,6 +220,8 @@ class EditPetViewModelTest {
 
         assertEquals(pet, localPetRepository.getPet(pet.id).getOrThrow())
         assertEquals(R.string.edit_pet_save_error, viewModel.uiState.value.errorMessage)
+        assertEquals(0, photos.deleteCalls)
+        assertFalse(viewModel.uiState.value.saved)
         assertFalse(viewModel.uiState.value.saving)
       }
 
@@ -222,6 +272,16 @@ class EditPetViewModelTest {
         assertEquals(pet, localPetRepository.getPet(pet.id).getOrThrow())
         assertFalse(viewModel.uiState.value.saving)
         assertEquals(0, petRepository.updateCalls)
+      }
+
+  @Test
+  fun onPhotoPickerError_showsTheCameraError() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(pet())
+
+        viewModel.onPhotoPickerError()
+
+        assertEquals(R.string.photo_camera_unavailable, viewModel.uiState.value.errorMessage)
       }
 
   @Test
@@ -292,7 +352,7 @@ class EditPetViewModelTest {
 
   private suspend fun TestScope.loadedViewModel(pet: Pet): EditPetViewModel {
     localPetRepository.addPet(pet).getOrThrow()
-    val viewModel = EditPetViewModel(pet.id, petRepository, alertRepository, photoRepository)
+    val viewModel = EditPetViewModel(pet.id, petRepository, alertRepository, photos)
     advanceUntilIdle()
     return viewModel
   }
@@ -316,6 +376,23 @@ class EditPetViewModelTest {
           petSpecies = Species.DOG,
           status = AlertStatus.OPEN,
       )
+
+  /** Records the pet photo deletions, which can be made to fail with [deleteFailure]. */
+  private class RecordingPhotoRepository(private val delegate: PhotoRepository) :
+      PhotoRepository by delegate {
+    var deleteFailure: Throwable? = null
+    val deletedPhotos = mutableListOf<Pair<String, String>>()
+    var deleteCalls = 0
+
+    override suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit> {
+      deleteCalls++
+      deleteFailure?.let {
+        return Result.failure(it)
+      }
+      deletedPhotos += ownerId to petId
+      return delegate.deletePetPhoto(ownerId, petId)
+    }
+  }
 
   private class ConfigurablePetRepository(private val delegate: PetRepositoryLocal) :
       PetRepository by delegate {

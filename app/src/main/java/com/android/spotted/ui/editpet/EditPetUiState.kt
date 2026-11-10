@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.editpet
 
@@ -14,10 +15,14 @@ data class EditPetUiState(
     val allergies: List<String> = emptyList(),
     val behaviors: Set<Behavior> = emptySet(),
     val isLoading: Boolean = true,
+    /** The pet could not be loaded: there is nothing to edit. */
+    val loadFailed: Boolean = false,
     val saving: Boolean = false,
+    /** The changes are saved; the View leaves the form. */
+    val saved: Boolean = false,
     val deleted: Boolean = false,
     @StringRes val errorMessage: Int? = null,
 ) {
   val canSave: Boolean
-    get() = !isLoading && !saving && !deleted && name.isNotBlank() && species != null
+    get() = !isLoading && !loadFailed && !saving && !deleted && name.isNotBlank() && species != null
 }

@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.editpet
 
@@ -15,7 +16,6 @@ import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.AlertRepository
-import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.photo.PhotoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +70,16 @@ class EditPetViewModel(
     }
   }
 
+  /** The photo picker could not open the camera: tells the user to pick from the gallery. */
+  fun onPhotoPickerError() {
+    _uiState.update { it.copy(errorMessage = R.string.photo_camera_unavailable) }
+  }
+
+  /**
+   * Saves the form when [EditPetUiState.canSave]. Uploads the photo only if it changed, updates the
+   * pet, then deletes the stored photo if it was removed. Ends with `saved = true`, or with an
+   * [EditPetUiState.errorMessage] and the form kept; saving again then retries every step.
+   */
   fun save() {
     val state = _uiState.value
     val pet = originalPet ?: return
@@ -103,31 +113,38 @@ class EditPetViewModel(
               behaviors = state.behaviors,
               note = state.description.trim(),
           )
-      petRepository
-          .updatePet(updatedPet)
-          .fold(
-              onSuccess = {
-                originalPet = updatedPet
-                _uiState.update {
-                  it.copy(
-                      name = updatedPet.name,
-                      breed = updatedPet.breed,
-                      photoUri = updatedPet.photoUrl,
-                      description = updatedPet.note,
-                      saving = false,
-                      errorMessage = null,
-                  )
-                }
-              },
-              onFailure = {
-                _uiState.update {
-                  it.copy(saving = false, errorMessage = R.string.edit_pet_save_error)
-                }
-              },
-          )
+      if (petRepository.updatePet(updatedPet).isFailure) {
+        _uiState.update { it.copy(saving = false, errorMessage = R.string.edit_pet_save_error) }
+        return@launch
+      }
+      // A removed photo is deleted too, or any signed-in user could still read it. On failure,
+      // originalPet keeps the old photo, so saving again retries the deletion.
+      val photoRemoved = pet.photoUrl != null && photoUrl == null
+      if (photoRemoved && photoRepository.deletePetPhoto(pet.ownerId, pet.id).isFailure) {
+        _uiState.update {
+          it.copy(saving = false, errorMessage = R.string.edit_pet_photo_delete_error)
+        }
+        return@launch
+      }
+      originalPet = updatedPet
+      _uiState.update {
+        it.copy(
+            name = updatedPet.name,
+            breed = updatedPet.breed,
+            photoUri = updatedPet.photoUrl,
+            description = updatedPet.note,
+            saving = false,
+            saved = true,
+            errorMessage = null,
+        )
+      }
     }
   }
 
+  /**
+   * Deletes the pet, unless it has an open alert ([R.string.edit_pet_open_alert_error]). Ends with
+   * `deleted = true`, or with an [EditPetUiState.errorMessage] and the pet kept.
+   */
   fun delete() {
     val pet = originalPet ?: return
     if (_uiState.value.saving || _uiState.value.deleted) return
@@ -141,7 +158,7 @@ class EditPetViewModel(
             }
             return@launch
           }
-      if (alerts.any { it.petId == pet.id && it.status == AlertStatus.OPEN }) {
+      if (alerts.any { it.petId == pet.id }) {
         _uiState.update {
           it.copy(saving = false, errorMessage = R.string.edit_pet_open_alert_error)
         }
@@ -186,7 +203,11 @@ class EditPetViewModel(
               },
               onFailure = {
                 _uiState.update {
-                  it.copy(isLoading = false, errorMessage = R.string.edit_pet_load_error)
+                  it.copy(
+                      isLoading = false,
+                      loadFailed = true,
+                      errorMessage = R.string.edit_pet_load_error,
+                  )
                 }
               },
           )
