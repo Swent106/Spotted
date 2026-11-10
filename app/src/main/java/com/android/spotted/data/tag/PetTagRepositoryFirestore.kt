@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.tag
 
 import com.android.spotted.data.user.UserRepositoryFirestore
@@ -10,6 +11,8 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.ExecutionException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +25,10 @@ class PetTagRepositoryFirestore(
     private val now: () -> Long = System::currentTimeMillis,
 ) : PetTagRepository {
   private val petTags = firestore.collection(PET_TAGS_COLLECTION)
+
+  // A random UUID without dashes: 32 hex characters, as required by firestore.rules.
+  override fun getNewId(): String =
+      UUID.randomUUID().toString().replace("-", "").uppercase(Locale.ROOT)
 
   override suspend fun linkTag(tagId: String, petId: String): Result<Unit> = firestoreResult {
     withContext(Dispatchers.IO) {
