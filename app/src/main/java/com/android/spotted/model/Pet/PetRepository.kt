@@ -6,6 +6,10 @@ interface PetRepository {
 
   suspend fun addPet(pet: Pet): Result<Unit>
 
+  /**
+   * Replaces the stored pet with [pet]. Fails if no pet with this id exists. A `null`
+   * [Pet.photoUrl] removes the photo field.
+   */
   suspend fun updatePet(pet: Pet): Result<Unit>
 
   suspend fun getPet(id: String): Result<Pet>

@@ -2,7 +2,6 @@
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.Pet
 
-import com.android.spotted.data.photo.PhotoRepositoryFirebaseStorage
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
@@ -15,9 +14,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * Pets stored in Firestore. [photoRepository] has no default: it must be the backend the app saves
+ * pet photos with, or [deletePet] would look for the photo in the wrong place and leave it behind.
+ */
 class PetRepositoryFirestore(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val photoRepository: PhotoRepository = PhotoRepositoryFirebaseStorage(),
+    private val photoRepository: PhotoRepository,
 ) : PetRepository {
   private val pets = firestore.collection(PETS_COLLECTION)
 

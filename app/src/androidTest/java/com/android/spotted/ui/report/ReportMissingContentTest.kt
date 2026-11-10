@@ -2,6 +2,7 @@
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.report
 
+import android.app.Application
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -13,7 +14,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.MutableCreationExtras
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
@@ -152,7 +155,12 @@ class ReportMissingContentTest {
     val viewModel =
         ReportMissingViewModel.Factory.create(
             ReportMissingViewModel::class.java,
-            CreationExtras.Empty,
+            MutableCreationExtras().apply {
+              set(
+                  ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY,
+                  ApplicationProvider.getApplicationContext<Application>(),
+              )
+            },
         )
 
     assertNotNull(viewModel)
