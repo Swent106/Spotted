@@ -9,6 +9,7 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.nfc.tech.NdefFormatable
+import com.android.spotted.model.tag.PetTag
 import com.android.spotted.model.tag.TagUri
 import com.android.spotted.model.tag.TagWriteError
 import com.android.spotted.model.tag.TagWriteException
@@ -76,7 +77,7 @@ interface NdefConnection : Closeable {
 
 /**
  * Writes the Spotted URL of [newTagId] on the tag behind [connection], unless the tag already holds
- * a Spotted URL. Always closes [connection].
+ * a Spotted URL with a valid id ([PetTag.isValidId]). Always closes [connection].
  */
 internal fun writeSpottedUrl(
     connection: NdefConnection?,
@@ -84,7 +85,11 @@ internal fun writeSpottedUrl(
 ): Result<TagWriteOutcome> {
   if (connection == null) return writeFailure(TagWriteError.UNSUPPORTED)
   return try {
-    val existingId = scannedTagFrom(uid = null, message = connection.readMessage())?.tagId
+    // An id Firestore refuses can never be linked: such a tag is rewritten like a blank one.
+    val existingId =
+        scannedTagFrom(uid = null, message = connection.readMessage())
+            ?.tagId
+            ?.takeIf(PetTag::isValidId)
     when {
       existingId != null -> Result.success(TagWriteOutcome.AlreadySpotted(existingId))
       !connection.isWritable -> writeFailure(TagWriteError.READ_ONLY)

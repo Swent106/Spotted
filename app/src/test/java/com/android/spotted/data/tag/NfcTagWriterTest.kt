@@ -118,6 +118,15 @@ class NfcTagWriterTest {
   }
 
   @Test
+  fun spottedUrlWithAnIdFirestoreRefusesIsOverwritten() {
+    // Valid for TagUri but not for firestore.rules: it could never be linked.
+    val tag = FakeConnection(message = urlMessage(TagUri.forTag("abcdef12")))
+
+    assertEquals(TagWriteOutcome.Written(newId), writeSpottedUrl(tag, newId).getOrThrow())
+    assertEquals(TagUri.forTag(newId), tag.written!!.records.single().toUri().toString())
+  }
+
+  @Test
   fun tagWithOtherContentIsOverwritten() {
     val tag = FakeConnection(message = urlMessage("https://example.com/t/abcd1234"))
 
