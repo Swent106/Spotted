@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.FakePetRepository
@@ -50,9 +51,10 @@ class PetProfileContentTest {
 
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.NAME).assertTextEquals("Luna")
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.SPECIES).assertTextEquals("Cat")
-    composeTestRule.onNodeWithText("White fluffy cat").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Chicken").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Fearful of strangers").assertIsDisplayed()
+    // Lower parts of the profile scroll: on a small screen they are below the visible area
+    composeTestRule.onNodeWithText("White fluffy cat").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithText("Fearful of strangers").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithText("Chicken").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithText("Edit Luna").assertIsDisplayed()
   }
 
