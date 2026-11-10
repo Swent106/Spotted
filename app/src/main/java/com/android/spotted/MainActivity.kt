@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -28,10 +29,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
+import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
+import com.android.spotted.ui.NearbyAlertsViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
@@ -104,6 +107,9 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
     if (savedInstanceState == null) notificationRoute = intent.getStringExtra(EXTRA_ROUTE)
+    // Created with the activity, so it watches for nearby alerts while the app runs
+    ViewModelProvider(this, NearbyAlertsViewModel.factory(SystemNotifier(applicationContext)))[
+        NearbyAlertsViewModel::class.java]
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)

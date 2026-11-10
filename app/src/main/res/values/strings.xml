@@ -83,4 +83,6 @@
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
     <string name="notification_sighting_text">Tap to review this sighting</string>
+    <string name="notification_nearby_alert_title">%1$s is lost %2$s from your home</string>
+    <string name="notification_nearby_alert_text">Tap to see the alert</string>
 </resources>
