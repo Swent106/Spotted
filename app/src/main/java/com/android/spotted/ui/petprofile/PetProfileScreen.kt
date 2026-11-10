@@ -38,8 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.android.spotted.R
@@ -80,8 +79,12 @@ fun PetProfileScreen(
     onBack: () -> Unit = {},
     onEdit: (String) -> Unit = {},
 ) {
-  // Loaded again when coming back from the edit form, so the changes are shown
-  LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.loadPet(petId) }
+  // Loaded on every resume (e.g. back from the edit form, so the changes are shown) and when
+  // petId changes while the screen stays resumed
+  LifecycleResumeEffect(petId) {
+    viewModel.loadPet(petId)
+    onPauseOrDispose {}
+  }
 
   val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -113,8 +116,9 @@ fun PetProfileContent(
           verticalArrangement = Arrangement.spacedBy(12.dp),
           modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
       ) {
+        // A fixed title: the name is already in the card, and is not known while loading
         PetScreenHeader(
-            title = state.pet?.name.orEmpty(),
+            title = stringResource(R.string.pet_profile_title),
             subtitle = stringResource(R.string.pet_profile_subtitle),
             backTag = PetProfileScreenTestTags.BACK_BUTTON,
             onBack = onBack,
@@ -201,7 +205,10 @@ private fun PetDetails(pet: Pet, onPhotoClick: () -> Unit) {
           modifier =
               photoModifier
                   .background(SpottedIllustration.bubbleBeige)
-                  .clickable(onClick = onPhotoClick)
+                  .clickable(
+                      onClickLabel = stringResource(R.string.pet_profile_view_photo),
+                      onClick = onPhotoClick,
+                  )
                   .testTag(PetProfileScreenTestTags.IMAGE),
           contentScale = ContentScale.Crop,
       )

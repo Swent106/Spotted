@@ -44,7 +44,9 @@
     <string name="edit_pet_allergies_section">ALLERGIES</string>
     <string name="edit_pet_allergies_placeholder">e.g. Chicken</string>
     <string name="edit_pet_save">Save changes</string>
+    <string name="pet_profile_title">Pet profile</string>
     <string name="pet_profile_subtitle">Your pet</string>
+    <string name="pet_profile_view_photo">View photo</string>
     <string name="pet_profile_edit">Edit %1$s</string>
     <string name="personal_info_back">Back</string>
     <string name="personal_info_title_create">Create your profile</string>
