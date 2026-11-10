@@ -1,6 +1,9 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.authentification
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -10,6 +13,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import org.junit.Assert.assertEquals
@@ -93,6 +97,19 @@ class SignInContentTest {
     composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).performClick()
 
     assertEquals(1, clicks)
+  }
+
+  @Test
+  fun landscape_showsGoogleButton() {
+    // Wider than tall picks the landscape layout. The emulator runs in portrait, so the box is
+    // given a fixed size; it may stick out of the screen, hence assertExists.
+    composeTestRule.setContent {
+      Box(Modifier.requiredSize(width = 800.dp, height = 400.dp)) {
+        SignInContent(state = SignInUiState(), onSignInClick = {})
+      }
+    }
+
+    composeTestRule.onNodeWithTag(SignInScreenTestTags.GOOGLE_BUTTON).assertExists()
   }
 
   @Test
