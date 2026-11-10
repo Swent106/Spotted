@@ -26,10 +26,11 @@ class FakeSightingRepositoryTest {
 
   @Test
   fun reportSighting_storesSightingAndReturnsSuccess() = runTest {
-    val sighting = sighting(id = "s1", alertId = "alert-1")
+    val sighting = sighting(id = "s1", alertId = "alert-1").copy(headingDegrees = 225)
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
     assertEquals(listOf(sighting), repository.reportedSightings)
+    assertEquals(225, repository.reportedSightings.single().headingDegrees)
   }
 
   @Test

@@ -51,8 +51,8 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.sighting.compassLabel
 import com.android.spotted.ui.components.createMapView
-import com.android.spotted.ui.sighting.directionLabelForHeading
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
@@ -318,7 +318,7 @@ private fun SightingRow(
                 style = jakarta(14, 18f, 700, SpottedTheme.colors.blue),
             )
             Text(
-                "Went ${directionLabelForHeading(heading)}",
+                "Went ${compassLabel(heading)}",
                 style = jakarta(11, 15f, 600, SpottedTheme.colors.blue),
             )
           }

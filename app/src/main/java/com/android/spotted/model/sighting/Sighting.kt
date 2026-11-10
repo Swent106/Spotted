@@ -19,7 +19,7 @@ import com.android.spotted.model.Pet.Species
  * @property photoUrl Download URL of the photo, if the passerby took one.
  * @property alertId Id of the lost-pet alert this sighting is linked to, if any.
  * @property status What the owner of the linked alert decided about this sighting.
- * @property headingDegrees Direction of travel clockwise from north, or null when unknown.
+ * @property headingDegrees Direction the pet went in degrees clockwise from north, if known.
  */
 data class Sighting(
     val id: String,
@@ -30,7 +30,7 @@ data class Sighting(
     val photoUrl: String? = null,
     val alertId: String? = null,
     val status: SightingStatus = SightingStatus.PENDING,
-    val headingDegrees: Double? = null,
+    val headingDegrees: Int? = null,
 )
 
 /**
