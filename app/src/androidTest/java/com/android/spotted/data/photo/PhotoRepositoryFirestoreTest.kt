@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -75,6 +76,33 @@ class PhotoRepositoryFirestoreTest {
     val image = decode(saved["data"] as String)
     assertEquals(120, image.width)
     assertEquals(80, image.height)
+  }
+
+  @Test
+  fun deletePetPhoto_removesTheDocumentAndMissingPhotoIsSuccessful() = runTest {
+    val petId = newPhotoId()
+    repository.uploadPetPhoto(ownerId, petId, jpeg(width = 40, height = 40)).getOrThrow()
+
+    assertTrue(repository.deletePetPhoto(ownerId, petId).isSuccess)
+    assertTrue(repository.deletePetPhoto(ownerId, petId).isSuccess)
+  }
+
+  @Test
+  fun deletePetPhoto_whenOwnerDoesNotMatch_returnsFailureAndKeepsThePhoto() = runTest {
+    val petId = newPhotoId()
+    withContext(Dispatchers.IO) {
+      Tasks.await(
+          firestore
+              .collection(PhotoRepositoryFirestore.PHOTOS_COLLECTION)
+              .document(petId)
+              .set(mapOf("ownerId" to ownerId, "contentType" to "image/jpeg", "data" to ""))
+      )
+    }
+
+    val result = repository.deletePetPhoto("another-owner", petId)
+
+    assertTrue(result.isFailure)
+    assertEquals(ownerId, savedDocument(petId)["ownerId"])
   }
 
   @Test

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.alert.Alert
@@ -144,9 +145,11 @@ class ReportMissingViewModel(
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
+        val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
         ReportMissingViewModel(
             alertRepository = AlertRepositoryFirestore(),
-            petRepository = PetRepositoryFirestore(),
+            petRepository =
+                PetRepositoryFirestore(photoRepository = PhotoRepositoryFirestore(application)),
             authRepository = AuthRepositoryProvider.authRepository,
         )
       }

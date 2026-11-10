@@ -277,7 +277,7 @@ private fun AddPetsHeader(
 }
 
 @Composable
-private fun FormCard(spacing: Dp = 10.dp, content: @Composable () -> Unit) {
+internal fun FormCard(spacing: Dp = 10.dp, content: @Composable () -> Unit) {
   Column(
       verticalArrangement = Arrangement.spacedBy(spacing),
       modifier =
@@ -291,7 +291,7 @@ private fun FormCard(spacing: Dp = 10.dp, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SectionLabel(resourceId: Int) {
+internal fun SectionLabel(resourceId: Int) {
   Text(stringResource(resourceId), style = sectionLabelStyle)
 }
 
@@ -302,7 +302,7 @@ private fun AddPetsMessage.resolve(): String =
     }
 
 @Composable
-private fun ChipFlow(content: @Composable () -> Unit) {
+internal fun ChipFlow(content: @Composable () -> Unit) {
   FlowRow(
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -313,7 +313,7 @@ private fun ChipFlow(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun FormChip(
+internal fun FormChip(
     text: String,
     selected: Boolean,
     role: Role,
@@ -349,7 +349,7 @@ private fun FormChip(
 }
 
 @Composable
-private fun FormField(
+internal fun FormField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,

@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.photo
 
 import kotlinx.coroutines.test.runTest
@@ -46,5 +47,30 @@ class FakePhotoRepositoryTest {
     assertTrue(result.isFailure)
     assertSame(error, result.exceptionOrNull())
     assertTrue(repository.uploadedPhotos.isEmpty())
+  }
+
+  @Test
+  fun deletePetPhoto_removesOnlyTheRequestedPhotoAndMissingPhotoIsSuccessful() = runTest {
+    val firstUrl = repository.uploadPetPhoto("owner-1", "pet-1", "content://photos/1").getOrThrow()
+    val secondUrl = repository.uploadPetPhoto("owner-1", "pet-2", "content://photos/2").getOrThrow()
+
+    assertTrue(repository.deletePetPhoto("owner-1", "pet-1").isSuccess)
+    assertEquals(mapOf(secondUrl to "content://photos/2"), repository.uploadedPhotos)
+    assertTrue(repository.deletePetPhoto("owner-1", "pet-1").isSuccess)
+    assertEquals(mapOf(secondUrl to "content://photos/2"), repository.uploadedPhotos)
+    assertTrue(repository.uploadedPhotos.containsKey(firstUrl).not())
+  }
+
+  @Test
+  fun deletePetPhoto_whenFailureIsSet_returnsFailureAndKeepsThePhoto() = runTest {
+    val url = repository.uploadPetPhoto("owner-1", "pet-1", "content://photos/1").getOrThrow()
+    val error = IllegalStateException("delete failed")
+    repository.failure = error
+
+    val result = repository.deletePetPhoto("owner-1", "pet-1")
+
+    assertTrue(result.isFailure)
+    assertSame(error, result.exceptionOrNull())
+    assertEquals(mapOf(url to "content://photos/1"), repository.uploadedPhotos)
   }
 }

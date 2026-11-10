@@ -28,6 +28,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -82,7 +83,7 @@ class SightingRepositoryFirestoreTest {
             id = repository.getNewId(),
             alertId = alertId,
             photoUrl = "https://example.test/milo.jpg",
-            headingDegrees = 45.0,
+            headingDegrees = 45,
         )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
@@ -179,6 +180,7 @@ class SightingRepositoryFirestoreTest {
         listOf(legacyId to SightingStatus.PENDING),
         repository.getSightingsForAlert(alertId).getOrThrow().map { it.id to it.status },
     )
+    assertNull(repository.getSightingsForAlert(alertId).getOrThrow().single().headingDegrees)
   }
 
   @Test
@@ -356,7 +358,7 @@ class SightingRepositoryFirestoreTest {
             .put("status", JSONObject().put("stringValue", sighting.status.name))
             .put(
                 "headingDegrees",
-                sighting.headingDegrees?.let { JSONObject().put("doubleValue", it) }
+                sighting.headingDegrees?.let { JSONObject().put("integerValue", it.toString()) }
                     ?: JSONObject().put("nullValue", JSONObject.NULL),
             )
     seedBypassingRules(collection = "sightings", id = sighting.id, fields = fields)
@@ -454,7 +456,7 @@ class SightingRepositoryFirestoreTest {
       seenAtMillis: Long = 1_000L,
       species: Species = Species.DOG,
       photoUrl: String? = null,
-      headingDegrees: Double? = null,
+      headingDegrees: Int? = null,
   ): Sighting {
     insertedSightingIds += id
     return Sighting(

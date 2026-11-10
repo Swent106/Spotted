@@ -1,18 +1,26 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.Pet
 
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.photo.PhotoRepository
 import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * Pets stored in Firestore. [photoRepository] has no default: it must be the backend the app saves
+ * pet photos with, or [deletePet] would look for the photo in the wrong place and leave it behind.
+ */
 class PetRepositoryFirestore(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val photoRepository: PhotoRepository,
 ) : PetRepository {
   private val pets = firestore.collection(PETS_COLLECTION)
 
@@ -23,6 +31,13 @@ class PetRepositoryFirestore(
   override suspend fun addPet(pet: Pet): Result<Unit> = firestoreResult {
     withContext(Dispatchers.IO) {
       Tasks.await(pets.document(pet.id).set(PetDocument.from(pet)))
+      Unit
+    }
+  }
+
+  override suspend fun updatePet(pet: Pet): Result<Unit> = firestoreResult {
+    withContext(Dispatchers.IO) {
+      Tasks.await(pets.document(pet.id).update(PetDocument.from(pet).toUpdateMap()))
       Unit
     }
   }
@@ -55,7 +70,15 @@ class PetRepositoryFirestore(
 
   override suspend fun deletePet(id: String): Result<Unit> = firestoreResult {
     withContext(Dispatchers.IO) {
-      Tasks.await(pets.document(id).delete())
+      val petReference = pets.document(id)
+      val snapshot = Tasks.await(petReference.get())
+      if (snapshot.exists()) {
+        val petDocument =
+            snapshot.toObject(PetDocument::class.java)
+                ?: throw IllegalStateException("Pet document $id could not be decoded")
+        photoRepository.deletePetPhoto(petDocument.ownerId, id).getOrThrow()
+        Tasks.await(petReference.delete())
+      }
       Unit
     }
   }
@@ -95,6 +118,18 @@ class PetRepositoryFirestore(
                   Behavior.entries.firstOrNull { it.name == name }
                 },
             note = note,
+        )
+
+    fun toUpdateMap(): Map<String, Any> =
+        mapOf(
+            "ownerId" to ownerId,
+            "name" to name,
+            "species" to species,
+            "breed" to breed,
+            "photoUrl" to (photoUrl ?: FieldValue.delete()),
+            "allergies" to allergies,
+            "behaviors" to behaviors,
+            "note" to note,
         )
 
     companion object {

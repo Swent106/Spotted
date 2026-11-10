@@ -39,6 +39,7 @@ import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
+import com.android.spotted.ui.editpet.EditPetScreen
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
@@ -74,11 +75,16 @@ object Route {
   const val PET_ID = "petId"
   private const val PET = "pet"
   const val PET_PROFILE = "$PET/{$PET_ID}"
+  /** The edit form of one of the user's pets, opened from its profile. */
+  private const val EDIT_PET_BASE = "edit_pet"
+  const val EDIT_PET = "$EDIT_PET_BASE/{$PET_ID}"
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
 
   fun petProfile(petId: String) = "$PET/$petId"
+
+  fun editPet(petId: String) = "$EDIT_PET_BASE/$petId"
 
   fun myAlert(alertId: String) = "$MY_ALERT_BASE/$alertId"
 
@@ -237,9 +243,9 @@ fun NavGraphBuilder.addPetsDestination(
  * missing screen, [alertDetailContent] an alert's detail, [addPetContent] Add pets opened from
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
- * profile (Profile tab), [editProfileContent] the profile form it opens and [myAlertContent] the
- * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
- * instead of the real ViewModels.
+ * profile (Profile tab), [editProfileContent] the profile form it opens, [editPetContent] the edit
+ * form of a pet and [myAlertContent] the owner's own alert, opened from a missing pet on Home;
+ * tests replace them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -289,6 +295,9 @@ fun NavGraphBuilder.homeDestinations(
           petId = petId,
           onBack = { navController.popBackStackSafely() },
       )
+    },
+    editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
+      EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)
     },
     mapContent: @Composable (onBack: () -> Unit, onAlertClick: (String) -> Unit) -> Unit =
         { onBack, onAlertClick ->
@@ -348,6 +357,11 @@ fun NavGraphBuilder.homeDestinations(
   composable(Route.ADD_PET) { addPetContent { navController.popBackStackSafely() } }
   composable(Route.PET_PROFILE) { entry ->
     petProfileContent(entry.arguments?.getString(Route.PET_ID).orEmpty())
+  }
+  composable(Route.EDIT_PET) { entry ->
+    editPetContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {
+      navController.popBackStackSafely()
+    }
   }
   composable(Route.REPORT_MISSING) { reportMissingContent { navController.popBackStackSafely() } }
   composable(Route.ALERT_DETAIL) { entry ->

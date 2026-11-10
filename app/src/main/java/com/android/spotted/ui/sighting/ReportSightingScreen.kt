@@ -58,6 +58,7 @@ import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
+import kotlin.math.roundToInt
 
 object ReportSightingScreenTestTags {
   const val SCREEN = "sightingScreen"
@@ -334,7 +335,7 @@ fun ReportSightingContent(
       }
 
       DirectionPicker(
-          selectedHeadingDegrees = state.headingDegrees,
+          selectedHeadingDegrees = state.direction?.toDouble(),
           onDirectionSelected = onDirectionSelected,
       )
 
@@ -527,7 +528,7 @@ fun ReportSightingScreen(
       },
       onAlertSelected = viewModel::selectAlert,
       onNoMatchSelected = viewModel::selectNoMatchingAlert,
-      onDirectionSelected = viewModel::setHeadingDegrees,
+      onDirectionSelected = { degrees -> viewModel.setDirection(degrees?.roundToInt()) },
       onSubmitClick = viewModel::submitSighting,
       onBack = onBack,
   )

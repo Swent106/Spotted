@@ -256,15 +256,17 @@ class HomeViewModel(
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
-        val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
+        val application =
+            requireNotNull(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
+        val photoRepository = PhotoRepositoryFirestore(application)
         HomeViewModel(
             authRepository = AuthRepositoryProvider.authRepository,
             userRepository = UserRepositoryFirestore(),
-            petRepository = PetRepositoryFirestore(),
+            petRepository = PetRepositoryFirestore(photoRepository = photoRepository),
             alertRepository = AlertRepositoryFirestore(),
-            addressRepository = application?.let { AddressRepositoryGeocoder(it) },
-            photoRepository = application?.let { PhotoRepositoryFirestore(it) },
-            locationRepository = application?.let { LocationRepositoryProvider.create(it) },
+            addressRepository = AddressRepositoryGeocoder(application),
+            photoRepository = photoRepository,
+            locationRepository = LocationRepositoryProvider.create(application),
         )
       }
     }

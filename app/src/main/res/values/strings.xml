@@ -36,6 +36,17 @@
     <string name="add_pets_not_signed_in">You need to be signed in to add a pet</string>
     <string name="add_pets_photo_upload_error">The photo couldn\'t be uploaded: the pet was saved without it</string>
     <string name="add_pets_save_error">Unable to save the pet</string>
+    <string name="edit_pet_load_error">Unable to load the pet</string>
+    <string name="edit_pet_save_error">Unable to save changes to the pet</string>
+    <string name="edit_pet_photo_upload_error">Unable to upload the new photo; pet changes were not saved</string>
+    <string name="edit_pet_photo_delete_error">Unable to remove the old photo. Save again to retry.</string>
+    <string name="edit_pet_delete_error">Unable to delete the pet</string>
+    <string name="edit_pet_open_alert_error">Close this pet\'s open alert before deleting it</string>
+    <string name="edit_pet_title">Edit %1$s</string>
+    <string name="edit_pet_subtitle">Changes are saved to %1$s’s profile</string>
+    <string name="edit_pet_allergies_section">ALLERGIES</string>
+    <string name="edit_pet_allergies_placeholder">e.g. Chicken</string>
+    <string name="edit_pet_save">Save changes</string>
     <string name="personal_info_title_create">Create your profile</string>
     <string name="personal_info_title_edit">Edit your profile</string>
     <string name="personal_info_onboarding_step">Step 1 of 2 · tell the community who you are</string>
