@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.profile
 
 import androidx.lifecycle.ViewModel
@@ -128,15 +129,16 @@ class HelperProfileViewModel(
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
+        val photoRepository =
+            PhotoRepositoryFirestore(
+                this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
+            )
         HelperProfileViewModel(
             userRepository = UserRepositoryFirestore(),
             authRepository = AuthRepositoryProvider.authRepository,
-            petRepository = PetRepositoryFirestore(),
+            petRepository = PetRepositoryFirestore(photoRepository = photoRepository),
             alertRepository = AlertRepositoryFirestore(),
-            photoRepository =
-                PhotoRepositoryFirestore(
-                    this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
-                ),
+            photoRepository = photoRepository,
         )
       }
     }

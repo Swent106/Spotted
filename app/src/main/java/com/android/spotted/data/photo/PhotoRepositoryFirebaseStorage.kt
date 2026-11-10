@@ -1,9 +1,11 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.photo
 
 import android.net.Uri
 import com.android.spotted.model.photo.PhotoRepository
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,22 @@ class PhotoRepositoryFirebaseStorage(
       Tasks.await(photoRef.downloadUrl).toString()
     }
   }
+
+  override suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit> =
+      storageResult {
+        withContext(Dispatchers.IO) {
+          try {
+            Tasks.await(storage.reference.child(petPhotoPath(ownerId, petId)).delete())
+          } catch (exception: Exception) {
+            val isMissingPhoto =
+                generateSequence(exception as Throwable?) { it.cause }
+                    .filterIsInstance<StorageException>()
+                    .any { it.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND }
+            if (!isMissingPhoto) throw exception
+          }
+          Unit
+        }
+      }
 
   override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
       storageResult {
