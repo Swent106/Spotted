@@ -288,6 +288,32 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun submitSighting_savesTheTimestampUsedForPlausibilityCheck() = runTest {
+    var nowCalls = 0
+    val alertRepository = FakeAlertRepository().apply { publishAlert(alertOwnedBy("someone-else")) }
+    val vm =
+        ReportSightingViewModel(
+                sightingRepository = sightingRepository,
+                photoRepository = photoRepository,
+                authRepository = authRepository,
+                now = { (++nowCalls).toLong() },
+                alertRepository = alertRepository,
+            )
+            .apply {
+              setSpecies(Species.DOG)
+              setLocation(ALERT_PLACE)
+              selectAlert(ALERT_ID)
+              setPhotoUri(PHOTO)
+            }
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
+    assertEquals(1, nowCalls)
+    assertEquals(1L, sightingRepository.reportedSightings.single().seenAtMillis)
+  }
+
+  @Test
   fun submitSighting_savesSelectedDirection() = runTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5197, 6.6323))

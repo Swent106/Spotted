@@ -253,19 +253,7 @@ class ReportSightingViewModel(
           uploadedPhotoUrl = uploadResult.getOrNull()
         }
 
-        val sighting =
-            Sighting(
-                id = sightingId,
-                reporterId = reporterId,
-                location = location,
-                seenAtMillis = now(),
-                species = species,
-                photoUrl = uploadedPhotoUrl,
-                headingDegrees = currentState.direction,
-                alertId =
-                    if (currentState.isNoMatchingAlertSelected) null
-                    else currentState.selectedAlertId,
-            )
+        val sighting = plausibilitySighting.copy(photoUrl = uploadedPhotoUrl)
 
         val reportResult = sightingRepository.reportSighting(sighting)
 

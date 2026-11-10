@@ -987,6 +987,22 @@ describe("Firestore sighting access rules", () => {
     }
   });
 
+  it("sighting update: reporter can preserve a legacy decimal heading", async () => {
+    await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { species: "CAT" }));
+    await assertFails(updateDoc(ref, { headingDegrees: 46.5 }));
+  });
+
+  it("sighting update: alert owner can review a sighting with a legacy decimal heading", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+  });
+
   // Only the fields the sighting rules read; the alert schema is tested above.
   async function seedAlert(id, ownerId) {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
