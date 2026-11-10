@@ -53,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
@@ -248,26 +249,7 @@ private fun AddPetsHeader(
       verticalAlignment = Alignment.CenterVertically,
       modifier = Modifier.fillMaxWidth(),
   ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier.size(40.dp)
-                .clip(CircleShape)
-                .background(SpottedTheme.colors.surface)
-                .clickable(
-                    onClickLabel = stringResource(R.string.add_pets_back),
-                    role = Role.Button,
-                    onClick = onBackClick,
-                )
-                .testTag(AddPetsScreenTestTags.BACK_BUTTON),
-    ) {
-      Icon(
-          painterResource(R.drawable.ic_arrow_back),
-          contentDescription = stringResource(R.string.add_pets_back),
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(20.dp),
-      )
-    }
+    SpottedBackButton(onClick = onBackClick, testTag = AddPetsScreenTestTags.BACK_BUTTON)
     Column(Modifier.weight(1f)) {
       Text(
           stringResource(R.string.add_pets_screen_title),
@@ -460,16 +442,11 @@ private fun AddPetsFooter(
                 )
                 .testTag(AddPetsScreenTestTags.ADD_ANOTHER_BUTTON),
     ) {
-      Text(
-          "+",
-          style =
-              jakarta(
-                  26,
-                  28f,
-                  800,
-                  if (state.canSave) SpottedTheme.colors.blue
-                  else SpottedTheme.colors.blue.copy(alpha = 0.4f),
-              ),
+      Icon(
+          painterResource(R.drawable.ic_plus),
+          contentDescription = null,
+          tint = SpottedTheme.colors.blue.copy(alpha = if (state.canSave) 1f else 0.4f),
+          modifier = Modifier.size(22.dp),
       )
     }
   }

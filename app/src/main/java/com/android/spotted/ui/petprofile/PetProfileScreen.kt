@@ -63,7 +63,7 @@ object PetProfileScreenTestTags {
   const val SPECIES = "pet_profile_species"
   const val LOADING = "pet_profile_loading"
   const val ERROR = "pet_profile_error"
-  const val BACK_BUTTON = "petProfile_backButton"
+  const val BACK_BUTTON = "pet_profile_back_button"
   const val EDIT_BUTTON = "petProfile_editButton"
 }
 

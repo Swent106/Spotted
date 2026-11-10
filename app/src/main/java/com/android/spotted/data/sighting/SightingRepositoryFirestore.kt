@@ -119,7 +119,7 @@ class SightingRepositoryFirestore(
     var photoUrl: String? = null
     var alertId: String? = null
     var status: String? = null
-    var headingDegrees: Double? = null
+    var headingDegrees: Int? = null
 
     /**
      * Returns null when required data or an enum value is invalid. Sightings saved before status or

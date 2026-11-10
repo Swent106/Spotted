@@ -2,12 +2,14 @@
     <string name="app_name">Spotted</string>
     <string name="title_activity_main">@string/app_name</string>
     <string name="title_activity_second">SecondActivity</string>
+    <string name="back">Back</string>
+    <string name="share">Share</string>
+    <string name="pet_profile_title">Pet profile</string>
     <string name="pet_profile_photo_description">Pet profile picture</string>
     <string name="pet_profile_no_photo">No Photo</string>
     <string name="alert_detail_found_message">Good news: %1$s has been found</string>
     <string name="add_pets_screen_title">Add your pet</string>
     <string name="add_pets_onboarding_step">Step 2 of 2 · you can edit it later</string>
-    <string name="add_pets_back">Back</string>
     <string name="add_pets_skip">Skip</string>
     <string name="add_pets_name_section">NAME</string>
     <string name="add_pets_name_placeholder">Your pet\'s name</string>
@@ -44,11 +46,9 @@
     <string name="edit_pet_allergies_section">ALLERGIES</string>
     <string name="edit_pet_allergies_placeholder">e.g. Chicken</string>
     <string name="edit_pet_save">Save changes</string>
-    <string name="pet_profile_title">Pet profile</string>
     <string name="pet_profile_subtitle">Your pet</string>
     <string name="pet_profile_view_photo">View photo</string>
     <string name="pet_profile_edit">Edit %1$s</string>
-    <string name="personal_info_back">Back</string>
     <string name="personal_info_title_create">Create your profile</string>
     <string name="personal_info_title_edit">Edit your profile</string>
     <string name="personal_info_onboarding_step">Step 1 of 2 · tell the community who you are</string>

@@ -51,8 +51,9 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.sighting.compassLabel
+import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.components.createMapView
-import com.android.spotted.ui.sighting.directionLabelForHeading
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
@@ -150,15 +151,11 @@ fun MyAlertContent(
               .testTag(MyAlertScreenTestTags.SCREEN),
       verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onClick = onBack, modifier = Modifier.testTag(MyAlertScreenTestTags.BACK_BUTTON)) {
-        Text("<", style = jakarta(20, 24f, 700, SpottedTheme.colors.ink))
-      }
-      Text(
-          state.alert?.let { "${it.petName} is missing" } ?: "My alert",
-          style = jakarta(22, 28f, 700, SpottedTheme.colors.ink),
-      )
-    }
+    SpottedTopBar(
+        title = state.alert?.let { "${it.petName} is missing" } ?: "My alert",
+        onBack = onBack,
+        backTestTag = MyAlertScreenTestTags.BACK_BUTTON,
+    )
 
     // One state shows one thing. An error with a loaded alert comes from a failed action (confirm,
     // dismiss, pet is home): it is shown above the alert instead of replacing it, so the owner
@@ -318,7 +315,7 @@ private fun SightingRow(
                 style = jakarta(14, 18f, 700, SpottedTheme.colors.blue),
             )
             Text(
-                "Went ${directionLabelForHeading(heading)}",
+                "Went ${compassLabel(heading)}",
                 style = jakarta(11, 15f, 600, SpottedTheme.colors.blue),
             )
           }

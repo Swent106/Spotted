@@ -244,11 +244,28 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun setDirection_normalizesDegrees() {
+    viewModel.setDirection(-10)
+    assertEquals(350, viewModel.uiState.value.direction)
+
+    viewModel.setDirection(360)
+    assertEquals(0, viewModel.uiState.value.direction)
+  }
+
+  @Test
+  fun setDirection_nullClearsSelection() {
+    viewModel.setDirection(45)
+
+    viewModel.setDirection(null)
+
+    assertNull(viewModel.uiState.value.direction)
+  }
+
+  @Test
   fun submitSighting_success_storesSightingAndSetsSubmittedFlag() = runTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5197, 6.6323))
     viewModel.setPhotoUri("content://media/dog.jpg")
-    viewModel.setHeadingDegrees(45.0)
     viewModel.selectNoMatchingAlert()
 
     assertTrue(viewModel.uiState.value.canSubmit)
@@ -265,9 +282,47 @@ class ReportSightingViewModelTest {
     assertEquals("fake_uid_from_token", saved.reporterId)
     assertEquals(fixedTimestamp, saved.seenAtMillis)
     assertEquals(Species.DOG, saved.species)
-    assertEquals(45.0, saved.headingDegrees)
     assertNull(saved.alertId)
     assertNotNull("Photo URL should be saved from photo repository", saved.photoUrl)
+    assertNull(saved.headingDegrees)
+  }
+
+  @Test
+  fun submitSighting_savesTheTimestampUsedForPlausibilityCheck() = runTest {
+    var nowCalls = 0
+    val alertRepository = FakeAlertRepository().apply { publishAlert(alertOwnedBy("someone-else")) }
+    val vm =
+        ReportSightingViewModel(
+                sightingRepository = sightingRepository,
+                photoRepository = photoRepository,
+                authRepository = authRepository,
+                now = { (++nowCalls).toLong() },
+                alertRepository = alertRepository,
+            )
+            .apply {
+              setSpecies(Species.DOG)
+              setLocation(ALERT_PLACE)
+              selectAlert(ALERT_ID)
+              setPhotoUri(PHOTO)
+            }
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
+    assertEquals(1, nowCalls)
+    assertEquals(1L, sightingRepository.reportedSightings.single().seenAtMillis)
+  }
+
+  @Test
+  fun submitSighting_savesSelectedDirection() = runTest {
+    viewModel.setSpecies(Species.DOG)
+    viewModel.setLocation(Location(46.5197, 6.6323))
+    viewModel.selectNoMatchingAlert()
+    viewModel.setDirection(45)
+
+    viewModel.submitSighting()
+
+    assertEquals(45, sightingRepository.reportedSightings.single().headingDegrees)
   }
 
   @Test
