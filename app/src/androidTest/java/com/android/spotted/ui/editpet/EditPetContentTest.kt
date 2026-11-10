@@ -75,6 +75,7 @@ class EditPetContentTest {
           onNameChange = { names += it },
           onSpeciesSelect = { speciesSelected += it },
           onPhotoChange = {},
+          onPhotoError = {},
           onDescriptionChange = { descriptions += it },
           onAllergiesChange = { allergies += it },
           onBehaviorToggle = { behaviorsToggled += it },
@@ -174,7 +175,13 @@ class EditPetContentTest {
 
   @Test
   fun loadFailure_showsOnlyTheErrorAndBack() {
-    setContent(EditPetUiState(isLoading = false, errorMessage = R.string.edit_pet_load_error))
+    setContent(
+        EditPetUiState(
+            isLoading = false,
+            loadFailed = true,
+            errorMessage = R.string.edit_pet_load_error,
+        )
+    )
 
     composeTestRule
         .onNodeWithTag(EditPetScreenTestTags.ERROR)
@@ -197,7 +204,7 @@ class EditPetContentTest {
 
   private var savedCalls = 0
 
-  private fun setScreen(petRepository: PetRepository) {
+  private fun setScreen(petRepository: PetRepository): EditPetViewModel {
     val viewModel =
         EditPetViewModel(luna.id, petRepository, FakeOpenAlertsRepository(), FakePhotoRepository())
     composeTestRule.setContent {
@@ -209,6 +216,7 @@ class EditPetContentTest {
           .fetchSemanticsNodes()
           .isNotEmpty()
     }
+    return viewModel
   }
 
   @Test
@@ -260,6 +268,19 @@ class EditPetContentTest {
     }
 
     composeTestRule.onNodeWithTag(EditPetScreenTestTags.SAVE_BUTTON).assertDoesNotExist()
+    assertEquals(0, savedCalls)
+  }
+
+  @Test
+  fun screen_cameraError_isShownOnTheForm() {
+    val viewModel = setScreen(FakePetRepository().apply { runBlocking { addPet(luna) } })
+
+    viewModel.onPhotoPickerError()
+
+    composeTestRule
+        .onNodeWithTag(EditPetScreenTestTags.ERROR)
+        .assertTextEquals("Unable to open the camera. Choose a photo from your gallery instead.")
+    composeTestRule.onNodeWithTag(EditPetScreenTestTags.NAME_FIELD).assertIsDisplayed()
     assertEquals(0, savedCalls)
   }
 

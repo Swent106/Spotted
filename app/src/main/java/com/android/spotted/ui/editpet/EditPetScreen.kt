@@ -84,14 +84,7 @@ fun EditPetScreen(
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   val currentOnSaved by rememberUpdatedState(onSaved)
-  // The ViewModel has no "saved" flag: once a requested save is over, no error means it succeeded
-  var saveRequested by rememberSaveable { mutableStateOf(false) }
-  LaunchedEffect(saveRequested, state.saving, state.errorMessage) {
-    if (saveRequested && !state.saving) {
-      saveRequested = false
-      if (state.errorMessage == null) currentOnSaved()
-    }
-  }
+  LaunchedEffect(state.saved) { if (state.saved) currentOnSaved() }
 
   EditPetContent(
       state = state,
@@ -99,15 +92,11 @@ fun EditPetScreen(
       onNameChange = viewModel::onNameChanged,
       onSpeciesSelect = viewModel::onSpeciesChanged,
       onPhotoChange = viewModel::onPhotoChanged,
+      onPhotoError = viewModel::onPhotoPickerError,
       onDescriptionChange = viewModel::onDescriptionChanged,
       onAllergiesChange = viewModel::onAllergiesChanged,
       onBehaviorToggle = viewModel::onBehaviorToggled,
-      onSave = {
-        if (state.canSave) {
-          saveRequested = true
-          viewModel.save()
-        }
-      },
+      onSave = viewModel::save,
   )
 }
 
@@ -122,6 +111,7 @@ fun EditPetContent(
     onNameChange: (String) -> Unit,
     onSpeciesSelect: (Species) -> Unit,
     onPhotoChange: (String?) -> Unit,
+    onPhotoError: () -> Unit,
     onDescriptionChange: (String) -> Unit,
     onAllergiesChange: (List<String>) -> Unit,
     onBehaviorToggle: (Behavior) -> Unit,
@@ -144,7 +134,7 @@ fun EditPetContent(
           color = SpottedTheme.colors.blue,
           modifier = Modifier.align(Alignment.Center).testTag(EditPetScreenTestTags.LOADING),
       )
-    } else if (state.errorMessage == R.string.edit_pet_load_error) {
+    } else if (state.loadFailed) {
       // Without the pet there is nothing to edit: no form, so nothing can look saved
       Column(
           verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -156,7 +146,7 @@ fun EditPetContent(
             backTag = EditPetScreenTestTags.BACK_BUTTON,
             onBack = onBack,
         )
-        ErrorText(state.errorMessage)
+        ErrorText(R.string.edit_pet_load_error)
       }
     } else {
       EditPetForm(
@@ -165,6 +155,7 @@ fun EditPetContent(
           onNameChange,
           onSpeciesSelect,
           onPhotoChange,
+          onPhotoError,
           onDescriptionChange,
           onAllergiesChange,
           onBehaviorToggle,
@@ -181,6 +172,7 @@ private fun EditPetForm(
     onNameChange: (String) -> Unit,
     onSpeciesSelect: (Species) -> Unit,
     onPhotoChange: (String?) -> Unit,
+    onPhotoError: () -> Unit,
     onDescriptionChange: (String) -> Unit,
     onAllergiesChange: (List<String>) -> Unit,
     onBehaviorToggle: (Behavior) -> Unit,
@@ -206,7 +198,7 @@ private fun EditPetForm(
         PetPhotoPicker(
             photoUri = state.photoUri,
             onPhotoSelected = onPhotoChange,
-            onPhotoError = {},
+            onPhotoError = onPhotoError,
             isSaving = state.saving,
         )
         SectionLabel(R.string.add_pets_name_section)
