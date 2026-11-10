@@ -5,15 +5,20 @@ import androidx.lifecycle.viewmodel.MutableCreationExtras
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.fakes.FakeNotificationRepository
+import com.android.spotted.model.notification.NotificationRepository
 import com.android.spotted.model.notification.SightingNotification
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -50,9 +55,75 @@ class NotificationsViewModelTest {
   private fun viewModel() = NotificationsViewModel(auth, notifications)
 
   @Test
-  fun startsLoading() {
-    assertTrue(NotificationsUiState().isLoading)
+  fun signedIn_isLoadingUntilTheRepositoryAnswers() {
+    auth.currentUser.value = ALICE
+    // A repository that hasn't emitted anything yet
+    val silent =
+        object : NotificationRepository {
+          override fun observePendingSightings(ownerId: String) =
+              MutableSharedFlow<Result<List<SightingNotification>>>()
+        }
+
+    val state = NotificationsViewModel(auth, silent).uiState.value
+
+    assertTrue(state.isLoading)
+    assertFalse(state.isEmpty)
   }
+
+  @Test
+  fun sameUidWithAnotherEmail_doesNotObserveAgainOrReset() {
+    notifications.setPending(ALICE.uid, listOf(MILO_SEEN))
+    auth.currentUser.value = ALICE
+    val vm = viewModel()
+    vm.open(MILO_SEEN)
+
+    auth.currentUser.value = ALICE.copy(email = "alice@new.example.com")
+
+    assertEquals(listOf(ALICE.uid), notifications.observedOwners)
+    assertEquals(MILO_SEEN.alertId, vm.uiState.value.destinationAlertId)
+  }
+
+  /**
+   * Regression (review of #333): with a real, queued dispatcher, an update for Alice already on its
+   * way when the user switches to Bob must never reach Bob's state, even when Bob's own load fails
+   * and the last list would otherwise be kept.
+   */
+  @Test
+  fun queuedResultOfThePreviousUser_neverReachesTheNewOne() =
+      runTest(StandardTestDispatcher()) {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        notifications.setPending(ALICE.uid, listOf(MILO_SEEN))
+        notifications.setFailure(BOB.uid, IllegalStateException("offline"))
+        auth.currentUser.value = ALICE
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertEquals(listOf(MILO_SEEN), vm.uiState.value.items)
+
+        // Both happen before any coroutine runs: Alice's update is queued, then the switch
+        notifications.setPending(ALICE.uid, listOf(MILO_SEEN, MILO_SEEN_AGAIN))
+        auth.currentUser.value = BOB
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.items.isEmpty())
+        assertEquals(NotificationsViewModel.LOAD_FAILED, vm.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun queuedResultOfThePreviousUser_isDroppedOnSignOut() =
+      runTest(StandardTestDispatcher()) {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        notifications.setPending(ALICE.uid, listOf(MILO_SEEN))
+        auth.currentUser.value = ALICE
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        notifications.setPending(ALICE.uid, listOf(MILO_SEEN, MILO_SEEN_AGAIN))
+        auth.currentUser.value = null
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.items.isEmpty())
+        assertFalse(vm.uiState.value.isLoading)
+      }
 
   @Test
   fun signedOut_showsAnEmptyListWithoutLoading() {
@@ -123,6 +194,21 @@ class NotificationsViewModelTest {
     notifications.setPending(ALICE.uid, emptyList())
     assertNull(vm.uiState.value.errorMessage)
     assertTrue(vm.uiState.value.isEmpty)
+  }
+
+  @Test
+  fun retry_observesTheListAgain() {
+    auth.currentUser.value = ALICE
+    notifications.setFailure(ALICE.uid, IllegalStateException("offline"))
+    val vm = viewModel()
+    assertEquals(NotificationsViewModel.LOAD_FAILED, vm.uiState.value.errorMessage)
+
+    notifications.setPending(ALICE.uid, listOf(MILO_SEEN))
+    vm.retry()
+
+    assertNull(vm.uiState.value.errorMessage)
+    assertEquals(listOf(MILO_SEEN), vm.uiState.value.items)
+    assertEquals(listOf(ALICE.uid, ALICE.uid), notifications.observedOwners)
   }
 
   @Test

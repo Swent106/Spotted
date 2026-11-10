@@ -14,14 +14,16 @@ import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.notification.NotificationRepository
 import com.android.spotted.model.notification.SightingNotification
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -42,17 +44,28 @@ class NotificationsViewModel(
   private val _uiState = MutableStateFlow(NotificationsUiState())
   val uiState: StateFlow<NotificationsUiState> = _uiState.asStateFlow()
 
+  /** Bumped by [retry]: the list of the current user is observed again from scratch. */
+  private val retries = MutableStateFlow(0)
+
+  /** Uid whose list is in [uiState]; results for any other uid are dropped. */
+  private var shownUid: String? = null
+
   init {
     viewModelScope.launch {
       authRepository.currentUser
           .map { it?.uid }
           .distinctUntilChanged()
-          .onEach { uid -> _uiState.value = NotificationsUiState(isLoading = uid != null) }
-          .flatMapLatest { uid ->
-            if (uid == null) emptyFlow() else notificationRepository.observePendingSightings(uid)
-          }
-          .collect { result -> show(result) }
+          .combine(retries) { uid, _ -> uid }
+          // The reset travels through the stream, after anything already queued for the previous
+          // user, and every state write happens in collect: a late result can't overwrite it
+          .flatMapLatest { uid -> updatesFor(uid) }
+          .collect { update -> apply(update) }
     }
+  }
+
+  /** Loads the list again, e.g. after a failure ("Retry"). */
+  fun retry() {
+    retries.update { it + 1 }
   }
 
   /** Opens "My alert" for the alert [notification] was reported on. */
@@ -63,6 +76,31 @@ class NotificationsViewModel(
   /** Called by the screen once it navigated, so going back doesn't navigate again. */
   fun onNavigated() {
     _uiState.update { it.copy(destinationAlertId = null) }
+  }
+
+  /** What happens to the state: a reset for a (new) user, or a result for one. */
+  private sealed interface Update {
+    data class Reset(val uid: String?) : Update
+
+    data class Loaded(val uid: String, val result: Result<List<SightingNotification>>) : Update
+  }
+
+  private fun updatesFor(uid: String?): Flow<Update> =
+      if (uid == null) flowOf(Update.Reset(null))
+      else
+          notificationRepository
+              .observePendingSightings(uid)
+              .map<Result<List<SightingNotification>>, Update> { Update.Loaded(uid, it) }
+              .onStart { emit(Update.Reset(uid)) }
+
+  private fun apply(update: Update) {
+    when (update) {
+      is Update.Reset -> {
+        shownUid = update.uid
+        _uiState.value = NotificationsUiState(isLoading = update.uid != null)
+      }
+      is Update.Loaded -> if (update.uid == shownUid) show(update.result)
+    }
   }
 
   private fun show(result: Result<List<SightingNotification>>) {
@@ -76,7 +114,7 @@ class NotificationsViewModel(
   }
 
   companion object {
-    const val LOAD_FAILED = "Couldn't load your notifications. Please try again."
+    const val LOAD_FAILED = "Couldn't load your notifications"
 
     /** Builds the ViewModel with the shared auth repository and the Firestore repositories. */
     val Factory: ViewModelProvider.Factory = viewModelFactory {
