@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.profile
 
 import com.android.spotted.model.Location
@@ -12,6 +13,7 @@ import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -143,5 +145,94 @@ class HelperProfileViewModelTest {
     assertEquals(HelperProfileViewModel.DELETE_FAILED, viewModel.uiState.value.errorMessage)
     assertFalse(viewModel.uiState.value.isLeaving)
     assertEquals(uid, authRepository.currentUser.value?.uid)
+  }
+
+  @Test
+  fun requestDeleteAccount_showsTheConfirmationAndDeletesNothing() = runTest {
+    addRexAndHisAlert()
+    val viewModel = viewModel()
+
+    viewModel.requestDeleteAccount()
+
+    assertTrue(viewModel.uiState.value.isDeleteConfirmationVisible)
+    assertFalse(viewModel.uiState.value.isLeaving)
+    assertNothingDeleted()
+  }
+
+  @Test
+  fun requestDeleteAccount_whileSigningOut_showsNoConfirmation() {
+    val signingOut =
+        object : AuthRepository by authRepository {
+          override suspend fun signOut(): Result<Unit> = awaitCancellation()
+        }
+    val viewModel = viewModel(signingOut)
+    viewModel.signOut()
+
+    viewModel.requestDeleteAccount()
+
+    assertTrue(viewModel.uiState.value.isLeaving)
+    assertFalse(viewModel.uiState.value.isDeleteConfirmationVisible)
+  }
+
+  @Test
+  fun cancelDeleteAccount_hidesTheConfirmationAndDeletesNothing() = runTest {
+    addRexAndHisAlert()
+    val viewModel = viewModel()
+    viewModel.requestDeleteAccount()
+
+    viewModel.cancelDeleteAccount()
+
+    assertFalse(viewModel.uiState.value.isDeleteConfirmationVisible)
+    assertNothingDeleted()
+  }
+
+  @Test
+  fun deleteAccount_afterTheConfirmation_hidesItAndDeletesEverything() = runTest {
+    addRexAndHisAlert()
+    val viewModel = viewModel()
+    viewModel.requestDeleteAccount()
+
+    viewModel.deleteAccount()
+
+    assertFalse(viewModel.uiState.value.isDeleteConfirmationVisible)
+    assertNull(authRepository.currentUser.value)
+    assertTrue(userRepository.getUser(uid).isFailure)
+    assertEquals(emptyList<Pet>(), petRepository.getPetsByOwner(uid).getOrThrow())
+    assertEquals(emptyList<Alert>(), alertRepository.publishedAlerts)
+  }
+
+  @Test
+  fun deleteAccount_afterTheConfirmation_whenItFails_hidesItAndShowsTheError() {
+    val viewModel = viewModel()
+    viewModel.requestDeleteAccount()
+    userRepository.failure = IllegalStateException("offline")
+
+    viewModel.deleteAccount()
+
+    assertFalse(viewModel.uiState.value.isDeleteConfirmationVisible)
+    assertEquals(HelperProfileViewModel.DELETE_FAILED, viewModel.uiState.value.errorMessage)
+  }
+
+  private suspend fun addRexAndHisAlert() {
+    petRepository.addPet(Pet(id = "rex", ownerId = uid, name = "Rex", species = Species.DOG))
+    alertRepository.publishAlert(
+        Alert(
+            id = "alert-rex",
+            petId = "rex",
+            ownerId = uid,
+            lastKnownLocation = Location(46.52, 6.63),
+            lostAtMillis = 0L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+        )
+    )
+  }
+
+  /** The account, profile, pet and alert added by [addRexAndHisAlert] are all still there. */
+  private suspend fun assertNothingDeleted() {
+    assertEquals(uid, authRepository.currentUser.value?.uid)
+    assertTrue(userRepository.getUser(uid).isSuccess)
+    assertEquals(listOf("rex"), petRepository.getPetsByOwner(uid).getOrThrow().map { it.id })
+    assertEquals(listOf("alert-rex"), alertRepository.publishedAlerts.map { it.id })
   }
 }
