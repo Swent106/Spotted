@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import org.junit.Assert.assertEquals
@@ -19,7 +20,8 @@ import org.junit.Test
  * UI tests for the stateless [SignInContent].
  *
  * Each test renders the screen with a hand-built [SignInUiState] (no ViewModel, no Firebase) and
- * checks what is shown. The screen does not scroll, so every element is checked where it is.
+ * checks what is shown. On a short screen the content scrolls, so the error message is scrolled to
+ * before it is checked.
  */
 class SignInContentTest {
 
@@ -70,6 +72,7 @@ class SignInContentTest {
 
     composeTestRule
         .onNodeWithTag(SignInScreenTestTags.ERROR_MESSAGE)
+        .performScrollTo()
         .assertIsDisplayed()
         .assertTextEquals("Sign-in cancelled")
   }
