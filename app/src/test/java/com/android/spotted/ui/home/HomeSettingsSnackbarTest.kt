@@ -12,23 +12,32 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Settings has no screen yet: the button says so instead of doing nothing (M1 feedback). */
+/** While Settings has no screen, the button says so instead of doing nothing (M1 feedback). */
 @RunWith(AndroidJUnit4::class)
 class HomeSettingsSnackbarTest {
 
   @get:Rule val composeTestRule = createComposeRule()
 
   @Test
-  fun settingsButton_showsComingSoon() {
-    var clicks = 0
-    composeTestRule.setContent {
-      HomeScreenContent(state = HomeUiState(), onSettingsClick = { clicks++ })
-    }
+  fun settingsButton_withoutSettingsAction_showsComingSoon() {
+    composeTestRule.setContent { HomeScreenContent(state = HomeUiState()) }
     composeTestRule.onNodeWithText(HomeScreenTexts.SETTINGS_COMING_SOON).assertDoesNotExist()
 
     composeTestRule.onNodeWithTag(HomeScreenTestTags.SETTINGS_BUTTON).performClick()
 
     composeTestRule.onNodeWithText(HomeScreenTexts.SETTINGS_COMING_SOON).assertIsDisplayed()
+  }
+
+  @Test
+  fun settingsButton_withSettingsAction_opensItWithoutComingSoon() {
+    var clicks = 0
+    composeTestRule.setContent {
+      HomeScreenContent(state = HomeUiState(), onSettingsClick = { clicks++ })
+    }
+
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.SETTINGS_BUTTON).performClick()
+
     assertEquals(1, clicks)
+    composeTestRule.onNodeWithText(HomeScreenTexts.SETTINGS_COMING_SOON).assertDoesNotExist()
   }
 }

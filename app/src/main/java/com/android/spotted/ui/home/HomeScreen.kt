@@ -169,7 +169,11 @@ fun HomeScreen(
   )
 }
 
-/** Stateless Home ("Near you") screen, from the Figma frame "01 · Near you". */
+/**
+ * Stateless Home ("Near you") screen, from the Figma frame "01 · Near you".
+ *
+ * @param onSettingsClick opens Settings; while it is null, the button says Settings is coming soon.
+ */
 @Composable
 fun HomeScreenContent(
     state: HomeUiState,
@@ -180,7 +184,7 @@ fun HomeScreenContent(
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
     onMissingPetClick: (alertId: String) -> Unit = {},
-    onSettingsClick: () -> Unit = {},
+    onSettingsClick: (() -> Unit)? = null,
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
@@ -195,7 +199,7 @@ fun HomeScreenContent(
     lifecycleOwner.lifecycle.addObserver(observer)
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
-  // Settings has no screen yet: say so instead of doing nothing (M1 feedback)
+  // While Settings has no screen, say so instead of doing nothing (M1 feedback)
   val snackbarHostState = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
 
@@ -246,11 +250,14 @@ fun HomeScreenContent(
             }
           },
           onSettingsClick = {
-            scope.launch {
-              snackbarHostState.currentSnackbarData?.dismiss()
-              snackbarHostState.showSnackbar(HomeScreenTexts.SETTINGS_COMING_SOON)
+            if (onSettingsClick != null) {
+              onSettingsClick()
+            } else {
+              scope.launch {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                snackbarHostState.showSnackbar(HomeScreenTexts.SETTINGS_COMING_SOON)
+              }
             }
-            onSettingsClick()
           },
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),

@@ -2,6 +2,7 @@
 package com.android.spotted.ui.components
 
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -51,7 +52,7 @@ class SharedBackButtonScreensTest {
   }
 
   @Test
-  fun petProfile_topBar_showsNameAndGoesBack() {
+  fun petProfile_topBar_showsFixedTitleAndGoesBack() {
     val pet = Pet(id = "luna", ownerId = "me", name = "Luna", species = Species.CAT)
     composeTestRule.setContent {
       PetProfileContent(
@@ -60,8 +61,9 @@ class SharedBackButtonScreensTest {
       )
     }
 
-    // Once in the top bar, once under the photo
-    assertEquals(2, composeTestRule.onAllNodesWithText("Luna").fetchSemanticsNodes().size)
+    // A fixed title, so the name is shown once, under the photo
+    composeTestRule.onNodeWithText("Pet profile").assertIsDisplayed()
+    assertEquals(1, composeTestRule.onAllNodesWithText("Luna").fetchSemanticsNodes().size)
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.BACK_BUTTON).performClick()
 
     assertEquals(1, backs)

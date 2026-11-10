@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +43,7 @@ fun SpottedBackButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+  val backLabel = stringResource(R.string.back)
   Box(
       contentAlignment = Alignment.Center,
       modifier =
@@ -51,7 +53,7 @@ fun SpottedBackButton(
               .background(SpottedTheme.colors.surface)
               .clickable(
                   enabled = enabled,
-                  onClickLabel = "Back",
+                  onClickLabel = backLabel,
                   role = Role.Button,
                   onClick = onClick,
               )
@@ -59,7 +61,7 @@ fun SpottedBackButton(
   ) {
     Icon(
         painterResource(R.drawable.ic_chevron_left),
-        contentDescription = "Back",
+        contentDescription = backLabel,
         tint = SpottedTheme.colors.ink,
         modifier = Modifier.size(22.dp),
     )

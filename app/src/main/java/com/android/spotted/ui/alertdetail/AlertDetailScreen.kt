@@ -277,7 +277,11 @@ private fun ShareButton(onClick: () -> Unit) {
           Modifier.size(BACK_BUTTON_SIZE)
               .clip(CircleShape)
               .background(SpottedTheme.colors.surface)
-              .clickable(onClickLabel = "Share", role = Role.Button, onClick = onClick)
+              .clickable(
+                  onClickLabel = stringResource(R.string.share),
+                  role = Role.Button,
+                  onClick = onClick,
+              )
               .testTag(AlertDetailTestTags.SHARE),
       contentAlignment = Alignment.Center,
   ) {

@@ -74,7 +74,7 @@ fun PetProfileContent(
   Column(modifier.fillMaxSize().padding(16.dp)) {
     onBack?.let {
       SpottedTopBar(
-          title = state.pet?.name.orEmpty(),
+          title = stringResource(R.string.pet_profile_title),
           onBack = it,
           backTestTag = PetProfileScreenTestTags.BACK_BUTTON,
       )
