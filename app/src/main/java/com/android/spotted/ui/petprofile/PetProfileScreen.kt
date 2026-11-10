@@ -105,13 +105,7 @@ fun PetProfileContent(
   LaunchedEffect(state.pet?.id, state.pet?.photoUrl) { isPhotoViewerOpen = false }
 
   Box(modifier.fillMaxSize().background(SpottedTheme.colors.screenBackground)) {
-    Image(
-        painterResource(R.drawable.background_textures),
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        alpha = 0.4f,
-        modifier = Modifier.fillMaxSize(),
-    )
+    TexturedBackground()
     Column(
         Modifier.fillMaxSize().padding(start = 20.dp, top = 52.dp, end = 20.dp, bottom = 34.dp)
     ) {
@@ -182,6 +176,18 @@ fun PetProfileContent(
       }
     }
   }
+}
+
+/** The app's paw-print texture, faded over the screen background. */
+@Composable
+private fun TexturedBackground() {
+  Image(
+      painterResource(R.drawable.background_textures),
+      contentDescription = null,
+      contentScale = ContentScale.Crop,
+      alpha = 0.4f,
+      modifier = Modifier.fillMaxSize(),
+  )
 }
 
 @Composable
