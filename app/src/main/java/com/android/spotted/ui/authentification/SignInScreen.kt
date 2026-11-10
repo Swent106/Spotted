@@ -6,8 +6,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,9 +57,9 @@ object SignInScreenTestTags {
  * Stateless Sign-In screen: shows a loader while [SignInUiState.isLoading] and the error message on
  * failure.
  *
- * The screen never scrolls: flexible spaces share the free height, so the content fits and stays
- * centred. In landscape (wider than tall) the illustration goes on the left and the sign-in part on
- * the right.
+ * When the content fits, the screen doesn't scroll: the free height is shared out so it stays
+ * centred. On a short screen or with a large font it scrolls, so the button stays reachable. In
+ * landscape (wider than tall) the illustration goes on the left and the sign-in part on the right.
  */
 @Composable
 fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
@@ -99,20 +101,30 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
         }
       }
     } else {
+      // Fills the screen and doesn't scroll when the content fits; on a short screen or with a
+      // large font it scrolls instead of pushing the button and the error off screen
       Column(
-          modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+          verticalArrangement = Arrangement.SpaceBetween,
+          modifier =
+              Modifier.fillMaxSize()
+                  .verticalScroll(rememberScrollState())
+                  .heightIn(min = maxHeight)
+                  .padding(horizontal = 24.dp, vertical = 16.dp),
       ) {
-        Spacer(Modifier.weight(1f))
-        Brand()
-        Spacer(Modifier.height(22.dp))
-        Heading()
-        Spacer(Modifier.height(22.dp))
-        Hero(Modifier.align(Alignment.CenterHorizontally))
-        Spacer(Modifier.weight(1f))
-        CommunityCount()
-        Spacer(Modifier.height(24.dp))
-        SignInAction(state, onSignInClick)
-        Spacer(Modifier.weight(1f))
+        // Empty first child: SpaceBetween then leaves the same free space above the content
+        Spacer(Modifier)
+        Column {
+          Brand()
+          Spacer(Modifier.height(22.dp))
+          Heading()
+          Spacer(Modifier.height(22.dp))
+          Hero(Modifier.align(Alignment.CenterHorizontally))
+        }
+        Column {
+          CommunityCount()
+          Spacer(Modifier.height(24.dp))
+          SignInAction(state, onSignInClick)
+        }
         Footer()
       }
     }
