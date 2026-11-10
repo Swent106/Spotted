@@ -289,9 +289,17 @@ fun NavGraphBuilder.homeDestinations(
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
           ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone)
         },
-    petProfileContent: @Composable (petId: String) -> Unit = { petId ->
-      PetProfileScreen(viewModel = viewModel(factory = PetProfileViewModel.Factory), petId = petId)
-    },
+    petProfileContent:
+        @Composable
+        (petId: String, onBack: () -> Unit, onEdit: (String) -> Unit) -> Unit =
+        { petId, onBack, onEdit ->
+          PetProfileScreen(
+              viewModel = viewModel(factory = PetProfileViewModel.Factory),
+              petId = petId,
+              onBack = onBack,
+              onEdit = onEdit,
+          )
+        },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
       EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)
     },
@@ -352,7 +360,11 @@ fun NavGraphBuilder.homeDestinations(
   }
   composable(Route.ADD_PET) { addPetContent { navController.popBackStackSafely() } }
   composable(Route.PET_PROFILE) { entry ->
-    petProfileContent(entry.arguments?.getString(Route.PET_ID).orEmpty())
+    petProfileContent(
+        entry.arguments?.getString(Route.PET_ID).orEmpty(),
+        { navController.popBackStackSafely() },
+        { petId -> if (entry.isResumed()) navController.navigate(Route.editPet(petId)) },
+    )
   }
   composable(Route.EDIT_PET) { entry ->
     editPetContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {

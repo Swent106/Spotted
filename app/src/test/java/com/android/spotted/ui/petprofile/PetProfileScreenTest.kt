@@ -53,7 +53,7 @@ class PetProfileScreenTest {
     )
 
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.NAME).assertTextEquals("Rex")
-    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.SPECIES).assertTextEquals("Species: CAT")
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.SPECIES).assertTextEquals("Cat")
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE).assertIsDisplayed()
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.IMAGE_PLACEHOLDER).assertDoesNotExist()
   }
