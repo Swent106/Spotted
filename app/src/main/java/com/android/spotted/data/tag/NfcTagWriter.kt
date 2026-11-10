@@ -51,7 +51,7 @@ class NfcTagWriter(
         // Called on an NFC binder thread, where blocking tag I/O is allowed.
         val callback = NfcAdapter.ReaderCallback { tag ->
           if (handled.compareAndSet(false, true)) {
-            continuation.resume(writeSpottedUrl(openConnection(tag), newTagId))
+            continuation.resume(writeOnTag(tag, newTagId))
           }
         }
         nfc.enableReaderMode(activity, callback, NfcTagReader.READER_FLAGS, null)
@@ -60,6 +60,21 @@ class NfcTagWriter(
       nfc.disableReaderMode(activity)
     }
   }
+
+  /**
+   * Writes [tag], turning any unexpected exception into a failure: the binder thread would swallow
+   * it, leaving [writeOnNextTap] waiting forever with reader mode on.
+   */
+  private fun writeOnTag(tag: Tag, newTagId: String): Result<TagWriteOutcome> =
+      try {
+        writeSpottedUrl(openConnection(tag), newTagId)
+      } catch (exception: SecurityException) { // Android's "tag is out of date": it left the field
+        writeFailure(TagWriteError.TAG_LOST, exception)
+      } catch (exception: IOException) {
+        writeFailure(TagWriteError.TAG_LOST, exception)
+      } catch (exception: Exception) {
+        writeFailure(TagWriteError.UNSUPPORTED, exception)
+      }
 }
 
 /** The few NDEF operations the writer needs, so its rules can be tested without a real chip. */

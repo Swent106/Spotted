@@ -18,6 +18,7 @@ import com.android.spotted.model.tag.TagWriteOutcome
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -233,6 +234,44 @@ class NfcTagWriterTest {
 
     assertTrue(result.await().isSuccess)
     assertEquals(1, connections.size)
+  }
+
+  /** Taps once with [openConnection] throwing [exception]; returns the error the call ends with. */
+  private fun TestScope.errorWhenOpeningThrows(exception: Exception): TagWriteError {
+    val writer = NfcTagWriter(activity, adapter, openConnection = { throw exception })
+    val result =
+        backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) {
+          writer.writeOnNextTap(newId)
+        }
+
+    captureCallback().onTagDiscovered(mock<Tag>())
+
+    // The call ends instead of waiting forever, and reader mode is turned off.
+    assertTrue(result.isCompleted)
+    verify(adapter).disableReaderMode(activity)
+    return errorOf(result.getCompleted())
+  }
+
+  @Test
+  fun tagOutOfDateWhenOpeningEndsTheCallAsLost() = runTest {
+    assertEquals(
+        TagWriteError.TAG_LOST,
+        errorWhenOpeningThrows(SecurityException("Tag is out of date")),
+    )
+  }
+
+  @Test
+  fun unexpectedExceptionWhenOpeningEndsTheCallAsUnsupported() = runTest {
+    assertEquals(
+        TagWriteError.UNSUPPORTED,
+        errorWhenOpeningThrows(IllegalStateException("boom")),
+    )
+  }
+
+  @Test
+  fun ioExceptionWhenOpeningEndsTheCallAsLost() = runTest {
+    // Kotlin lambdas may throw checked exceptions.
+    assertEquals(TagWriteError.TAG_LOST, errorWhenOpeningThrows(IOException("gone")))
   }
 
   @Test
