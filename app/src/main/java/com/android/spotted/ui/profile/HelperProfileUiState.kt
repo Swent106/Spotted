@@ -21,6 +21,8 @@ data class HelperProfileUiState(
     /** True while signing out or deleting the account. */
     val isLeaving: Boolean = false,
     val errorMessage: String? = null,
+    /** True while the "Delete your account?" confirmation is shown. */
+    val isDeleteConfirmationVisible: Boolean = false,
 ) {
   /** Letter shown in the avatar while there is no profile photo. */
   val initial: String

@@ -35,8 +35,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.android.spotted.model.sighting.compassLabel
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
+import kotlin.math.roundToInt
 
 private val compassDirections = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 private val directionGrid =
@@ -135,7 +137,7 @@ fun DirectionPickerContent(
                   }
                 }
               } else {
-                val isSelected = selectedHeadingDegrees?.let(::directionLabelForHeading) == label
+                val isSelected = selectedHeadingDegrees?.roundToInt()?.let(::compassLabel) == label
                 Surface(
                     onClick = { onDirectionSelected(compassDirections.indexOf(label) * 45.0) },
                     modifier =
@@ -222,13 +224,6 @@ private fun DirectionPickerPreview() {
       )
     }
   }
-}
-
-/** Maps a clockwise heading to its nearest eight-point compass label. */
-fun directionLabelForHeading(headingDegrees: Double): String {
-  val normalized = normalizeHeadingDegrees(headingDegrees)
-  val index = ((normalized + 22.5) / 45.0).toInt() % compassDirections.size
-  return compassDirections[index]
 }
 
 private fun normalizeHeadingDegrees(degrees: Double): Double = ((degrees % 360.0) + 360.0) % 360.0

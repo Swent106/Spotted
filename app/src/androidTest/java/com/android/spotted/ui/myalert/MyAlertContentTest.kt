@@ -232,7 +232,7 @@ class MyAlertContentTest {
 
   @Test
   fun sightingWithDirection_showsArrowAndCompassLabel() {
-    val withDirection = PENDING.copy(headingDegrees = 45.0)
+    val withDirection = PENDING.copy(headingDegrees = 45)
     setContent(
         MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withDirection))
     )

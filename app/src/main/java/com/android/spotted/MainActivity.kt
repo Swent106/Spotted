@@ -288,7 +288,7 @@ fun NavGraphBuilder.homeDestinations(
           val viewModel: ReportSightingViewModel =
               viewModel(factory = ReportSightingViewModel.Factory)
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
-          ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone)
+          ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone, onBack = onDone)
         },
     petProfileContent:
         @Composable

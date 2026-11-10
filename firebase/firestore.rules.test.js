@@ -783,6 +783,7 @@ describe("Firestore sighting access rules", () => {
       species: "DOG",
       photoUrl: null,
       alertId: "alert-1",
+      headingDegrees: null,
       ...overrides,
     };
   }
@@ -826,6 +827,17 @@ describe("Firestore sighting access rules", () => {
       }
     });
   }
+
+  it("sighting create: allows a document without headingDegrees", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+    const sightingWithoutHeading = sighting("sighting-1", "user-1");
+    delete sightingWithoutHeading.headingDegrees;
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sightingWithoutHeading),
+    );
+  });
 
   const readCases = [
     { who: "reporter", userId: "user-1", allowed: true },
@@ -954,6 +966,10 @@ describe("Firestore sighting access rules", () => {
       sighting("sighting-1", "user-1", { species: "PARROT" }),
       sighting("sighting-1", "user-1", { photoUrl: 42 }),
       sighting("sighting-1", "user-1", { alertId: "" }),
+      sighting("sighting-1", "user-1", { headingDegrees: -1 }),
+      sighting("sighting-1", "user-1", { headingDegrees: 360 }),
+      sighting("sighting-1", "user-1", { headingDegrees: 1.5 }),
+      sighting("sighting-1", "user-1", { headingDegrees: "45" }),
     ];
 
     for (const invalidSighting of invalidSightings) {
@@ -972,12 +988,29 @@ describe("Firestore sighting access rules", () => {
       { species: "PARROT" },
       { photoUrl: "x".repeat(2049) },
       { alertId: "" },
+      { headingDegrees: 360 },
       { species: deleteField() },
     ];
 
     for (const invalidChange of invalidChanges) {
       await assertFails(updateDoc(ref, invalidChange));
     }
+  });
+
+  it("sighting update: reporter can preserve a legacy decimal heading", async () => {
+    await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { species: "CAT" }));
+    await assertFails(updateDoc(ref, { headingDegrees: 46.5 }));
+  });
+
+  it("sighting update: alert owner can review a sighting with a legacy decimal heading", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
   });
 
   // Only the fields the sighting rules read; the alert schema is tested above.
@@ -991,7 +1024,7 @@ describe("Firestore sighting access rules", () => {
     await seedAlert("alert-1", "owner-1");
     const db = firestoreForUser("user-1");
 
-    for (const [index, headingDegrees] of [null, 0, 45.5, 359.9].entries()) {
+    for (const [index, headingDegrees] of [null, 0, 45, 359].entries()) {
       await assertSucceeds(
         setDoc(
           doc(db, "sightings", `valid-heading-${index}`),
@@ -1000,7 +1033,7 @@ describe("Firestore sighting access rules", () => {
       );
     }
 
-    for (const [index, headingDegrees] of [-0.1, 360, "NE"].entries()) {
+    for (const [index, headingDegrees] of [-1, 360, 45.5, "NE"].entries()) {
       await assertFails(
         setDoc(
           doc(db, "sightings", `invalid-heading-${index}`),
@@ -1148,6 +1181,13 @@ describe("Firestore sighting access rules", () => {
     { field: "location", value: { latitude: 90, longitude: 180 }, allowed: true },
     { field: "location", value: { latitude: -90.1, longitude: 0 }, allowed: false },
     { field: "location", value: { latitude: 0, longitude: 180.1 }, allowed: false },
+    { field: "headingDegrees", value: null, allowed: true },
+    { field: "headingDegrees", value: 0, allowed: true },
+    { field: "headingDegrees", value: 359, allowed: true },
+    { field: "headingDegrees", value: -1, allowed: false },
+    { field: "headingDegrees", value: 360, allowed: false },
+    { field: "headingDegrees", value: 1.5, allowed: false },
+    { field: "headingDegrees", value: "45", allowed: false },
   ];
 
   for (const testCase of boundaryCases) {

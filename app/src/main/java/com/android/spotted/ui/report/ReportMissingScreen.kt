@@ -42,6 +42,7 @@ import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.ui.components.MapPicker
+import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
@@ -85,21 +86,12 @@ fun ReportMissingContent(
               .testTag(ReportMissingScreenTestTags.SCREEN),
       verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      TextButton(
-          onClick = onBack,
-          modifier = Modifier.testTag(ReportMissingScreenTestTags.BACK_BUTTON),
-      ) {
-        Text("<", style = jakarta(20, 24f, 700, SpottedTheme.colors.ink))
-      }
-      Column {
-        Text("Report a pet missing", style = jakarta(22, 28f, 700, SpottedTheme.colors.ink))
-        Text(
-            "Everyone within $ALERT_RADIUS_KM km gets an alert right away",
-            style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
-        )
-      }
-    }
+    SpottedTopBar(
+        title = "Report a pet missing",
+        subtitle = "Everyone within $ALERT_RADIUS_KM km gets an alert right away",
+        onBack = onBack,
+        backTestTag = ReportMissingScreenTestTags.BACK_BUTTON,
+    )
 
     Section("Which pet is missing?") {
       if (state.isLoadingPets) {

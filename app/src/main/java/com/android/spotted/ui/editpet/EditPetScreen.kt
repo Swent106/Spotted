@@ -4,11 +4,9 @@ package com.android.spotted.ui.editpet
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -53,6 +48,7 @@ import com.android.spotted.ui.addpets.FormField
 import com.android.spotted.ui.addpets.PetPhotoPicker
 import com.android.spotted.ui.addpets.SectionLabel
 import com.android.spotted.ui.addpets.labelRes
+import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
@@ -298,8 +294,8 @@ private fun ErrorText(@StringRes error: Int, modifier: Modifier = Modifier) {
 }
 
 /**
- * Header of the pet screens (Figma 21 and 21b): the round Back button, then [title] and, if any,
- * [subtitle].
+ * Header of the pet screens (Figma 21 and 21b): the app's [SpottedTopBar], with [title] and, if
+ * any, [subtitle].
  */
 @Composable
 internal fun PetScreenHeader(
@@ -308,30 +304,5 @@ internal fun PetScreenHeader(
     backTag: String,
     onBack: () -> Unit,
 ) {
-  Row(
-      horizontalArrangement = Arrangement.spacedBy(12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      modifier = Modifier.fillMaxWidth(),
-  ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier.size(48.dp)
-                .clip(CircleShape)
-                .background(SpottedTheme.colors.surface)
-                .clickable(role = Role.Button, onClick = onBack)
-                .testTag(backTag),
-    ) {
-      Icon(
-          painterResource(R.drawable.ic_arrow_back),
-          contentDescription = stringResource(R.string.add_pets_back),
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(22.dp),
-      )
-    }
-    Column(Modifier.weight(1f)) {
-      Text(title, style = jakarta(23, 31f, 800, SpottedTheme.colors.ink))
-      subtitle?.let { Text(it, style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary)) }
-    }
-  }
+  SpottedTopBar(title = title, onBack = onBack, backTestTag = backTag, subtitle = subtitle)
 }

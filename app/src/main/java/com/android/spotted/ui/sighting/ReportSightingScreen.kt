@@ -52,14 +52,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.util.Locale
+import kotlin.math.roundToInt
 
 object ReportSightingScreenTestTags {
   const val SCREEN = "sightingScreen"
+  const val BACK_BUTTON = "sightingBackButton"
   const val PHOTO_AREA = "sightingPhotoArea"
   const val PHOTO_BUTTON = "sightingPhotoButton"
   const val LOCATION_CARD = "sightingLocationCard"
@@ -81,6 +84,7 @@ fun ReportSightingContent(
     onNoMatchSelected: () -> Unit = {},
     onDirectionSelected: (Double?) -> Unit = {},
     onSubmitClick: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
   val photoPickerActions =
       rememberPhotoPickerActions(onPhotoSelected = onPhotoSelected, onCameraUnavailable = {})
@@ -122,6 +126,15 @@ fun ReportSightingContent(
               style = jakarta(14, 18f, 600, SpottedTheme.colors.textMuted),
           )
         }
+      }
+
+      // Back to the previous screen, over the photo as in Alert detail
+      onBack?.let {
+        SpottedBackButton(
+            onClick = it,
+            testTag = ReportSightingScreenTestTags.BACK_BUTTON,
+            modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+        )
       }
 
       // Retake / Add Photo Button in top right
@@ -322,7 +335,7 @@ fun ReportSightingContent(
       }
 
       DirectionPicker(
-          selectedHeadingDegrees = state.headingDegrees,
+          selectedHeadingDegrees = state.direction?.toDouble(),
           onDirectionSelected = onDirectionSelected,
       )
 
@@ -487,6 +500,7 @@ private fun CheckIcon(modifier: Modifier = Modifier) {
 fun ReportSightingScreen(
     viewModel: ReportSightingViewModel = viewModel(factory = ReportSightingViewModel.Factory),
     onSubmitted: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
 ) {
   val state by viewModel.uiState.collectAsState()
 
@@ -514,7 +528,8 @@ fun ReportSightingScreen(
       },
       onAlertSelected = viewModel::selectAlert,
       onNoMatchSelected = viewModel::selectNoMatchingAlert,
-      onDirectionSelected = viewModel::setHeadingDegrees,
+      onDirectionSelected = { degrees -> viewModel.setDirection(degrees?.roundToInt()) },
       onSubmitClick = viewModel::submitSighting,
+      onBack = onBack,
   )
 }
