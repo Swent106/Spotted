@@ -74,22 +74,30 @@ fun SignInContent(state: SignInUiState, onSignInClick: () -> Unit) {
               .testTag(SignInScreenTestTags.SCREEN)
   ) {
     if (maxWidth > maxHeight) {
+      // Read here: inside the Row, BoxWithConstraints' maxHeight isn't reachable
+      val screenHeight = maxHeight
       Row(
           horizontalArrangement = Arrangement.spacedBy(24.dp),
           verticalAlignment = Alignment.CenterVertically,
-          modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 12.dp),
+          modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
       ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).padding(vertical = 12.dp),
         ) {
           Hero()
           CommunityCount()
         }
+        // Same fallback as portrait: centred when it fits, scrolls on a short screen or with a
+        // large font, so the button and the error stay reachable
         Column(
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier =
+                Modifier.weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = screenHeight)
+                    .padding(vertical = 12.dp),
         ) {
           Brand()
           Spacer(Modifier.height(12.dp))
