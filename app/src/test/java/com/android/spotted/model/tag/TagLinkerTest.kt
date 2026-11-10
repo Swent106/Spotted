@@ -5,6 +5,7 @@ import com.android.spotted.model.fakes.FakePetTagRepository
 import com.android.spotted.model.fakes.FakeTagWriter
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -111,11 +112,40 @@ class TagLinkerTest {
   @Test
   fun repositoryFailureWhileCheckingTheTagIsReturnedAndLinksNothing() = runTest {
     writer.existingTagId = "0000000000000000000000000000ABCD"
-    repository.failure = IllegalStateException("offline")
+    // Only getTag fails: if its error were ignored, linkTag would succeed and link the tag.
+    repository.getTagFailure = IllegalStateException("offline")
 
     val result = tapAndLink("pet-1")
 
     assertEquals("offline", result.exceptionOrNull()?.message)
     assertTrue(repository.linkedTags.isEmpty())
+  }
+
+  @Test
+  fun tagWhoseSpottedUrlHoldsAnIdFirestoreRefusesIsRewrittenWithANewId() = runTest {
+    writer.existingTagId = "abcdef12" // valid for TagUri, refused by firestore.rules
+
+    assertTrue(tapAndLink("pet-1").isSuccess)
+
+    val writtenId = writer.writtenIds.single()
+    assertEquals(writtenId, repository.linkedTags.single().tagId)
+  }
+
+  @Test
+  fun alreadySpottedWithAnIdFirestoreRefusesFailsWithoutCallingFirestore() = runTest {
+    repository.failure = IllegalStateException("Firestore must not be called")
+
+    val result = linker.link(Result.success(TagWriteOutcome.AlreadySpotted("abcdef12")), "pet-1")
+
+    assertEquals(TagWriteError.UNSUPPORTED, (result.exceptionOrNull() as TagWriteException).error)
+  }
+
+  @Test
+  fun petTagIdsFollowTheFirestoreRules() {
+    assertTrue(PetTag.isValidId("0000000000000000000000000000ABCD"))
+    assertTrue(PetTag.isValidId("04A21F")) // hardware UID
+    assertFalse(PetTag.isValidId("abcdef12"))
+    assertFalse(PetTag.isValidId("A".repeat(33)))
+    assertFalse(PetTag.isValidId(""))
   }
 }

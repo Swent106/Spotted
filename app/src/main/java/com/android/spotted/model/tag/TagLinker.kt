@@ -28,6 +28,10 @@ class TagLinker(private val petTagRepository: PetTagRepository) {
   }
 
   private suspend fun linkIfFree(tagId: String, petId: String): Result<Unit> {
+    // A TagWriter rewrites such tags; refuse here too rather than get a permission error.
+    if (!PetTag.isValidId(tagId)) {
+      return Result.failure(TagWriteException(TagWriteError.UNSUPPORTED))
+    }
     val existing =
         petTagRepository.getTag(tagId).getOrElse {
           return Result.failure(it)

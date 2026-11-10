@@ -5,7 +5,10 @@ package com.android.spotted.model.tag
 sealed interface TagWriteOutcome {
   val tagId: String
 
-  /** The tag already held a Spotted URL: nothing was written, [tagId] was read from it. */
+  /**
+   * The tag already held a Spotted URL with a valid id ([PetTag.isValidId]): nothing was written,
+   * [tagId] was read from it.
+   */
   data class AlreadySpotted(override val tagId: String) : TagWriteOutcome
 
   /** The Spotted URL of [tagId] (see [TagUri]) was written on the tag. */
@@ -37,8 +40,9 @@ class TagWriteException(val error: TagWriteError, cause: Throwable? = null) :
  */
 interface TagWriter {
   /**
-   * Waits for the next tag tapped on the phone. A tag that already holds a Spotted URL is left
-   * untouched ([TagWriteOutcome.AlreadySpotted]); any other tag gets the URL of [newTagId]
+   * Waits for the next tag tapped on the phone. A tag that already holds a Spotted URL with a valid
+   * id ([PetTag.isValidId]) is left untouched ([TagWriteOutcome.AlreadySpotted]); any other tag,
+   * including one whose Spotted URL holds an id Firestore would refuse, gets the URL of [newTagId]
    * ([TagWriteOutcome.Written]). Fails with a [TagWriteException]. Cancel the call to stop waiting.
    *
    * Only one tag reader or writer can be active at a time on a screen.

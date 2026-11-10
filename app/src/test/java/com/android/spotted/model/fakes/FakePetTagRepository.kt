@@ -18,6 +18,9 @@ class FakePetTagRepository(
   private var lastId = 0
 
   var failure: Throwable? = null
+
+  /** If set, only [getTag] fails with it; every other call works. */
+  var getTagFailure: Throwable? = null
   val linkedTags: List<PetTag>
     get() = tags.values.toList()
 
@@ -63,7 +66,7 @@ class FakePetTagRepository(
   }
 
   override suspend fun getTag(tagId: String): Result<PetTag?> {
-    failure?.let {
+    (failure ?: getTagFailure)?.let {
       return Result.failure(it)
     }
     return Result.success(tags[tagId])
