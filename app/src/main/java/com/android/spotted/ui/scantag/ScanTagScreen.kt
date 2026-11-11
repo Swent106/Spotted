@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -515,6 +516,7 @@ private fun DetailHighlight(title: String, items: List<String>, tag: String) {
               .clip(RoundedCornerShape(18.dp))
               .background(SpottedTheme.colors.warningTint)
               .padding(14.dp)
+              .semantics(mergeDescendants = true) {}
               .testTag(tag),
       verticalArrangement = Arrangement.spacedBy(4.dp),
   ) {
