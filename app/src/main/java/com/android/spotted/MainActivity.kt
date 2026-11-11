@@ -3,6 +3,8 @@ package com.android.spotted
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -40,6 +42,7 @@ import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
+import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
@@ -110,6 +113,7 @@ class MainActivity : ComponentActivity() {
             .components { add(FirestorePhotoFetcher.Factory()) }
             .build()
     )
+    keepSplashWhileLoading()
     setContent {
       SpottedTheme {
         Surface(
@@ -131,6 +135,23 @@ class MainActivity : ComponentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
+  }
+
+  /**
+   * Keeps the system splash screen until [MainViewModel] knows the start screen, so a signed-in
+   * user reopening the app goes straight to Home without a glimpse of Welcome.
+   */
+  private fun keepSplashWhileLoading() {
+    val content = findViewById<View>(android.R.id.content)
+    content.viewTreeObserver.addOnPreDrawListener(
+        object : ViewTreeObserver.OnPreDrawListener {
+          override fun onPreDraw(): Boolean {
+            if (mainViewModel.uiState.value == StartDestination.LOADING) return false
+            content.viewTreeObserver.removeOnPreDrawListener(this)
+            return true
+          }
+        }
+    )
   }
 }
 
@@ -177,13 +198,15 @@ fun StartRouting(destination: StartDestination, navController: NavController) {
 
   LaunchedEffect(destination) {
     if (destination == routedDestination) return@LaunchedEffect
-    routedDestination = destination
     val targetRoute =
         when (destination) {
+          // The splash screen hides the app until the start screen is known
+          StartDestination.LOADING -> return@LaunchedEffect
           StartDestination.SIGNIN -> Route.SIGNIN
           StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
           StartDestination.HOME -> Route.HOME
         }
+    routedDestination = destination
     navController.navigate(targetRoute) {
       popUpTo(0) { inclusive = true }
       launchSingleTop = true
@@ -289,13 +312,24 @@ fun NavGraphBuilder.homeDestinations(
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
           ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone, onBack = onDone)
         },
-    petProfileContent: @Composable (petId: String) -> Unit = { petId ->
-      PetProfileScreen(
-          viewModel = viewModel(factory = PetProfileViewModel.Factory),
-          petId = petId,
-          onBack = { navController.popBackStackSafely() },
-      )
-    },
+    petProfileContent:
+        @Composable
+        (
+            petId: String,
+            onBack: () -> Unit,
+            onEdit: (String) -> Unit,
+            onDeleted: () -> Unit,
+        ) -> Unit =
+        { petId, onBack, onEdit, onDeleted ->
+          PetProfileScreen(
+              viewModel = viewModel(factory = PetProfileViewModel.Factory),
+              petId = petId,
+              deleteViewModel = viewModel(key = petId, factory = EditPetViewModel.factory(petId)),
+              onBack = onBack,
+              onEdit = onEdit,
+              onDeleted = onDeleted,
+          )
+        },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
       EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)
     },
@@ -356,7 +390,13 @@ fun NavGraphBuilder.homeDestinations(
   }
   composable(Route.ADD_PET) { addPetContent { navController.popBackStackSafely() } }
   composable(Route.PET_PROFILE) { entry ->
-    petProfileContent(entry.arguments?.getString(Route.PET_ID).orEmpty())
+    petProfileContent(
+        entry.arguments?.getString(Route.PET_ID).orEmpty(),
+        { navController.popBackStackSafely() },
+        { petId -> if (entry.isResumed()) navController.navigate(Route.editPet(petId)) },
+        // The pet no longer exists: back to Home, with its profile removed from the back stack
+        { navController.popBackStack(Route.HOME, inclusive = false) },
+    )
   }
   composable(Route.EDIT_PET) { entry ->
     editPetContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {

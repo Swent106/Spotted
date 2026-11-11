@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui
 
 import com.android.spotted.model.auth.FakeAuthRepository
@@ -5,6 +6,7 @@ import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -36,6 +38,17 @@ class MainViewModelTest {
   @Test
   fun factory_executesFactory() {
     runCatching { MainViewModel.Factory.create(MainViewModel::class.java) }
+  }
+
+  @Test
+  fun whileTheProfileIsRead_startDestinationIsLoading() = runTest {
+    authRepository.signInWithGoogle("fake_token")
+    Dispatchers.setMain(StandardTestDispatcher())
+
+    // The collection has not run yet: the start screen is still unknown
+    val viewModel = MainViewModel(authRepository, userRepository)
+
+    assertEquals(StartDestination.LOADING, viewModel.uiState.value)
   }
 
   @Test
