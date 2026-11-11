@@ -289,7 +289,7 @@ fun PetProfileContent(
 
 /** The app's paw-print texture, faded over the screen background. */
 @Composable
-private fun TexturedBackground() {
+internal fun TexturedBackground() {
   Image(
       painterResource(R.drawable.background_textures),
       contentDescription = null,
