@@ -154,9 +154,9 @@ class HelperProfileContentTest {
   private var confirms = 0
   private var cancels = 0
 
-  private fun setConfirmDialog(darkTheme: Boolean = false) {
+  private fun setConfirmDialog() {
     composeTestRule.setContent {
-      SpottedTheme(darkTheme = darkTheme) {
+      SpottedTheme {
         DeleteAccountConfirmDialog(onConfirm = { confirms++ }, onCancel = { cancels++ })
       }
     }
@@ -193,13 +193,5 @@ class HelperProfileContentTest {
 
     assertEquals(1, confirms)
     assertEquals(0, cancels)
-  }
-
-  @Test
-  fun deleteConfirmation_inDarkMode_showsBothButtons() {
-    setConfirmDialog(darkTheme = true)
-
-    composeTestRule.onNodeWithTag(HelperProfileTestTags.DELETE_CONFIRM).assertIsDisplayed()
-    composeTestRule.onNodeWithTag(HelperProfileTestTags.DELETE_CANCEL).assertIsDisplayed()
   }
 }

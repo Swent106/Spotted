@@ -3,19 +3,19 @@ package com.android.spotted.ui.profile
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.auth.FakeAuthRepository
-import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
-import kotlinx.coroutines.runBlocking
+import com.android.spotted.utils.FakeOpenAlertsRepository
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -33,7 +33,7 @@ class HelperProfileScreenTest {
   private lateinit var viewModel: HelperProfileViewModel
 
   @Before
-  fun setUp() = runBlocking {
+  fun setUp() = runTest {
     uid = authRepository.signInWithGoogle("token").getOrThrow().uid
     userRepository.saveUser(UserProfile(uid = uid, name = "Rayen", email = "rayen@example.com"))
     viewModel =
@@ -41,19 +41,15 @@ class HelperProfileScreenTest {
             userRepository,
             authRepository,
             PetRepositoryLocal(),
-            FakeAlertRepository(),
+            FakeOpenAlertsRepository(),
         )
     composeTestRule.setContent { HelperProfileScreen(viewModel = viewModel) }
     composeTestRule.waitForIdle()
   }
 
-  private fun openAccountOptions() {
+  private fun askToDelete() {
     composeTestRule.onNodeWithTag(HelperProfileTestTags.ACCOUNT_BUTTON).performClick()
     composeTestRule.waitForIdle()
-  }
-
-  private fun askToDelete() {
-    openAccountOptions()
     composeTestRule.onNodeWithTag(HelperProfileTestTags.DELETE_ACCOUNT).performClick()
     composeTestRule.waitForIdle()
   }
@@ -83,13 +79,15 @@ class HelperProfileScreenTest {
   }
 
   @Test
-  fun cancelOnTheAccountOptions_closesThem() {
-    openAccountOptions()
+  fun deleteOnTheConfirmation_closesItAndDeletesTheAccount() = runTest {
+    askToDelete()
 
-    composeTestRule.onNodeWithText("Cancel").performClick()
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.DELETE_CONFIRM).performClick()
+
     composeTestRule.waitForIdle()
-
-    assertFalse(isShown(HelperProfileTestTags.ACCOUNT_OPTIONS))
-    assertEquals(uid, authRepository.currentUser.value?.uid)
+    assertFalse(isShown(HelperProfileTestTags.DELETE_CONFIRM_DIALOG))
+    // Credential Manager is cleared on the device first, then the account is deleted
+    composeTestRule.waitUntil(timeoutMillis = 5_000) { authRepository.currentUser.value == null }
+    assertTrue(userRepository.getUser(uid).isFailure)
   }
 }

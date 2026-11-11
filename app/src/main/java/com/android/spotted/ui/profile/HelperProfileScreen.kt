@@ -136,7 +136,11 @@ fun HelperProfileScreen(
 
   if (state.isDeleteConfirmationVisible) {
     DeleteAccountConfirmDialog(
-        onConfirm = { leave(viewModel::deleteAccount) },
+        onConfirm = {
+          // Hide the dialog first: clearing Credential Manager takes a moment
+          viewModel.cancelDeleteAccount()
+          leave(viewModel::deleteAccount)
+        },
         onCancel = viewModel::cancelDeleteAccount,
     )
   }
