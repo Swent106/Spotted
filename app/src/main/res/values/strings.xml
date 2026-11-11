@@ -49,6 +49,7 @@
     <string name="pet_profile_subtitle">Your pet</string>
     <string name="pet_profile_view_photo">View photo</string>
     <string name="pet_profile_edit">Edit %1$s</string>
+    <string name="pet_profile_link_tag">Link a tag</string>
     <string name="pet_profile_delete">Delete %1$s</string>
     <string name="pet_profile_delete_title">Delete %1$s?</string>
     <string name="pet_profile_delete_message">%1$s’s profile and photo will be removed for good. This can’t be undone.</string>
