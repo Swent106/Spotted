@@ -129,6 +129,8 @@ class ReportSightingContentTest {
             selectedSpecies = Species.CAT,
             isNoMatchingAlertSelected = true,
             location = Location(46.5, 6.6),
+            photoUri = PHOTO,
+            photoCheck = PhotoCheck.ANIMAL,
             detectedSpecies = Species.CAT,
         )
 
@@ -260,6 +262,8 @@ class ReportSightingContentTest {
             selectedSpecies = Species.DOG,
             location = Location(46.5, 6.6),
             isNoMatchingAlertSelected = true,
+            photoUri = PHOTO,
+            photoCheck = PhotoCheck.ANIMAL,
             nearbyAlerts =
                 listOf(
                     NearbyAlertOption(
@@ -325,6 +329,7 @@ class ReportSightingContentTest {
     viewModel.setSpecies(Species.CAT)
     viewModel.setLocation(Location(46.5, 6.6))
     viewModel.selectNoMatchingAlert()
+    viewModel.setPhotoUri(PHOTO)
 
     composeTestRule.setContent {
       ReportSightingScreen(
@@ -361,6 +366,8 @@ class ReportSightingContentTest {
   fun reportSightingScreen_successfulSubmit_callsOnSubmitted() {
     grantLocationPermission()
     val viewModel = viewModelWithFakes()
+    // Without a matching alert, the photo is required
+    viewModel.setPhotoUri(PHOTO)
     var submittedCalled = false
 
     composeTestRule.setContent {
@@ -418,6 +425,47 @@ class ReportSightingContentTest {
 
     composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_CHECKING).assertDoesNotExist()
     composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_WARNING).assertDoesNotExist()
+  }
+
+  @Test
+  fun noMatchingAlertWithoutPhoto_showsThePhotoHintAndDisablesSend() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state =
+              ReportSightingUiState(
+                  selectedSpecies = Species.DOG,
+                  location = Location(46.5, 6.6),
+                  isNoMatchingAlertSelected = true,
+              )
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.PHOTO_REQUIRED)
+        .assertIsDisplayed()
+        .assertTextEquals(
+            "Add a photo: with no matching alert, it's how the owner will recognise their pet."
+        )
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .assertIsNotEnabled()
+  }
+
+  @Test
+  fun existingAlertWithoutPhoto_showsNoPhotoHint() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state =
+              ReportSightingUiState(
+                  selectedSpecies = Species.DOG,
+                  location = Location(46.5, 6.6),
+                  selectedAlertId = "alert_1",
+              )
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_REQUIRED).assertDoesNotExist()
   }
 
   private fun grantLocationPermission() {

@@ -318,6 +318,7 @@ class ReportSightingViewModelTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5197, 6.6323))
     viewModel.selectNoMatchingAlert()
+    viewModel.setPhotoUri(PHOTO)
     viewModel.setDirection(45)
 
     viewModel.submitSighting()
@@ -361,6 +362,7 @@ class ReportSightingViewModelTest {
     viewModel.setSpecies(Species.DOG)
     viewModel.setLocation(Location(46.5, 6.6))
     viewModel.selectNoMatchingAlert()
+    viewModel.setPhotoUri(PHOTO)
 
     sightingRepository.reportFailure = Exception("Database write error")
 
@@ -402,6 +404,7 @@ class ReportSightingViewModelTest {
     vm.setSpecies(Species.DOG)
     vm.setLocation(Location(46.5, 6.6))
     vm.selectNoMatchingAlert()
+    vm.setPhotoUri(PHOTO)
 
     vm.submitSighting()
 
@@ -747,6 +750,57 @@ class ReportSightingViewModelTest {
           photoRepository = photoRepository,
           authRepository = authRepository,
           animalDetector = detector,
+      )
+
+  @Test
+  fun canSubmit_withNoMatchingAlertAndNoPhoto_isFalseAndAsksForAPhoto() {
+    val state = validNoMatchState()
+
+    assertFalse(state.canSubmit)
+    assertTrue(state.isPhotoMissing)
+  }
+
+  @Test
+  fun canSubmit_withNoMatchingAlertAndAPhotoOfAnAnimal_isTrue() {
+    val state = validNoMatchState().copy(photoUri = PHOTO, photoCheck = PhotoCheck.ANIMAL)
+
+    assertTrue(state.canSubmit)
+    assertFalse(state.isPhotoMissing)
+  }
+
+  @Test
+  fun canSubmit_withNoMatchingAlertAndAPhotoWithoutAnAnimal_isFalse() {
+    val state = validNoMatchState().copy(photoUri = PHOTO, photoCheck = PhotoCheck.NO_ANIMAL)
+
+    assertFalse(state.canSubmit)
+  }
+
+  @Test
+  fun canSubmit_withAnExistingAlertAndNoPhoto_isTrue() {
+    val state =
+        validNoMatchState().copy(isNoMatchingAlertSelected = false, selectedAlertId = ALERT_ID)
+
+    assertTrue(state.canSubmit)
+    assertFalse(state.isPhotoMissing)
+  }
+
+  @Test
+  fun selectNoMatchingAlert_withoutPhoto_blocksTheSubmitUntilAPhotoIsAdded() {
+    val vm = viewModelWith(FakeAnimalDetector()).withAValidForm()
+
+    assertFalse(vm.uiState.value.canSubmit)
+
+    vm.setPhotoUri(PHOTO)
+
+    assertTrue(vm.uiState.value.canSubmit)
+  }
+
+  /** A form with "No matching alert" that has everything except the photo. */
+  private fun validNoMatchState() =
+      ReportSightingUiState(
+          selectedSpecies = Species.DOG,
+          location = Location(46.5, 6.6),
+          isNoMatchingAlertSelected = true,
       )
 
   /** Fills everything [ReportSightingUiState.canSubmit] needs, except the photo. */

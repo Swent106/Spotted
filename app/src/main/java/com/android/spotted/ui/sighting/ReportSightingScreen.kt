@@ -73,6 +73,7 @@ object ReportSightingScreenTestTags {
   const val ERROR_MESSAGE = "sightingErrorMessage"
   const val PHOTO_CHECKING = "sighting_photoChecking"
   const val PHOTO_WARNING = "sighting_photoWarning"
+  const val PHOTO_REQUIRED = "sighting_photoRequired"
 }
 
 @Composable
@@ -181,6 +182,18 @@ fun ReportSightingContent(
                     .testTag(ReportSightingScreenTestTags.PHOTO_CHECKING)
                     .semantics { contentDescription = "Checking the photo" },
             color = SpottedTheme.colors.onAccent,
+        )
+      }
+      if (state.isPhotoMissing) {
+        Text(
+            stringResource(R.string.sighting_photo_required),
+            style = jakarta(12, 16f, 600, SpottedTheme.colors.inkSoft),
+            modifier =
+                Modifier.align(Alignment.BottomStart)
+                    .padding(16.dp)
+                    .background(SpottedTheme.colors.surface, RoundedCornerShape(100.dp))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .testTag(ReportSightingScreenTestTags.PHOTO_REQUIRED),
         )
       }
       if (state.photoCheck == PhotoCheck.NO_ANIMAL) {
