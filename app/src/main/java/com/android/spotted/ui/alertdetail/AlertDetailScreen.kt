@@ -71,6 +71,7 @@ object AlertDetailTestTags {
   const val LOST_AT = "alertDetail_lostAt"
   const val MAP = "alertDetail_map"
   const val LOCATION = "alertDetail_location"
+  const val PLACE = "alertDetail_place"
   const val DISTANCE = "alertDetail_distance"
   const val ALLERGIES = "alertDetail_allergies"
   const val ALLERGY_PREFIX = "alertDetail_allergy_"
@@ -146,6 +147,7 @@ fun AlertDetailContent(
         AlertDetails(
             alert = state.alert,
             distanceText = state.distanceText,
+            placeName = state.placeName,
             onReportSighting = onReportSighting,
             onBack = onBack,
             onShare = { onShare(state.alert) },
@@ -158,6 +160,7 @@ fun AlertDetailContent(
 private fun AlertDetails(
     alert: Alert,
     distanceText: String?,
+    placeName: String?,
     onReportSighting: () -> Unit,
     onBack: () -> Unit,
     onShare: () -> Unit,
@@ -188,9 +191,9 @@ private fun AlertDetails(
             modifier = Modifier.testTag(AlertDetailTestTags.FOUND_MESSAGE),
         )
       }
-      PetSummary(alert, distanceText)
+      PetSummary(alert, distanceText, placeName)
       PetWarnings(alert)
-      LastSeenArea(alert.lastKnownLocation)
+      LastSeenArea(alert.lastKnownLocation, placeName)
     }
     BottomActions(
         canReportSighting = alert.status == AlertStatus.OPEN,
@@ -257,7 +260,7 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PetSummary(alert: Alert, distanceText: String?) {
+private fun PetSummary(alert: Alert, distanceText: String?, placeName: String?) {
   Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text(
@@ -277,7 +280,9 @@ private fun PetSummary(alert: Alert, distanceText: String?) {
       )
     }
     Text(
-        "Lost ${timeSinceLost(alert.lostAtMillis)} · ${locationCoordinates(alert.lastKnownLocation)}",
+        // The place's name once it is known, e.g. "Ouchy, Lausanne"; until then, the coordinates
+        "Lost ${timeSinceLost(alert.lostAtMillis)} · " +
+            (placeName ?: locationCoordinates(alert.lastKnownLocation)),
         style = jakarta(12, 17f, 600, SpottedTheme.colors.lostRed),
         modifier = Modifier.testTag(AlertDetailTestTags.LOST_AT),
     )
@@ -400,7 +405,7 @@ private fun WarningCard(
 }
 
 @Composable
-private fun LastSeenArea(location: Location) {
+private fun LastSeenArea(location: Location, placeName: String?) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Text("LAST SEEN AREA", style = jakarta(11, 14f, 600, SpottedTheme.colors.textSecondary))
     Box(
@@ -446,8 +451,9 @@ private fun LastSeenArea(location: Location) {
           verticalArrangement = Arrangement.spacedBy(2.dp),
       ) {
         Text(
-            "Around last known location",
+            placeName?.let { "Around $it" } ?: "Around last known location",
             style = jakarta(12, 16f, 700, SpottedTheme.colors.ink),
+            modifier = Modifier.testTag(AlertDetailTestTags.PLACE),
         )
         Text(
             locationCoordinates(location),
