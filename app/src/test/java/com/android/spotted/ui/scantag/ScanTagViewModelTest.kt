@@ -84,7 +84,7 @@ class ScanTagViewModelTest {
         FakePetTagRepository(
             initialTags =
                 listOf(
-                    tag.copy(showPhone = false, showEmail = false),
+                    tag.copy(showPhone = false, showEmail = true),
                 )
         )
     val petRepository = FakePetRepository().apply { addPet(pet) }
@@ -107,10 +107,31 @@ class ScanTagViewModelTest {
             species = pet.species,
             allergies = pet.allergies,
             behaviors = pet.behaviors,
+            visibleEmail = tag.contactEmail,
             openAlertId = "alert-1",
         ),
         viewModel.uiState.value,
     )
+  }
+
+  @Test
+  fun onTagScanned_linkedTag_exposesPhoneAndHidesEmailWhenConfigured() = runTest {
+    val petRepository = FakePetRepository().apply { addPet(pet) }
+    val viewModel =
+        ScanTagViewModel(
+            FakePetTagRepository(
+                initialTags = listOf(tag.copy(showPhone = true, showEmail = false))
+            ),
+            petRepository,
+            FakeAlertRepository(),
+        )
+
+    viewModel.onTagScanned(tag.tagId)
+    advanceUntilIdle()
+
+    assertEquals(ScanTagStep.Found, viewModel.uiState.value.step)
+    assertEquals(tag.contactPhone, viewModel.uiState.value.visiblePhone)
+    assertNull(viewModel.uiState.value.visibleEmail)
   }
 
   @Test
