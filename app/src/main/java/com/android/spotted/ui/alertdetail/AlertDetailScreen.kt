@@ -4,7 +4,6 @@ package com.android.spotted.ui.alertdetail
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +39,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -53,7 +51,6 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.alert.alertShareText
-import com.android.spotted.ui.components.BACK_BUTTON_SIZE
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.shareText
@@ -173,7 +170,7 @@ private fun AlertDetails(
               .background(SpottedTheme.colors.screenBackground)
               .testTag(AlertDetailTestTags.SCREEN),
   ) {
-    PetPhotoHeader(alert = alert, onBack = onBack, onShare = onShare)
+    PetPhotoHeader(alert = alert, onBack = onBack)
     Column(
         modifier =
             Modifier.weight(1f)
@@ -195,14 +192,16 @@ private fun AlertDetails(
       PetWarnings(alert)
       LastSeenArea(alert.lastKnownLocation)
     }
-    if (alert.status == AlertStatus.OPEN) {
-      ReportSightingBar(onClick = onReportSighting)
-    }
+    BottomActions(
+        canReportSighting = alert.status == AlertStatus.OPEN,
+        onReportSighting = onReportSighting,
+        onShare = onShare,
+    )
   }
 }
 
 @Composable
-private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit) {
+private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit) {
   Box(
       modifier =
           Modifier.fillMaxWidth()
@@ -231,14 +230,11 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
               Modifier.align(Alignment.Center).testTag(AlertDetailTestTags.PHOTO_PLACEHOLDER),
       )
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 48.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-      SpottedBackButton(onClick = onBack, testTag = AlertDetailTestTags.BACK)
-      ShareButton(onClick = onShare)
-    }
+    SpottedBackButton(
+        onClick = onBack,
+        testTag = AlertDetailTestTags.BACK,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 48.dp),
+    )
     if (alert.status == AlertStatus.OPEN) {
       Row(
           modifier =
@@ -257,26 +253,6 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
         )
       }
     }
-  }
-}
-
-/** "↗" in a circle the size of the back button, so both sides of the photo match. */
-@Composable
-private fun ShareButton(onClick: () -> Unit) {
-  Box(
-      modifier =
-          Modifier.size(BACK_BUTTON_SIZE)
-              .clip(CircleShape)
-              .background(SpottedTheme.colors.surface)
-              .clickable(
-                  onClickLabel = stringResource(R.string.share),
-                  role = Role.Button,
-                  onClick = onClick,
-              )
-              .testTag(AlertDetailTestTags.SHARE),
-      contentAlignment = Alignment.Center,
-  ) {
-    Text("↗", style = jakarta(22, 26f, 600, SpottedTheme.colors.ink))
   }
 }
 
@@ -483,22 +459,47 @@ private fun LastSeenArea(location: Location) {
   }
 }
 
+/**
+ * The actions at the bottom (Figma "07 · Alert detail"): "I have seen this pet" while the alert is
+ * open, and "Share", which stays once the pet is found.
+ */
 @Composable
-private fun ReportSightingBar(onClick: () -> Unit) {
-  Box(
+private fun BottomActions(
+    canReportSighting: Boolean,
+    onReportSighting: () -> Unit,
+    onShare: () -> Unit,
+) {
+  Row(
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
       modifier =
           Modifier.fillMaxWidth()
               .background(SpottedTheme.colors.surface)
               .padding(horizontal = 20.dp, vertical = 12.dp),
   ) {
+    if (canReportSighting) {
+      Button(
+          onClick = onReportSighting,
+          modifier = Modifier.weight(1f).height(48.dp).testTag(AlertDetailTestTags.REPORT_SIGHTING),
+          shape = RoundedCornerShape(13.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
+      ) {
+        Text("I have seen this pet", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+      }
+    }
+    // Same look as "Share" on My alert
     Button(
-        onClick = onClick,
+        onClick = onShare,
         modifier =
-            Modifier.fillMaxWidth().height(48.dp).testTag(AlertDetailTestTags.REPORT_SIGHTING),
+            (if (canReportSighting) Modifier else Modifier.weight(1f))
+                .height(48.dp)
+                .testTag(AlertDetailTestTags.SHARE),
         shape = RoundedCornerShape(13.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
+        colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.inputBackground),
     ) {
-      Text("I have seen this pet", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+      Text(
+          stringResource(R.string.share),
+          style = jakarta(14, 18f, 700, SpottedTheme.colors.ink),
+      )
     }
   }
 }
