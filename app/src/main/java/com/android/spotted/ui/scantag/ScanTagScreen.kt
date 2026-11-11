@@ -80,6 +80,8 @@ object ScanTagScreenTestTags {
   const val OPEN_NFC_SETTINGS = "scanTag_openNfcSettings"
   const val PHONE = "scanTag_phone"
   const val EMAIL = "scanTag_email"
+  const val PET_NAME = "scanTag_petName"
+  const val PHOTO_PLACEHOLDER = "scanTag_photoPlaceholder"
   const val ALLERGIES = "scanTag_allergies"
   const val BEHAVIORS = "scanTag_behaviors"
 }
@@ -421,14 +423,16 @@ private fun FoundPetContent(
           contentAlignment = Alignment.Center,
       ) {
         Text(
-            state.petName ?: "Pet",
+            "Photo unavailable",
             style = jakarta(24, 30f, FontWeight.Bold, SpottedTheme.colors.ink),
+            modifier = Modifier.testTag(ScanTagScreenTestTags.PHOTO_PLACEHOLDER),
         )
       }
     }
     Text(
         state.petName ?: "Pet found",
         style = jakarta(24, 30f, FontWeight.Bold, SpottedTheme.colors.ink),
+        modifier = Modifier.testTag(ScanTagScreenTestTags.PET_NAME),
     )
     state.species?.let {
       Text(

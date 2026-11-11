@@ -3,6 +3,7 @@ package com.android.spotted.ui.scantag
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -66,7 +67,10 @@ class ScanTagContentTest {
     }
 
     composeTestRule.onNodeWithTag(ScanTagScreenTestTags.FOUND).assertIsDisplayed()
-    composeTestRule.onNodeWithText("Luna").assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ScanTagScreenTestTags.PET_NAME).assertTextEquals("Luna")
+    composeTestRule
+        .onNodeWithTag(ScanTagScreenTestTags.PHOTO_PLACEHOLDER)
+        .assertTextEquals("Photo unavailable")
     composeTestRule.onNodeWithTag(ScanTagScreenTestTags.ALLERGIES).assertTextContains("Chicken")
     composeTestRule
         .onNodeWithTag(ScanTagScreenTestTags.BEHAVIORS)
