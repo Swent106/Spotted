@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.spotted.R
 import com.android.spotted.model.notification.SightingNotification
+import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.home.PetPhoto
 import com.android.spotted.ui.home.timeAgo
 import com.android.spotted.ui.theme.SpottedTheme
@@ -122,34 +122,13 @@ fun NotificationsContent(
         modifier = Modifier.fillMaxSize().statusBarsPadding().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-      Header(onBack)
+      SpottedTopBar(
+          title = "Notifications",
+          onBack = onBack,
+          backTestTag = NotificationsScreenTestTags.BACK_BUTTON,
+      )
       Body(state, nowMillis, onOpen, onRetry)
     }
-  }
-}
-
-/** Round back button and the title. */
-@Composable
-private fun Header(onBack: () -> Unit) {
-  Row(verticalAlignment = Alignment.CenterVertically) {
-    Box(
-        modifier =
-            Modifier.size(44.dp)
-                .clip(CircleShape)
-                .background(SpottedTheme.colors.surface)
-                .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBack)
-                .testTag(NotificationsScreenTestTags.BACK_BUTTON),
-        contentAlignment = Alignment.Center,
-    ) {
-      Icon(
-          painterResource(R.drawable.ic_arrow_back),
-          contentDescription = "Back",
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(20.dp),
-      )
-    }
-    Spacer(Modifier.width(12.dp))
-    Text("Notifications", style = jakarta(22, 28f, 700, SpottedTheme.colors.ink))
   }
 }
 
