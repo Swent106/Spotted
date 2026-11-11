@@ -15,6 +15,7 @@ import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.tag.PetTagRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,10 +49,12 @@ class ScanTagViewModel(
 
   private val _uiState = MutableStateFlow(ScanTagUiState())
   val uiState: StateFlow<ScanTagUiState> = _uiState.asStateFlow()
+  private var scanJob: Job? = null
 
   fun onTagScanned(tagId: String) {
+    scanJob?.cancel()
     _uiState.value = ScanTagUiState(step = ScanTagStep.Loading)
-    viewModelScope.launch {
+    scanJob = viewModelScope.launch {
       val tag =
           petTagRepository.getTag(tagId).getOrElse {
             _uiState.value = ScanTagUiState(step = ScanTagStep.Error)

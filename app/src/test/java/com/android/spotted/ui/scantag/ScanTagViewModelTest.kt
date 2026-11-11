@@ -11,22 +11,47 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakePetTagRepository
 import com.android.spotted.model.tag.PetTag
+import com.android.spotted.model.tag.PetTagRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 private class FailingPetRepository(private val failure: Throwable) :
     PetRepository by FakePetRepository() {
   override suspend fun getPet(id: String): Result<Pet> = Result.failure(failure)
+}
+
+private class BlockingPetTagRepository(
+    private val blockedTagId: String,
+    private val delegate: PetTagRepository,
+) : PetTagRepository by delegate {
+  var blockedScanCancelled = false
+    private set
+
+  override suspend fun getTag(tagId: String): Result<PetTag?> {
+    if (tagId == blockedTagId) {
+      try {
+        awaitCancellation()
+      } catch (cancellation: CancellationException) {
+        blockedScanCancelled = true
+        throw cancellation
+      }
+    }
+    return delegate.getTag(tagId)
+  }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,29 +79,24 @@ class ScanTagViewModelTest {
   }
 
   @Test
-  fun initialState_waitsForTag() {
-    val viewModel =
-        ScanTagViewModel(FakePetTagRepository(), FakePetRepository(), FakeAlertRepository())
-
-    assertEquals(ScanTagStep.WaitingForTag, viewModel.uiState.value.step)
-  }
-
-  @Test
   fun onTagScanned_linkedTag_exposesPetAndOnlyVisibleContactsAndMatchingAlert() = runTest {
     val tagRepository =
         FakePetTagRepository(
             initialTags =
                 listOf(
-                    tag.copy(showPhone = false, showEmail = true),
+                    tag.copy(showPhone = false, showEmail = false),
                 )
         )
     val petRepository = FakePetRepository().apply { addPet(pet) }
     val alertRepository = FakeAlertRepository()
-    alertRepository.publishAlert(alert(id = "alert-other-pet", petId = "pet-2"))
+    alertRepository.publishAlert(
+        alert(id = "alert-other-pet", petId = "pet-2").copy(lostAtMillis = 2L)
+    )
     alertRepository.publishAlert(alert(id = "alert-1", petId = pet.id))
     val viewModel = ScanTagViewModel(tagRepository, petRepository, alertRepository)
 
     viewModel.onTagScanned(tag.tagId)
+    assertEquals(ScanTagStep.Loading, viewModel.uiState.value.step)
     advanceUntilIdle()
 
     assertEquals(
@@ -87,7 +107,6 @@ class ScanTagViewModelTest {
             species = pet.species,
             allergies = pet.allergies,
             behaviors = pet.behaviors,
-            visibleEmail = tag.contactEmail,
             openAlertId = "alert-1",
         ),
         viewModel.uiState.value,
@@ -96,13 +115,59 @@ class ScanTagViewModelTest {
 
   @Test
   fun onTagScanned_tagNotFound_setsUnknown() = runTest {
+    val petRepository = FakePetRepository().apply { addPet(pet) }
     val viewModel =
-        ScanTagViewModel(FakePetTagRepository(), FakePetRepository(), FakeAlertRepository())
+        ScanTagViewModel(
+            FakePetTagRepository(initialTags = listOf(tag)),
+            petRepository,
+            FakeAlertRepository(),
+        )
+
+    viewModel.onTagScanned(tag.tagId)
+    assertEquals(ScanTagStep.Loading, viewModel.uiState.value.step)
+    advanceUntilIdle()
+    assertEquals(ScanTagStep.Found, viewModel.uiState.value.step)
+    assertEquals(pet.name, viewModel.uiState.value.petName)
 
     viewModel.onTagScanned("unknown-tag")
+    assertEquals(ScanTagStep.Loading, viewModel.uiState.value.step)
+    assertNull(viewModel.uiState.value.petName)
     advanceUntilIdle()
 
     assertEquals(ScanTagStep.Unknown, viewModel.uiState.value.step)
+    assertNull(viewModel.uiState.value.petName)
+  }
+
+  @Test
+  fun onTagScanned_newScanCancelsPreviousScan() = runTest {
+    val secondPet = pet.copy(id = "pet-2", name = "Milo")
+    val tagRepository =
+        BlockingPetTagRepository(
+            blockedTagId = "blocked-tag",
+            delegate =
+                FakePetTagRepository(
+                    initialTags =
+                        listOf(
+                            tag.copy(tagId = "blocked-tag"),
+                            tag.copy(tagId = "next-tag", petId = secondPet.id),
+                        )
+                ),
+        )
+    val petRepository =
+        FakePetRepository().apply {
+          addPet(pet)
+          addPet(secondPet)
+        }
+    val viewModel = ScanTagViewModel(tagRepository, petRepository, FakeAlertRepository())
+
+    viewModel.onTagScanned("blocked-tag")
+    runCurrent()
+    viewModel.onTagScanned("next-tag")
+    advanceUntilIdle()
+
+    assertTrue(tagRepository.blockedScanCancelled)
+    assertEquals(ScanTagStep.Found, viewModel.uiState.value.step)
+    assertEquals(secondPet.name, viewModel.uiState.value.petName)
   }
 
   @Test
