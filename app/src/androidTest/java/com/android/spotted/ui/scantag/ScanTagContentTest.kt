@@ -83,6 +83,21 @@ class ScanTagContentTest {
   }
 
   @Test
+  fun found_petWithoutOptionalDetails_showsFallbacks() {
+    composeTestRule.setContent {
+      ScanTagContent(state = ScanTagUiState(step = ScanTagStep.Found, species = Species.DOG))
+    }
+
+    composeTestRule.onNodeWithTag(ScanTagScreenTestTags.PET_NAME).assertTextEquals("Pet found")
+    composeTestRule.onNodeWithText("Dog").assertIsDisplayed()
+    composeTestRule
+        .onNodeWithText("No contact details are available for this pet.")
+        .assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ScanTagScreenTestTags.ALLERGIES).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(ScanTagScreenTestTags.BEHAVIORS).assertDoesNotExist()
+  }
+
+  @Test
   fun foundLostPet_reportsSightingForItsAlert() {
     var reportAlertId: String? = null
     composeTestRule.setContent {
@@ -137,6 +152,23 @@ class ScanTagContentTest {
     composeTestRule.onNodeWithTag(ScanTagScreenTestTags.CANCEL).performClick()
 
     assertEquals(true, openedSettings)
+    assertEquals(true, cancelled)
+  }
+
+  @Test
+  fun nfcUnsupported_showsUnavailableMessageAndCancel() {
+    var cancelled = false
+    composeTestRule.setContent {
+      ScanTagContent(
+          state = ScanTagUiState(nfcAvailability = NfcAvailability.UNSUPPORTED),
+          onCancel = { cancelled = true },
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ScanTagScreenTestTags.NFC_OFF).assertIsDisplayed()
+    composeTestRule.onNodeWithText("NFC isn’t available").assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ScanTagScreenTestTags.CANCEL).performClick()
+
     assertEquals(true, cancelled)
   }
 
