@@ -246,6 +246,13 @@ fun ReportSightingContent(
       )
 
       // Nearby Alerts list
+      if (state.location != null && state.nearbyAlerts.isEmpty()) {
+        Text(
+            "No missing pet matches nearby",
+            style = jakarta(14, 18f, 500, SpottedTheme.colors.textSecondary),
+            modifier = Modifier.padding(vertical = 8.dp),
+        )
+      }
       state.nearbyAlerts.forEach { alert ->
         val isSelected = state.selectedAlertId == alert.alertId && !state.isNoMatchingAlertSelected
         Row(

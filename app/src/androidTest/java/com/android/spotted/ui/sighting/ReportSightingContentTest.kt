@@ -73,6 +73,16 @@ class ReportSightingContentTest {
   }
 
   @Test
+  fun emptyNearbyAlerts_displaysNoMatchesMessageAndNoMatchingOption() {
+    composeTestRule.setContent {
+      ReportSightingContent(state = ReportSightingUiState(location = Location(46.5, 6.6)))
+    }
+
+    composeTestRule.onNodeWithText("No missing pet matches nearby").assertIsDisplayed()
+    composeTestRule.onNodeWithText("No matching alert").assertIsDisplayed()
+  }
+
+  @Test
   fun directionButtons_andNoIdea_reportTheirDegrees() {
     val selectedDirections = mutableListOf<Double?>()
     composeTestRule.setContent {

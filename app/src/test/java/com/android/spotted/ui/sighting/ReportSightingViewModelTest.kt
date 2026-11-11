@@ -5,6 +5,7 @@ package com.android.spotted.ui.sighting
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
@@ -482,6 +483,237 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun nearbyAlerts_excludesAlertsBeyondFiveKilometers() = runTest {
+    val farAlert =
+        alertOwnedBy("owner")
+            .copy(lastKnownLocation = Location(ALERT_PLACE.latitude, ALERT_PLACE.longitude + 0.1))
+    val alertRepository =
+        object : AlertRepository by FakeAlertRepository() {
+          override suspend fun getOpenAlertsNear(
+              center: Location,
+              radiusKm: Double,
+          ): Result<List<Alert>> = Result.success(listOf(farAlert))
+        }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(ALERT_PLACE)
+
+    assertTrue(vm.uiState.value.nearbyAlerts.isEmpty())
+    assertTrue(vm.uiState.value.isNoMatchingAlertSelected)
+  }
+
+  @Test
+  fun nearbyAlerts_excludesOwnAlerts() = runTest {
+    val alertRepository = FakeAlertRepository()
+    listOf(
+            alertOwnedBy(signedInUid()).copy(petName = "Mine"),
+            alertOwnedBy("someone-else").copy(id = "other", petName = "Other"),
+        )
+        .forEach { alertRepository.publishAlert(it) }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(ALERT_PLACE)
+
+    assertEquals(listOf("other"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+  }
+
+  @Test
+  fun nearbyAlerts_filtersBySpeciesAndReappliesWhenSpeciesChanges() = runTest {
+    val alertRepositoryDelegate = FakeAlertRepository()
+    var nearbyAlertLoads = 0
+    val alertRepository =
+        object : AlertRepository by alertRepositoryDelegate {
+          override suspend fun getOpenAlertsNear(
+              center: Location,
+              radiusKm: Double,
+          ): Result<List<Alert>> {
+            nearbyAlertLoads++
+            return alertRepositoryDelegate.getOpenAlertsNear(center, radiusKm)
+          }
+        }
+    listOf(
+            alertOwnedBy("owner").copy(id = "dog", petSpecies = Species.DOG),
+            alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT),
+        )
+        .forEach { alertRepository.publishAlert(it) }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(ALERT_PLACE)
+    assertEquals(listOf("cat", "dog"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+
+    vm.setSpecies(Species.CAT)
+
+    assertEquals(listOf("cat"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+    assertEquals(1, nearbyAlertLoads)
+  }
+
+  @Test
+  fun nearbyAlerts_filtersByDetectedSpecies() = runTest {
+    val alertRepositoryDelegate = FakeAlertRepository()
+    var nearbyAlertLoads = 0
+    val alertRepository =
+        object : AlertRepository by alertRepositoryDelegate {
+          override suspend fun getOpenAlertsNear(
+              center: Location,
+              radiusKm: Double,
+          ): Result<List<Alert>> {
+            nearbyAlertLoads++
+            return alertRepositoryDelegate.getOpenAlertsNear(center, radiusKm)
+          }
+        }
+    listOf(
+            alertOwnedBy("owner").copy(id = "dog", petSpecies = Species.DOG),
+            alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT),
+        )
+        .forEach { alertRepository.publishAlert(it) }
+    val detector = FakeAnimalDetector().apply { result = AnimalDetection(true, Species.CAT) }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+            animalDetector = detector,
+        )
+
+    vm.setLocation(ALERT_PLACE)
+    vm.setPhotoUri(PHOTO)
+
+    assertEquals(listOf("cat"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+    assertEquals(1, nearbyAlertLoads)
+  }
+
+  @Test
+  fun nearbyAlerts_areSortedByDistanceAndLimitedToFive() = runTest {
+    val alertRepository = FakeAlertRepository()
+    val location = Location(46.52, 6.63)
+    val offsets = listOf(0.01, 0.02, 0.03, 0.04, 0.05, 0.06)
+    offsets.forEachIndexed { index, longitudeOffset ->
+      alertRepository.publishAlert(
+          alertOwnedBy("owner")
+              .copy(
+                  id = "alert-$index",
+                  lastKnownLocation =
+                      Location(location.latitude, location.longitude + longitudeOffset),
+              )
+      )
+    }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(location)
+
+    assertEquals(
+        listOf("alert-0", "alert-1", "alert-2", "alert-3", "alert-4"),
+        vm.uiState.value.nearbyAlerts.map { it.alertId },
+    )
+  }
+
+  @Test
+  fun nearbyAlerts_positionChangeReplacesOptionsAndClearsSelection() = runTest {
+    val alertRepository = FakeAlertRepository()
+    val lausanne = Location(46.52, 6.63)
+    val zurich = Location(47.37, 8.54)
+    alertRepository.publishAlert(
+        alertOwnedBy("owner").copy(id = "lausanne", lastKnownLocation = lausanne)
+    )
+    alertRepository.publishAlert(
+        alertOwnedBy("owner").copy(id = "zurich", lastKnownLocation = zurich)
+    )
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(lausanne)
+    vm.selectAlert("lausanne")
+    vm.setLocation(zurich)
+
+    assertEquals(listOf("zurich"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+    assertNull(vm.uiState.value.selectedAlertId)
+    assertTrue(vm.uiState.value.isNoMatchingAlertSelected)
+  }
+
+  @Test
+  fun nearbyAlerts_noMatchesSelectsNoMatchingAlert() = runTest {
+    val alertRepository = FakeAlertRepository()
+    alertRepository.publishAlert(alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT))
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.setLocation(ALERT_PLACE)
+    vm.setSpecies(Species.DOG)
+
+    assertTrue(vm.uiState.value.nearbyAlerts.isEmpty())
+    assertTrue(vm.uiState.value.isNoMatchingAlertSelected)
+  }
+
+  @Test
+  fun preselectedAlert_staysFirstAndSelectedOutsideNearbyFilters() = runTest {
+    val alertRepository = FakeAlertRepository()
+    val distantAlert =
+        alertOwnedBy(signedInUid())
+            .copy(
+                id = "preselected",
+                petSpecies = Species.CAT,
+                lastKnownLocation = Location(47.37, 8.54),
+            )
+    alertRepository.publishAlert(distantAlert)
+    alertRepository.publishAlert(
+        alertOwnedBy("owner").copy(id = "nearby", petSpecies = Species.DOG)
+    )
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+
+    vm.preselectAlert("preselected")
+    vm.setSpecies(Species.DOG)
+    vm.setLocation(ALERT_PLACE)
+
+    assertEquals(
+        listOf("preselected", "nearby"),
+        vm.uiState.value.nearbyAlerts.map { it.alertId },
+    )
+    assertEquals("preselected", vm.uiState.value.selectedAlertId)
+    assertFalse(vm.uiState.value.isNoMatchingAlertSelected)
+  }
+
+  @Test
   fun preselectAlert_closedAlertDoesNotAddOrSelectIt() = runTest {
     val alertRepository = FakeAlertRepository()
     alertRepository.publishAlert(
@@ -638,6 +870,7 @@ class ReportSightingViewModelTest {
   fun submitSighting_onOwnAlert_isRefusedWithItsMessageAndNothingUploaded() = runTest {
     val vm = viewModelOnAlert(alertOwnedBy(signedInUid()))
     vm.setPhotoUri(PHOTO)
+    vm.selectAlert(ALERT_ID)
 
     vm.submitSighting()
 
