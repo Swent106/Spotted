@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.myalert
 
 import com.android.spotted.model.Location
@@ -6,6 +7,7 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.sighting.Sighting
@@ -449,17 +451,43 @@ class MyAlertViewModelTest {
         assertEquals(NOW, viewModel.uiState.value.alert?.closedAtMillis)
       }
 
+  @Test
+  fun placeName_isWhereThePetWasLastSeen() =
+      runTest(testDispatcher) {
+        signIn()
+        alertRepository.publishAlert(alert())
+        val viewModel = viewModel("alert-1", FakeAddressRepository(name = "Plainpalais, Geneva"))
+        advanceUntilIdle()
+
+        assertEquals("Plainpalais, Geneva", viewModel.uiState.value.placeName)
+      }
+
+  @Test
+  fun placeName_whenThePlaceCantBeNamed_isNull() =
+      runTest(testDispatcher) {
+        signIn()
+        alertRepository.publishAlert(alert())
+        val addressRepository =
+            FakeAddressRepository().apply { failure = NoSuchElementException("no name") }
+        val viewModel = viewModel("alert-1", addressRepository)
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.placeName)
+        assertEquals("alert-1", viewModel.uiState.value.alert?.id)
+      }
+
   private suspend fun signIn() {
     authRepository.signInWithGoogle("token")
   }
 
-  private fun viewModel(alertId: String) =
+  private fun viewModel(alertId: String, addressRepository: FakeAddressRepository? = null) =
       MyAlertViewModel(
           alertId = alertId,
           alertRepository = alertRepository,
           sightingRepository = sightingRepository,
           authRepository = authRepository,
           now = { NOW },
+          addressRepository = addressRepository,
       )
 
   private fun alert(ownerId: String = OWNER_ID) =

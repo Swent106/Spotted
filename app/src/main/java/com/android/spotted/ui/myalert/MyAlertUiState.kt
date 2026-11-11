@@ -17,6 +17,7 @@ import com.android.spotted.model.sighting.SightingStatus
  * @property isLoading True while the alert is being loaded; the screen starts loading.
  * @property errorMessage Message to show, or null. Set with an [alert] when an action on it failed.
  * @property isClosed True once the owner said the pet is home; the screen then navigates away.
+ * @property placeName Where the pet was last seen, e.g. "Ouchy, Lausanne"; null while unknown.
  */
 data class MyAlertUiState(
     val alert: Alert? = null,
@@ -28,6 +29,7 @@ data class MyAlertUiState(
      * Navigation flag set when the alert is closed on load or after [MyAlertViewModel.markFound].
      */
     val isClosed: Boolean = false,
+    val placeName: String? = null,
 ) {
   /** Sightings drawn on the map: dismissed ones are hidden there, but stay greyed in the list. */
   val mapSightings: List<Sighting>

@@ -2,7 +2,6 @@
 // Portions of this code were generated with the help of GitHub Copilot.
 package com.android.spotted.ui.alertdetail
 
-import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -53,9 +52,11 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.alertShareText
 import com.android.spotted.ui.components.BACK_BUTTON_SIZE
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.components.SpottedBackButton
+import com.android.spotted.ui.components.shareText
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
@@ -103,17 +104,7 @@ fun AlertDetailScreen(
       modifier = modifier,
       onBack = onBack,
       // The system share sheet, launched from the View
-      onShare = { alert ->
-        val text =
-            "${alert.petName} is missing near ${locationCoordinates(alert.lastKnownLocation)}." +
-                " Have you seen them? Open Spotted to help."
-        val send =
-            Intent(Intent.ACTION_SEND).apply {
-              type = "text/plain"
-              putExtra(Intent.EXTRA_TEXT, text)
-            }
-        context.startActivity(Intent.createChooser(send, null))
-      },
+      onShare = { alert -> context.shareText(alertShareText(alert, state.placeName)) },
   )
 }
 

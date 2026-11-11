@@ -1,12 +1,18 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.myalert
 
+import android.content.Intent
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.auth.FakeAuthRepository
+import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import kotlinx.coroutines.runBlocking
@@ -15,6 +21,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 
 /** [MyAlertScreen] connects the ViewModel to the screen and leaves once the alert is closed. */
 @RunWith(AndroidJUnit4::class)
@@ -37,6 +44,7 @@ class MyAlertScreenTest {
             alertRepository = alertRepository,
             sightingRepository = FakeSightingRepository(),
             authRepository = authRepository,
+            addressRepository = FakeAddressRepository(name = "Ouchy, Lausanne"),
         )
     composeTestRule.setContent { MyAlertScreen(viewModel = viewModel, onBack = { backs++ }) }
     composeTestRule.waitForIdle()
@@ -55,6 +63,24 @@ class MyAlertScreenTest {
 
     assertEquals(true, viewModel.uiState.value.isClosed)
     assertEquals(1, backs)
+  }
+
+  @Test
+  fun share_opensTheShareSheetWithTheAlertLink() {
+    composeTestRule
+        .onNodeWithTag(MyAlertScreenTestTags.SHARE_BUTTON, useUnmergedTree = true)
+        .performScrollTo()
+        .performClick()
+
+    val chooser =
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .nextStartedActivity
+    assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+    @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+    assertEquals(
+        "Luna is missing near Ouchy, Lausanne. Have you seen them? spotted://alert/alert-1",
+        send?.getStringExtra(Intent.EXTRA_TEXT),
+    )
   }
 
   private companion object {
