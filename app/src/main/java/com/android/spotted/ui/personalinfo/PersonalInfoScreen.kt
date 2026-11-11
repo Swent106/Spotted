@@ -69,6 +69,7 @@ import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedTheme
@@ -201,23 +202,7 @@ private fun Header(isEditing: Boolean, onBackClick: (() -> Unit)?) {
       modifier = Modifier.fillMaxWidth(),
   ) {
     if (onBackClick != null) {
-      val back = stringResource(R.string.personal_info_back)
-      Box(
-          contentAlignment = Alignment.Center,
-          modifier =
-              Modifier.size(40.dp)
-                  .clip(RoundedCornerShape(20.dp))
-                  .background(SpottedTheme.colors.surface)
-                  .clickable(onClickLabel = back, role = Role.Button, onClick = onBackClick)
-                  .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
-      ) {
-        Icon(
-            painterResource(R.drawable.ic_arrow_back),
-            contentDescription = back,
-            tint = SpottedTheme.colors.ink,
-            modifier = Modifier.size(20.dp),
-        )
-      }
+      SpottedBackButton(onClick = onBackClick, testTag = PersonalInfoScreenTestTags.BACK_BUTTON)
     }
     Column(Modifier.weight(1f)) {
       Text(
@@ -282,7 +267,12 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit, enabled: B
                   .background(SpottedTheme.colors.blue)
                   .border(3.dp, SpottedTheme.colors.surface, CircleShape),
       ) {
-        Text("+", style = jakarta(16, 18, FontWeight.ExtraBold, SpottedTheme.colors.onAccent))
+        Icon(
+            painterResource(R.drawable.ic_plus),
+            contentDescription = null,
+            tint = SpottedTheme.colors.onAccent,
+            modifier = Modifier.size(14.dp),
+        )
       }
     }
     Text(
@@ -669,6 +659,7 @@ private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit, enab
     Text(
         text,
         style = jakarta(15, 20, Bold, SpottedTheme.colors.blue),
+        textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
   }

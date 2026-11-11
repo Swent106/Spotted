@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.profile
 
 import androidx.lifecycle.ViewModel
@@ -76,7 +77,9 @@ class HelperProfileViewModel(
   /** Signs out; the profile is kept for the next sign-in. */
   fun signOut() {
     if (_uiState.value.isLeaving) return
-    _uiState.update { it.copy(isLeaving = true, errorMessage = null) }
+    _uiState.update {
+      it.copy(isLeaving = true, errorMessage = null, isDeleteConfirmationVisible = false)
+    }
     viewModelScope.launch {
       authRepository.signOut().onFailure {
         _uiState.update { it.copy(isLeaving = false, errorMessage = SIGN_OUT_FAILED) }
@@ -93,7 +96,9 @@ class HelperProfileViewModel(
   fun deleteAccount() {
     if (_uiState.value.isLeaving) return
     val user = authRepository.currentUser.value ?: return
-    _uiState.update { it.copy(isLeaving = true, errorMessage = null) }
+    _uiState.update {
+      it.copy(isLeaving = true, errorMessage = null, isDeleteConfirmationVisible = false)
+    }
     viewModelScope.launch {
       // Alerts and pets first: otherwise they would come back with the next profile of this
       // Google account. Alerts before pets, as an alert points to its pet
@@ -120,6 +125,17 @@ class HelperProfileViewModel(
           return false
         }
     return pets.all { petRepository.deletePet(it.id).isSuccess }
+  }
+
+  /** Asks the user to confirm before [deleteAccount]; deletes nothing. */
+  fun requestDeleteAccount() {
+    if (_uiState.value.isLeaving) return
+    _uiState.update { it.copy(isDeleteConfirmationVisible = true) }
+  }
+
+  /** Hides the confirmation; deletes nothing. */
+  fun cancelDeleteAccount() {
+    _uiState.update { it.copy(isDeleteConfirmationVisible = false) }
   }
 
   companion object {
