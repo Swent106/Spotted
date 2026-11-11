@@ -102,4 +102,22 @@
     <string name="link_tag_nfc_unavailable_error">NFC is off or not available. Turn on NFC and try again.</string>
     <string name="link_tag_save_error">Unable to link the tag. Check your connection and try again.</string>
     <string name="link_tag_contacts_not_saved_error">The tag was linked, but its contacts couldn\'t be saved. Try another tag.</string>
+    <string name="link_tag_title">%1$s\'s tag</string>
+    <string name="link_tag_title_no_pet">Link a tag</string>
+    <string name="link_tag_subtitle_choose">Choose what finders see, then tap the tag</string>
+    <string name="link_tag_subtitle_writing">Keep the tag against your phone</string>
+    <string name="link_tag_subtitle_error">Nothing was linked</string>
+    <string name="link_tag_subtitle_success">Anyone who taps it sees %1$s, never your address</string>
+    <string name="link_tag_status_hold">Hold the tag to the back of your phone</string>
+    <string name="link_tag_status_writing">Linking the tag to %1$s…</string>
+    <string name="link_tag_status_error">Couldn\'t link this tag</string>
+    <string name="link_tag_status_success">Tag linked to %1$s</string>
+    <string name="link_tag_icon_nfc">NFC</string>
+    <string name="link_tag_chip_waiting">Waiting for a tag…</string>
+    <string name="link_tag_chip_writing">Writing to the tag</string>
+    <string name="link_tag_chip_linked">✓ Tag linked</string>
+    <string name="link_tag_start">Link tag</string>
+    <string name="link_tag_retry">Try again</string>
+    <string name="link_tag_done">Done</string>
+    <string name="link_tag_cancel">Cancel</string>
 </resources>
