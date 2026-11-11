@@ -124,4 +124,16 @@
     <string name="link_tag_retry">Try again</string>
     <string name="link_tag_done">Done</string>
     <string name="link_tag_cancel">Cancel</string>
+    <string name="link_tag_contacts_section">WHAT FINDERS CAN SEE</string>
+    <string name="link_tag_name_and_photo">%1$s\'s name and photo</string>
+    <string name="link_tag_name_and_photo_no_pet">Your pet\'s name and photo</string>
+    <string name="link_tag_always">Always</string>
+    <string name="link_tag_phone">Phone number</string>
+    <string name="link_tag_email">Email</string>
+    <string name="link_tag_shown">Shown</string>
+    <string name="link_tag_hidden">Hidden</string>
+    <string name="link_tag_address_note">Your home address is never shown on the tag.</string>
+    <string name="link_tag_nfc_disabled">NFC is turned off. Turn it on to link the tag.</string>
+    <string name="link_tag_nfc_unsupported">This phone can\'t write NFC tags.</string>
+    <string name="link_tag_open_nfc_settings">Open NFC settings</string>
 </resources>
