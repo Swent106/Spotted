@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -20,6 +21,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -169,6 +171,36 @@ class PhotoRepositoryFirestoreTest {
   }
 
   @Test
+  fun deleteProfilePhoto_removesTheUsersPhoto_andAMissingPhotoIsSuccessful() = runTest {
+    savedPhotoIds += "profile_$ownerId"
+    repository.uploadProfilePhoto(ownerId, jpeg(width = 64, height = 64)).getOrThrow()
+
+    assertTrue(repository.deleteProfilePhoto(ownerId).isSuccess)
+    assertFalse(photoExists("profile_$ownerId"))
+    assertTrue(repository.deleteProfilePhoto(ownerId).isSuccess)
+  }
+
+  @Test
+  fun deleteProfilePhoto_whenOwnerDoesNotMatch_returnsFailureAndKeepsThePhoto() = runTest {
+    // Saved by the signed-in user under another user's profile photo id
+    val otherUserId = "other-${UUID.randomUUID()}"
+    savedPhotoIds += "profile_$otherUserId"
+    withContext(Dispatchers.IO) {
+      Tasks.await(
+          firestore
+              .collection(PhotoRepositoryFirestore.PHOTOS_COLLECTION)
+              .document("profile_$otherUserId")
+              .set(mapOf("ownerId" to ownerId, "contentType" to "image/jpeg", "data" to ""))
+      )
+    }
+
+    val result = repository.deleteProfilePhoto(otherUserId)
+
+    assertTrue(result.isFailure)
+    assertTrue(photoExists("profile_$otherUserId"))
+  }
+
+  @Test
   fun photoUrl_pointsToThePhotosCollection() {
     assertEquals("firestore://photos/pet-1", PhotoRepositoryFirestore.photoUrl("pet-1"))
   }
@@ -207,6 +239,17 @@ class PhotoRepositoryFirestoreTest {
                     .get()
             )
             .data!!
+      }
+
+  private suspend fun photoExists(photoId: String): Boolean =
+      withContext(Dispatchers.IO) {
+        Tasks.await(
+                firestore
+                    .collection(PhotoRepositoryFirestore.PHOTOS_COLLECTION)
+                    .document(photoId)
+                    .get()
+            )
+            .exists()
       }
 
   private fun decode(base64: String): Bitmap {

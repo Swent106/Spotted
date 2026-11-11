@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.photo
 
 import java.util.concurrent.ConcurrentHashMap
@@ -40,6 +41,14 @@ class FakePhotoRepository : PhotoRepository {
     val url = profilePhotoUrl(userId)
     photos[url] = localUri
     return Result.success(url)
+  }
+
+  override suspend fun deleteProfilePhoto(userId: String): Result<Unit> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    photos.remove(profilePhotoUrl(userId))
+    return Result.success(Unit)
   }
 
   override fun profilePhotoUrl(userId: String) = "$FAKE_URL_PREFIX/users/$userId/photo.jpg"

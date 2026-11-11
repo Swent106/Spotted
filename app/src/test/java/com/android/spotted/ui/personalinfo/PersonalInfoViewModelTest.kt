@@ -12,6 +12,7 @@ import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -525,4 +526,59 @@ class PersonalInfoViewModelTest {
         assertFalse(state.isSaved)
         assertTrue(userRepository.getUser("user-1").isFailure)
       }
+
+  @Test
+  fun saveProfile_deletesTheSavedPhotoOnlyOnceItIsRemoved() =
+      runTest(testDispatcher) {
+        val (photoRepository, editing) = editingWithASavedPhoto()
+        val photoUrl = photoRepository.profilePhotoUrl("user-1")
+
+        // Saving with the photo kept leaves it in place
+        editing.onHomeAreaChanged("Pully")
+        editing.saveProfile()
+        advanceUntilIdle()
+        assertTrue(photoRepository.uploadedPhotos.containsKey(photoUrl))
+
+        editing.onPhotoSelected(null)
+        editing.saveProfile()
+        advanceUntilIdle()
+
+        assertFalse(photoRepository.uploadedPhotos.containsKey(photoUrl))
+        assertTrue(editing.uiState.value.isSaved)
+      }
+
+  @Test
+  fun saveProfile_whenTheRemovedPhotoCannotBeDeleted_keepsTheFormAndSaysSo() =
+      runTest(testDispatcher) {
+        val (photoRepository, editing) = editingWithASavedPhoto()
+        val savesBefore = userRepository.saveCalls
+        photoRepository.failure = Exception("offline")
+
+        editing.onPhotoSelected(null)
+        editing.saveProfile()
+        advanceUntilIdle()
+
+        val state = editing.uiState.value
+        assertEquals(PersonalInfoViewModel.PHOTO_DELETE_FAILED, state.errorMessage)
+        assertFalse(state.isSaved)
+        assertFalse(state.isSaving)
+        assertEquals("the profile is not saved", savesBefore, userRepository.saveCalls)
+      }
+
+  /** A saved profile with a profile photo, loaded in a ViewModel for editing. */
+  private suspend fun TestScope.editingWithASavedPhoto():
+      Pair<FakePhotoRepository, PersonalInfoViewModel> {
+    val photoRepository = FakePhotoRepository()
+    photoRepository.uploadProfilePhoto("user-1", "content://photos/old").getOrThrow()
+    userRepository.saveUser(savedProfile()).getOrThrow()
+    val editing =
+        PersonalInfoViewModel(
+            user = User(uid = "user-1", email = "jamie@example.com"),
+            userRepository = userRepository,
+            photoRepository = photoRepository,
+        )
+    advanceUntilIdle()
+    assertTrue("the profile is loaded for editing", editing.uiState.value.isEditing)
+    return photoRepository to editing
+  }
 }

@@ -1550,10 +1550,13 @@ describe("Firestore photo access rules", () => {
   });
 
   it("photo delete: the owner is allowed, other users are denied", async () => {
-    await seedPhoto("pet-1", "user-1");
+    // A pet photo and a profile photo follow the same rule
+    for (const id of ["pet-1", "profile_user-1"]) {
+      await seedPhoto(id, "user-1");
 
-    await assertFails(deleteDoc(doc(firestoreForUser("user-2"), "photos", "pet-1")));
-    await assertFails(deleteDoc(doc(firestoreForUser(null), "photos", "pet-1")));
-    await assertSucceeds(deleteDoc(doc(firestoreForUser("user-1"), "photos", "pet-1")));
+      await assertFails(deleteDoc(doc(firestoreForUser("user-2"), "photos", id)));
+      await assertFails(deleteDoc(doc(firestoreForUser(null), "photos", id)));
+      await assertSucceeds(deleteDoc(doc(firestoreForUser("user-1"), "photos", id)));
+    }
   });
 });
