@@ -24,6 +24,7 @@ import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.utils.FakeOpenAlertsRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -173,10 +174,16 @@ class PetProfileContentTest {
   private var deleted = 0
   private val editedIds = mutableListOf<String>()
 
-  private fun setScreen(openAlerts: List<Alert> = emptyList()) {
+  /**
+   * [deletePets] is what the delete ViewModel reads the pet from; the profile uses the real one.
+   */
+  private fun setScreen(
+      openAlerts: List<Alert> = emptyList(),
+      deletePets: PetRepository = petRepository,
+  ) {
     val alerts = FakeOpenAlertsRepository(openAlerts)
     val viewModel = PetProfileViewModel(petRepository)
-    val deleteViewModel = EditPetViewModel(luna.id, petRepository, alerts, FakePhotoRepository())
+    val deleteViewModel = EditPetViewModel(luna.id, deletePets, alerts, FakePhotoRepository())
     composeTestRule.setContent {
       PetProfileScreen(
           viewModel = viewModel,
@@ -211,7 +218,26 @@ class PetProfileContentTest {
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.DELETE_CONFIRM).performClick()
     composeTestRule.waitUntil { deleted == 1 }
 
-    assertTrue(!petStillExists())
+    assertFalse(petStillExists())
+  }
+
+  @Test
+  fun screen_deletePetCannotBeLoaded_disablesDeleteAndShowsWhy() {
+    val unreadable =
+        object : PetRepository by petRepository {
+          override suspend fun getPet(id: String): Result<Pet> =
+              Result.failure(IllegalStateException("Read refused"))
+        }
+    setScreen(deletePets = unreadable)
+    composeTestRule.waitUntil { hasNode(PetProfileScreenTestTags.DELETE_ERROR) }
+
+    composeTestRule
+        .onNodeWithTag(PetProfileScreenTestTags.DELETE_ERROR)
+        .assertTextEquals("Unable to load the pet")
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.DELETE_BUTTON).assertIsNotEnabled()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.DELETE_BUTTON).performClick()
+    composeTestRule.onNodeWithTag(PetProfileScreenTestTags.DELETE_DIALOG).assertDoesNotExist()
+    assertTrue(petStillExists())
   }
 
   @Test

@@ -125,7 +125,8 @@ fun PetProfileScreen(
       modifier = modifier,
       showDeleteDialog = showDeleteDialog,
       showRefusedDialog = showRefusedDialog,
-      canDelete = !deleteState.isLoading,
+      // Without the pet, delete() would do nothing: disable it (the load error says why)
+      canDelete = !deleteState.isLoading && !deleteState.loadFailed,
       isDeleting = deleteState.saving,
       // The open alert error has its own dialog; the others would leave Delete doing nothing
       deleteError =
