@@ -209,7 +209,13 @@ class MainUserFlowTest {
     waitUntil("The GPS position should fill the sighting's location") {
       composeTestRule.onAllNodes(hasText("Taken from your GPS")).fetchSemanticsNodes().isNotEmpty()
     }
-    node(ReportSightingScreenTestTags.NO_MATCH_OPTION).performScrollTo().performClick()
+    // The pet reported missing just before: "No matching alert" would need a photo, which the
+    // test can't pick from the system Photo Picker
+    val missing = pets.first()
+    waitUntil("\"${missing.name}\"'s alert should be offered") {
+      composeTestRule.onAllNodes(hasText(missing.name)).fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNode(hasText(missing.name)).performScrollTo().performClick()
     node(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
@@ -392,7 +398,8 @@ class MainUserFlowTest {
     const val TEST_EMAIL = "e2e@spotted.test"
     /** Fixed Google account id, so every run signs in as the same emulator account. */
     const val TEST_SUB = "e2e-test-account"
-    val GPS = Location(latitude = 46.5191, longitude = 6.5668)
+    /** Near the map's default center, where the missing pet's pin goes, so its alert is nearby. */
+    val GPS = Location(latitude = 46.5197, longitude = 6.6300)
 
     fun speciesFor(index: Int) = Species.entries[(index - 1) % Species.entries.size]
   }
