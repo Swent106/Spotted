@@ -3,6 +3,8 @@ package com.android.spotted
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -118,6 +120,7 @@ class MainActivity : ComponentActivity() {
             .components { add(FirestorePhotoFetcher.Factory()) }
             .build()
     )
+    keepSplashWhileLoading()
     setContent {
       SpottedTheme {
         Surface(
@@ -139,6 +142,23 @@ class MainActivity : ComponentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
+  }
+
+  /**
+   * Keeps the system splash screen until [MainViewModel] knows the start screen, so a signed-in
+   * user reopening the app goes straight to Home without a glimpse of Welcome.
+   */
+  private fun keepSplashWhileLoading() {
+    val content = findViewById<View>(android.R.id.content)
+    content.viewTreeObserver.addOnPreDrawListener(
+        object : ViewTreeObserver.OnPreDrawListener {
+          override fun onPreDraw(): Boolean {
+            if (mainViewModel.uiState.value == StartDestination.LOADING) return false
+            content.viewTreeObserver.removeOnPreDrawListener(this)
+            return true
+          }
+        }
+    )
   }
 }
 
@@ -185,13 +205,15 @@ fun StartRouting(destination: StartDestination, navController: NavController) {
 
   LaunchedEffect(destination) {
     if (destination == routedDestination) return@LaunchedEffect
-    routedDestination = destination
     val targetRoute =
         when (destination) {
+          // The splash screen hides the app until the start screen is known
+          StartDestination.LOADING -> return@LaunchedEffect
           StartDestination.SIGNIN -> Route.SIGNIN
           StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
           StartDestination.HOME -> Route.HOME
         }
+    routedDestination = destination
     navController.navigate(targetRoute) {
       popUpTo(0) { inclusive = true }
       launchSingleTop = true
