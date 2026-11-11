@@ -93,4 +93,13 @@
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
     <string name="notification_sighting_text">Tap to review this sighting</string>
+    <string name="link_tag_load_error">Unable to load the pet</string>
+    <string name="link_tag_already_linked_error">This tag is already linked to a pet. Try another tag.</string>
+    <string name="link_tag_lost_error">The tag moved away too soon. Hold it against the phone and try again.</string>
+    <string name="link_tag_read_only_error">This tag is locked and can\'t be written. Try another tag.</string>
+    <string name="link_tag_not_enough_space_error">This tag is too small. Try another tag.</string>
+    <string name="link_tag_unsupported_error">This tag isn\'t supported. Try another tag.</string>
+    <string name="link_tag_nfc_unavailable_error">NFC is off or not available. Turn on NFC and try again.</string>
+    <string name="link_tag_save_error">Unable to link the tag. Check your connection and try again.</string>
+    <string name="link_tag_contacts_not_saved_error">The tag was linked, but its contacts couldn\'t be saved. Try another tag.</string>
 </resources>
