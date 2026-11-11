@@ -40,6 +40,7 @@ import com.android.spotted.ui.authentification.SignInScreen
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
+import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.ui.home.HomeScreen
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
@@ -291,13 +292,20 @@ fun NavGraphBuilder.homeDestinations(
         },
     petProfileContent:
         @Composable
-        (petId: String, onBack: () -> Unit, onEdit: (String) -> Unit) -> Unit =
-        { petId, onBack, onEdit ->
+        (
+            petId: String,
+            onBack: () -> Unit,
+            onEdit: (String) -> Unit,
+            onDeleted: () -> Unit,
+        ) -> Unit =
+        { petId, onBack, onEdit, onDeleted ->
           PetProfileScreen(
               viewModel = viewModel(factory = PetProfileViewModel.Factory),
               petId = petId,
+              deleteViewModel = viewModel(key = petId, factory = EditPetViewModel.factory(petId)),
               onBack = onBack,
               onEdit = onEdit,
+              onDeleted = onDeleted,
           )
         },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
@@ -364,6 +372,8 @@ fun NavGraphBuilder.homeDestinations(
         entry.arguments?.getString(Route.PET_ID).orEmpty(),
         { navController.popBackStackSafely() },
         { petId -> if (entry.isResumed()) navController.navigate(Route.editPet(petId)) },
+        // The pet no longer exists: back to Home, with its profile removed from the back stack
+        { navController.popBackStack(Route.HOME, inclusive = false) },
     )
   }
   composable(Route.EDIT_PET) { entry ->
