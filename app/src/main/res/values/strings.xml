@@ -93,6 +93,10 @@
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
     <string name="notification_sighting_text">Tap to review this sighting</string>
+    <string name="delete_account_confirm_title">Delete your account?</string>
+    <string name="delete_account_confirm_text">Your profile, pets and alerts will be deleted. This can\'t be undone.</string>
+    <string name="delete_account_confirm_delete">Delete</string>
+    <string name="delete_account_confirm_cancel">Cancel</string>
     <string name="link_tag_load_error">Unable to load the pet</string>
     <string name="link_tag_already_linked_error">This tag is already linked to a pet. Try another tag.</string>
     <string name="link_tag_lost_error">The tag moved away too soon. Hold it against the phone and try again.</string>

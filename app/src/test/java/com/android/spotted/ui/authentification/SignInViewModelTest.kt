@@ -132,9 +132,24 @@ class SignInViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
         assertEquals("fake_uid_from_token", state.user?.uid)
         assertNull(state.errorMessage)
+      }
+
+  @Test
+  fun afterSuccess_buttonStaysDisabledUntilTheScreenIsLeft() =
+      runTest(testDispatcher) {
+        val cm = credentialManagerReturningGoogleToken()
+        viewModel.signIn(context, cm)
+        advanceUntilIdle()
+
+        // The loader stays in place of the Google button while the start screen is chosen
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        // A click that still got through starts nothing
+        viewModel.signIn(context, cm)
+        advanceUntilIdle()
+        verifyBlocking(cm, times(1)) { getCredential(any<Context>(), any<GetCredentialRequest>()) }
       }
 
   @Test
@@ -294,7 +309,8 @@ class SignInViewModelTest {
         pending.complete(GetCredentialResponse(googleCredential))
         advanceUntilIdle()
 
-        assertFalse(viewModel.uiState.value.isLoading)
+        // Signed in: the loader stays until the app leaves the screen
+        assertTrue(viewModel.uiState.value.isLoading)
       }
 
   // ===================== Factory =====================
