@@ -1,7 +1,11 @@
 package com.android.spotted.e2e
 
 import android.Manifest
+import android.app.Activity
+import android.app.Instrumentation
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.CancellationSignal
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -28,6 +32,9 @@ import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.intent.Intents
+import androidx.test.espresso.intent.Intents.intending
+import androidx.test.espresso.intent.matcher.IntentMatchers.anyIntent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.MainActivity
@@ -209,13 +216,8 @@ class MainUserFlowTest {
     waitUntil("The GPS position should fill the sighting's location") {
       composeTestRule.onAllNodes(hasText("Taken from your GPS")).fetchSemanticsNodes().isNotEmpty()
     }
-    // The pet reported missing just before: "No matching alert" would need a photo, which the
-    // test can't pick from the system Photo Picker
-    val missing = pets.first()
-    waitUntil("\"${missing.name}\"'s alert should be offered") {
-      composeTestRule.onAllNodes(hasText(missing.name)).fetchSemanticsNodes().isNotEmpty()
-    }
-    composeTestRule.onNode(hasText(missing.name)).performScrollTo().performClick()
+    node(ReportSightingScreenTestTags.NO_MATCH_OPTION).performScrollTo().performClick()
+    pickFakePhoto()
     node(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
@@ -272,6 +274,33 @@ class MainUserFlowTest {
   }
 
   /** Documents of [collection] whose [field] is [value], read from the Firestore emulator. */
+  /**
+   * "No matching alert" needs a photo, but the test can't drive the system Photo Picker: its result
+   * is stubbed with a URI that isn't a real image. The animal check and the upload then fail, and
+   * both let the sighting through without a photo.
+   */
+  private fun pickFakePhoto() {
+    Intents.init()
+    try {
+      intending(anyIntent())
+          .respondWith(
+              Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(FAKE_PHOTO))
+          )
+      node(ReportSightingScreenTestTags.PHOTO_BUTTON).performScrollTo().performClick()
+      waitUntil("The stubbed photo should be accepted") {
+        listOf(
+                ReportSightingScreenTestTags.PHOTO_REQUIRED,
+                ReportSightingScreenTestTags.PHOTO_CHECKING,
+            )
+            .all { tag ->
+              composeTestRule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isEmpty()
+            }
+      }
+    } finally {
+      Intents.release()
+    }
+  }
+
   private fun documents(collection: String, field: String, value: String): List<Map<String, Any>> =
       Tasks.await(
               FirebaseFirestore.getInstance()
@@ -398,8 +427,9 @@ class MainUserFlowTest {
     const val TEST_EMAIL = "e2e@spotted.test"
     /** Fixed Google account id, so every run signs in as the same emulator account. */
     const val TEST_SUB = "e2e-test-account"
-    /** Near the map's default center, where the missing pet's pin goes, so its alert is nearby. */
-    val GPS = Location(latitude = 46.5197, longitude = 6.6300)
+    val GPS = Location(latitude = 46.5191, longitude = 6.5668)
+    /** Returned by the stubbed Photo Picker; nothing is behind it. */
+    val FAKE_PHOTO: Uri = Uri.parse("content://com.android.spotted.e2e/fake_photo.jpg")
 
     fun speciesFor(index: Int) = Species.entries[(index - 1) % Species.entries.size]
   }
