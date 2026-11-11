@@ -368,6 +368,43 @@ class LinkTagViewModelTest {
       }
 
   @Test
+  fun contactsThatThrowAreRolledBackLikeAFailure() =
+      runTest(testDispatcher) {
+        val throwing =
+            object : PetTagRepository by tags {
+              override suspend fun setVisibleContacts(
+                  tagId: String,
+                  showPhone: Boolean,
+                  showEmail: Boolean,
+                  phone: String?,
+                  email: String?,
+              ): Result<Unit> = throw IllegalStateException("offline")
+            }
+        val viewModel = loadedViewModel(tagRepository = throwing)
+
+        linkWith(viewModel)
+
+        viewModel.assertErrorWith(R.string.link_tag_save_error)
+        assertTrue(tags.linkedTags.isEmpty())
+      }
+
+  @Test
+  fun undoThatThrowsSaysTheTagStayedLinked() =
+      runTest(testDispatcher) {
+        val stuck =
+            object : PetTagRepository by FailingContactsRepository(tags) {
+              override suspend fun unlinkTag(tagId: String): Result<Unit> =
+                  throw IllegalStateException("offline")
+            }
+        val viewModel = loadedViewModel(tagRepository = stuck)
+
+        linkWith(viewModel)
+
+        viewModel.assertErrorWith(R.string.link_tag_contacts_not_saved_error)
+        assertEquals(PET_ID, tags.linkedTags.single().petId)
+      }
+
+  @Test
   fun closingTheScreenAfterTheTapStillSavesTheChosenContacts() =
       runTest(testDispatcher) {
         val contactsGate = CompletableDeferred<Unit>()

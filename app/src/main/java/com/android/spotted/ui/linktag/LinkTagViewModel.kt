@@ -145,17 +145,18 @@ class LinkTagViewModel(
       return Result.failure(it)
     }
     val tagId = write.getOrThrow().tagId // The link succeeded, so the write did too.
-    val saved =
-        petTagRepository.setVisibleContacts(
-            tagId = tagId,
-            showPhone = showPhone,
-            showEmail = showEmail,
-            phone = owner.phone,
-            email = owner.email,
-        )
+    val saved = attempt {
+      petTagRepository.setVisibleContacts(
+          tagId = tagId,
+          showPhone = showPhone,
+          showEmail = showEmail,
+          phone = owner.phone,
+          email = owner.email,
+      )
+    }
     if (saved.isSuccess) return saved
     // Unlink, so nothing stays linked with contacts the owner did not choose.
-    return if (petTagRepository.unlinkTag(tagId).isSuccess) {
+    return if (attempt { petTagRepository.unlinkTag(tagId) }.isSuccess) {
       saved
     } else {
       // Known gap: the tag stays linked with the default contacts, and TagLinker refuses it on a
@@ -163,6 +164,18 @@ class LinkTagViewModel(
       Result.failure(TagLeftLinkedException(saved.exceptionOrNull()))
     }
   }
+
+  /**
+   * Runs [call] and returns what it throws as a failure, so the rollback in [saveLink] also runs
+   * when a repository throws. Only called in [NonCancellable] after the tap, where even a
+   * [CancellationException] comes from the repository, not from this job.
+   */
+  private suspend fun <T> attempt(call: suspend () -> Result<T>): Result<T> =
+      try {
+        call()
+      } catch (exception: Exception) {
+        Result.failure(exception)
+      }
 
   private suspend fun loadOwner(): Result<UserProfile> {
     val uid =
