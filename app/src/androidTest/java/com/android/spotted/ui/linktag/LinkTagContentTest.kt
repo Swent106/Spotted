@@ -4,19 +4,26 @@ package com.android.spotted.ui.linktag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.R
+import com.android.spotted.model.tag.NfcAvailability
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** [LinkTagContent] with hand-built states: one test per step, then the buttons and the header. */
+/**
+ * [LinkTagContent] with hand-built states: one test per step, the buttons and the header, then the
+ * contacts finders can see and the NFC notice.
+ */
 @RunWith(AndroidJUnit4::class)
 class LinkTagContentTest {
 
@@ -25,14 +32,21 @@ class LinkTagContentTest {
   private val idle = LinkTagUiState(petName = "Luna")
   private val calls = mutableListOf<String>()
 
-  private fun show(state: LinkTagUiState) {
+  private fun show(
+      state: LinkTagUiState,
+      nfc: NfcAvailability = NfcAvailability.AVAILABLE,
+  ) {
     composeTestRule.setContent {
       LinkTagContent(
           state = state,
+          nfcAvailability = nfc,
+          onShowPhoneChange = { calls += "phone=$it" },
+          onShowEmailChange = { calls += "email=$it" },
           onStart = { calls += "start" },
           onRetry = { calls += "retry" },
           onDone = { calls += "done" },
           onCancel = { calls += "cancel" },
+          onOpenNfcSettings = { calls += "settings" },
       )
     }
   }
@@ -140,5 +154,89 @@ class LinkTagContentTest {
     click(LinkTagScreenTestTags.BACK_BUTTON)
 
     assertEquals(listOf("cancel"), calls)
+  }
+
+  @Test
+  fun contactsShowTheChoicesAndReportChanges() {
+    show(idle.copy(showEmail = false))
+
+    composeTestRule.onNodeWithText("Luna's name and photo").assertIsDisplayed()
+    node(LinkTagScreenTestTags.PHONE_SWITCH).assertIsOn().assertIsEnabled()
+    node(LinkTagScreenTestTags.EMAIL_SWITCH).assertIsOff().assertIsEnabled()
+    click(LinkTagScreenTestTags.PHONE_SWITCH)
+    click(LinkTagScreenTestTags.EMAIL_SWITCH)
+
+    assertEquals(listOf("phone=false", "email=true"), calls)
+  }
+
+  @Test
+  fun contactsAreLockedWhileLinking() {
+    show(idle.copy(step = LinkTagStep.WaitingForTag))
+
+    node(LinkTagScreenTestTags.PHONE_SWITCH).assertIsNotEnabled()
+    node(LinkTagScreenTestTags.EMAIL_SWITCH).assertIsNotEnabled()
+  }
+
+  @Test
+  fun contactsCanChangeAgainAfterAnError() {
+    show(idle.copy(step = LinkTagStep.Error))
+
+    node(LinkTagScreenTestTags.PHONE_SWITCH).assertIsEnabled()
+  }
+
+  @Test
+  fun petNotLoadedYetIsNamedGenerically() {
+    show(LinkTagUiState())
+
+    composeTestRule.onNodeWithText("Your pet's name and photo").assertIsDisplayed()
+  }
+
+  @Test
+  fun theAddressNoteIsShownAndThereIsNoAddressSwitch() {
+    show(idle)
+
+    node(LinkTagScreenTestTags.ADDRESS_NOTE)
+        .performScrollTo()
+        .assertTextEquals("Your home address is never shown on the tag.")
+    node("link_tag_address_switch").assertDoesNotExist()
+  }
+
+  @Test
+  fun nfcOffSaysSoOffersTheSettingsAndDisablesStart() {
+    show(idle, NfcAvailability.DISABLED)
+
+    node(LinkTagScreenTestTags.NFC_MESSAGE)
+        .assertTextEquals("NFC is turned off. Turn it on to link the tag.")
+    node(LinkTagScreenTestTags.START_BUTTON).assertIsNotEnabled()
+    click(LinkTagScreenTestTags.NFC_SETTINGS_BUTTON)
+
+    assertEquals(listOf("settings"), calls)
+  }
+
+  @Test
+  fun noNfcSaysSoWithoutASettingsButton() {
+    show(idle, NfcAvailability.UNSUPPORTED)
+
+    node(LinkTagScreenTestTags.NFC_MESSAGE).assertTextEquals("This phone can't write NFC tags.")
+    node(LinkTagScreenTestTags.NFC_SETTINGS_BUTTON).assertDoesNotExist()
+    node(LinkTagScreenTestTags.START_BUTTON).assertIsNotEnabled()
+  }
+
+  @Test
+  fun nfcOffDisablesRetryAfterAnError() {
+    show(
+        idle.copy(step = LinkTagStep.Error, errorMessage = R.string.link_tag_save_error),
+        NfcAvailability.DISABLED,
+    )
+
+    node(LinkTagScreenTestTags.RETRY_BUTTON).assertIsNotEnabled()
+    node(LinkTagScreenTestTags.NFC_SETTINGS_BUTTON).assertIsDisplayed()
+  }
+
+  @Test
+  fun nfcNoticeIsHiddenOnceTheTagIsLinked() {
+    show(idle.copy(step = LinkTagStep.Success), NfcAvailability.DISABLED)
+
+    node(LinkTagScreenTestTags.NFC_MESSAGE).assertDoesNotExist()
   }
 }
