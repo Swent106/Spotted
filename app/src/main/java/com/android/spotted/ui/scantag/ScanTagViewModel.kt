@@ -14,6 +14,7 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.AlertRepository
+import com.android.spotted.model.tag.NfcAvailability
 import com.android.spotted.model.tag.PetTagRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,7 @@ enum class ScanTagStep {
 
 data class ScanTagUiState(
     val step: ScanTagStep = ScanTagStep.WaitingForTag,
+    val nfcAvailability: NfcAvailability = NfcAvailability.AVAILABLE,
     val petName: String? = null,
     val photoUrl: String? = null,
     val species: Species? = null,
@@ -98,6 +100,11 @@ class ScanTagViewModel(
               openAlertId = openAlert?.id,
           )
     }
+  }
+
+  fun resetForRetry() {
+    scanJob?.cancel()
+    _uiState.value = ScanTagUiState()
   }
 
   companion object {

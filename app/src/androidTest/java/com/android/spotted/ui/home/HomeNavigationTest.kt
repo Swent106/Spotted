@@ -55,6 +55,7 @@ class HomeNavigationTest {
                   onMapClick = navigation.onMapClick,
                   onCameraClick = navigation.onCameraClick,
                   onProfileClick = navigation.onProfileClick,
+                  onScanTagClick = navigation.onScanTagClick,
               )
             },
             // The real screen needs Firebase: a tagged text is enough to check the navigation
@@ -79,6 +80,17 @@ class HomeNavigationTest {
                   "Report a sighting of ${alertId ?: "a new pet"}",
                   Modifier.testTag(REPORT_SIGHTING_SCREEN),
               )
+            },
+            scanTagContent = { _, onReportSighting ->
+              Column {
+                Text("Scan a pet’s tag", Modifier.testTag(SCAN_TAG_SCREEN))
+                Button(
+                    onClick = { onReportSighting(MILO.id) },
+                    modifier = Modifier.testTag(SCAN_TAG_REPORT_SIGHTING),
+                ) {
+                  Text("Report a sighting")
+                }
+              }
             },
             petProfileContent = { petId, _, _, _ ->
               Text("Pet $petId", Modifier.testTag(PET_SCREEN))
@@ -145,6 +157,19 @@ class HomeNavigationTest {
   }
 
   @Test
+  fun scanTagFromHome_opensSightingFlowForThatAlert() {
+    scrollTo(HomeScreenTestTags.SCAN_TAG_BUTTON).performClick()
+
+    node(SCAN_TAG_SCREEN).assertIsDisplayed()
+    node(SCAN_TAG_REPORT_SIGHTING).performClick()
+
+    node(REPORT_SIGHTING_SCREEN)
+        .assertIsDisplayed()
+        .assertTextEquals("Report a sighting of ${MILO.id}")
+    assertEquals(Route.REPORT_SIGHTING, navController.currentDestination?.route)
+  }
+
+  @Test
   fun profileTab_opensTheHelperProfile() {
     node(HomeScreenTestTags.TAB_PROFILE).performClick()
 
@@ -180,6 +205,8 @@ class HomeNavigationTest {
     const val ALERT_DETAIL_SCREEN = "alert_detail_screen"
     const val ALERT_DETAIL_REPORT_SIGHTING = "alert_detail_report_sighting"
     const val REPORT_SIGHTING_SCREEN = "report_sighting_screen"
+    const val SCAN_TAG_SCREEN = "scan_tag_screen"
+    const val SCAN_TAG_REPORT_SIGHTING = "scan_tag_reportSighting"
     const val REPORT_MISSING_SCREEN = "report_missing_screen"
     const val ADD_PETS_SCREEN = "add_pets_screen"
     const val MAP_SCREEN = "map_screen"

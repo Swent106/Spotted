@@ -224,6 +224,23 @@ class ScanTagViewModelTest {
   }
 
   @Test
+  fun resetForRetry_clearsThePreviousScan() = runTest {
+    val petRepository = FakePetRepository().apply { addPet(pet) }
+    val viewModel =
+        ScanTagViewModel(
+            FakePetTagRepository(initialTags = listOf(tag)),
+            petRepository,
+            FakeAlertRepository(),
+        )
+    viewModel.onTagScanned(tag.tagId)
+    advanceUntilIdle()
+
+    viewModel.resetForRetry()
+
+    assertEquals(ScanTagUiState(), viewModel.uiState.value)
+  }
+
+  @Test
   fun onTagScanned_tagLookupFailure_setsError() = runTest {
     val failure = IllegalStateException("tag lookup failed")
     val tagRepository = FakePetTagRepository().apply { getTagFailure = failure }

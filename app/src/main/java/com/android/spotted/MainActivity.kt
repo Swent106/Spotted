@@ -53,6 +53,7 @@ import com.android.spotted.ui.petprofile.PetProfileViewModel
 import com.android.spotted.ui.profile.HelperProfileNavigation
 import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
+import com.android.spotted.ui.scantag.ScanTagScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
 import com.android.spotted.ui.theme.SpottedTheme
@@ -62,6 +63,7 @@ object Route {
   const val PERSONAL_INFO = "personal_info"
   const val ADD_PETS = "add_pets"
   const val HOME = "home"
+  const val SCAN_TAG = "scan_tag"
   const val REPORT_MISSING = "report_missing"
   const val ALERT_ID = "alertId"
   private const val ALERT = "alert"
@@ -283,6 +285,7 @@ fun NavGraphBuilder.homeDestinations(
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
+          onScanTagClick = navigation.onScanTagClick,
       )
     },
     myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
@@ -311,6 +314,12 @@ fun NavGraphBuilder.homeDestinations(
               viewModel(factory = ReportSightingViewModel.Factory)
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
           ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone, onBack = onDone)
+        },
+    scanTagContent:
+        @Composable
+        (onBack: () -> Unit, onReportSighting: (alertId: String?) -> Unit) -> Unit =
+        { onBack, onReportSighting ->
+          ScanTagScreen(onBack = onBack, onReportSighting = onReportSighting)
         },
     petProfileContent:
         @Composable
@@ -368,7 +377,20 @@ fun NavGraphBuilder.homeDestinations(
             onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
             onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
+            onScanTagClick = dropUnlessResumed { navController.navigate(Route.SCAN_TAG) },
         )
+    )
+  }
+  composable(Route.SCAN_TAG) { entry ->
+    scanTagContent(
+        dropUnlessResumed { navController.popBackStackSafely() },
+        { alertId ->
+          if (entry.isResumed()) {
+            navController.navigate(
+                if (alertId == null) Route.NEW_SIGHTING else Route.reportSighting(alertId)
+            )
+          }
+        },
     )
   }
   composable(Route.PROFILE) {
@@ -438,4 +460,5 @@ data class HomeNavigation(
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
+    val onScanTagClick: () -> Unit = {},
 )

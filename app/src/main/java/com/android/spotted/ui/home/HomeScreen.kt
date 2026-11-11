@@ -99,6 +99,7 @@ object HomeScreenTestTags {
   const val OFFLINE_BANNER = "home_offlineBanner"
   const val OFFLINE_RETRY = "home_offlineRetry"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
+  const val SCAN_TAG_BUTTON = "home_scanTagButton"
   const val ADD_PET_BUTTON = "home_addPetButton"
   const val AVATAR = "home_avatar"
   const val TAB_BAR = "home_tabBar"
@@ -146,6 +147,7 @@ fun HomeScreen(
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    onScanTagClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   // Home stays in the back stack: reload it when coming back, so a pet just reported missing or
@@ -163,6 +165,7 @@ fun HomeScreen(
       onMapClick = onMapClick,
       onCameraClick = onCameraClick,
       onProfileClick = onProfileClick,
+      onScanTagClick = onScanTagClick,
       onAlertClick = onAlertClick,
       onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,
@@ -189,6 +192,7 @@ fun HomeScreenContent(
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    onScanTagClick: () -> Unit = {},
 ) {
   var isOpeningPetProfile by remember { mutableStateOf(false) }
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -260,6 +264,7 @@ fun HomeScreenContent(
             }
           },
           onNotificationsClick = onNotificationsClick,
+          onScanTagClick = onScanTagClick,
           modifier = Modifier.padding(innerPadding),
       )
     }
@@ -279,6 +284,7 @@ private fun HomeList(
     onMissingPetClick: (alertId: String) -> Unit,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
+    onScanTagClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   // Lazy, so that a long list of lost pets only composes what is on screen
@@ -324,6 +330,25 @@ private fun HomeList(
         Text(
             "Report a pet missing",
             style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.lostRed),
+        )
+      }
+    }
+    item(key = "scanTag") {
+      OutlinedButton(
+          onClick = onScanTagClick,
+          shape = RoundedCornerShape(14.dp),
+          border = BorderStroke(1.dp, SpottedTheme.colors.reportBorder),
+          colors =
+              ButtonDefaults.outlinedButtonColors(containerColor = SpottedTheme.colors.surface),
+          modifier =
+              Modifier.padding(top = 9.dp)
+                  .fillMaxWidth()
+                  .height(52.dp)
+                  .testTag(HomeScreenTestTags.SCAN_TAG_BUTTON),
+      ) {
+        Text(
+            "Scan a pet’s tag",
+            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.blue),
         )
       }
     }
