@@ -2,6 +2,7 @@
 package com.android.spotted.ui.notifications
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -56,6 +57,11 @@ class NotificationsContentTest {
     composeTestRule.onNodeWithText("12 min ago").assertIsDisplayed()
     composeTestRule.onNodeWithText("2 h ago").assertIsDisplayed()
     node(NotificationsScreenTestTags.EMPTY).assertDoesNotExist()
+
+    // Newest first: Milo (12 min ago) is drawn above Rex (2 h ago).
+    val milo = node(NotificationsScreenTestTags.item(MILO.sightingId)).getUnclippedBoundsInRoot()
+    val rex = node(NotificationsScreenTestTags.item(REX.sightingId)).getUnclippedBoundsInRoot()
+    assertTrue(milo.top < rex.top)
   }
 
   @Test
