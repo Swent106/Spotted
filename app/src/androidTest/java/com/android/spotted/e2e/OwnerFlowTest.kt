@@ -189,11 +189,9 @@ class OwnerFlowTest : EndToEndTest() {
 
     val status = MyAlertScreenTestTags.status(sightingId)
     waitFor(MyAlertScreenTestTags.sighting(sightingId), "My alert should list the sighting")
+    // The "Went NE" label is a child of the sighting row; the merged tree exposes its text
     waitUntil("My alert should show the sighting went NE") {
-      composeTestRule
-          .onAllNodes(hasTestTag(directionTag(sightingId)) and hasText("Went NE"))
-          .fetchSemanticsNodes()
-          .isNotEmpty()
+      composeTestRule.onAllNodes(hasText("Went NE")).fetchSemanticsNodes().isNotEmpty()
     }
     assertStatus(status, "To review")
     node(MyAlertScreenTestTags.confirm(sightingId)).scrollToAndClick()
@@ -216,10 +214,11 @@ class OwnerFlowTest : EndToEndTest() {
    */
   private fun assertAlreadyReportedMissing(petId: String) {
     openReportMissing()
-    waitFor(
-        "${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}$petId",
-        "The missing pet should be marked as already reported",
-    )
+    // "Already reported missing" is a child Text of the clickable pet row: match it on the row's
+    // merged node, since a descendant test tag is not exposed in the merged tree.
+    waitUntil("The missing pet should be marked as already reported") {
+      petOptionShows(petId, "Already reported missing")
+    }
     node("${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId").scrollToAndClick()
     waitFor(
         ReportMissingScreenTestTags.ALREADY_MISSING_DIALOG,
@@ -243,7 +242,7 @@ class OwnerFlowTest : EndToEndTest() {
     )
     assertFalse(
         "The pet should no longer be marked as already reported",
-        exists("${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}$petId"),
+        petOptionShows(petId, "Already reported missing"),
     )
     node(ReportMissingScreenTestTags.BACK_BUTTON).scrollToAndClick()
     waitFor(HomeScreenTestTags.SCREEN, "Home should show again after leaving Report missing")
@@ -280,6 +279,15 @@ class OwnerFlowTest : EndToEndTest() {
           .fetchSemanticsNodes()
           .isNotEmpty()
 
+  /** Whether the pet row [petId] in Report missing shows [text] (read from its merged node). */
+  private fun petOptionShows(petId: String, text: String): Boolean =
+      composeTestRule
+          .onAllNodes(
+              hasTestTag("${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId") and hasText(text)
+          )
+          .fetchSemanticsNodes()
+          .isNotEmpty()
+
   private fun assertStatus(tag: String, label: String) =
       assertEquals("The sighting's status should be \"$label\"", true, hasStatus(tag, label))
 
@@ -290,8 +298,5 @@ class OwnerFlowTest : EndToEndTest() {
 
     /** The north-east tile of the sighting form's DirectionPicker (see DirectionPicker). */
     const val DIRECTION_NE_TAG = "sighting_direction_ne"
-
-    /** My alert's direction row for a sighting (see MyAlertScreen). */
-    fun directionTag(sightingId: String) = "alertDetail_sightingDirection_$sightingId"
   }
 }
