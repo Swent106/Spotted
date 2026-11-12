@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.user
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -45,6 +46,7 @@ class UserRepositoryFirestoreTest {
             phone = "+41 79 123 45 67",
             email = "jamie@example.com",
             homeArea = "Lausanne",
+            username = "jamie",
         )
 
     assertTrue(repository.saveUser(profile).isSuccess)
@@ -54,16 +56,21 @@ class UserRepositoryFirestoreTest {
   }
 
   @Test
-  fun saveUser_withDefaultOptionalFields_persistsEmptyValues() = runTest {
+  fun saveUser_withDefaultOptionalFields_persistsEmptyValues_butNeedsAUsername() = runTest {
     val profile =
         UserProfile(
             uid = currentUserId(),
             name = "Jamie",
             email = "jamie@example.com",
+            username = "jamie",
         )
 
     assertTrue(repository.saveUser(profile).isSuccess)
     assertEquals(profile, repository.getUser(profile.uid).getOrThrow())
+    assertTrue(
+        "the rules refuse a profile without a username",
+        repository.saveUser(profile.copy(username = "")).isFailure,
+    )
   }
 
   @Test

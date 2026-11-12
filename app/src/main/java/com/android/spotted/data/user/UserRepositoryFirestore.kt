@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.user
 
 import com.android.spotted.model.Location
@@ -63,6 +64,8 @@ class UserRepositoryFirestore(
     var homeLatitude: Double? = null
     var homeLongitude: Double? = null
     var alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM
+    // Empty in profiles saved before the username was asked for
+    var username: String = ""
 
     fun toUserProfile() =
         UserProfile(
@@ -74,6 +77,7 @@ class UserRepositoryFirestore(
             homeLocation =
                 homeLatitude?.let { latitude -> homeLongitude?.let { Location(latitude, it) } },
             alertRadiusKm = alertRadiusKm,
+            username = username,
         )
 
     companion object {
@@ -87,6 +91,7 @@ class UserRepositoryFirestore(
             homeLatitude = user.homeLocation?.latitude
             homeLongitude = user.homeLocation?.longitude
             alertRadiusKm = user.alertRadiusKm
+            username = user.username
           }
     }
   }

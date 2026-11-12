@@ -86,6 +86,7 @@ object PersonalInfoScreenTestTags {
   const val PHOTO_FROM_CAMERA = "personalInfo_photoFromCamera"
   const val PHOTO_REMOVE = "personalInfo_photoRemove"
   const val USERNAME_INPUT = "personalInfo_usernameInput"
+  const val USERNAME_HINT = "personalInfo_usernameHint"
   const val FIRST_NAME_INPUT = "personalInfo_firstNameInput"
   const val LAST_NAME_INPUT = "personalInfo_lastNameInput"
   const val HOME_AREA_INPUT = "personalInfo_homeAreaInput"
@@ -300,6 +301,14 @@ private fun IdentityCard(
         placeholder = stringResource(R.string.personal_info_username_placeholder),
         testTag = PersonalInfoScreenTestTags.USERNAME_INPUT,
     )
+    // Save stays disabled without a username, so the form says why
+    if (state.cleanUsername.isEmpty()) {
+      Text(
+          stringResource(R.string.personal_info_username_hint),
+          style = jakarta(12, 16, FontWeight.Medium, SpottedTheme.colors.textSecondary),
+          modifier = Modifier.testTag(PersonalInfoScreenTestTags.USERNAME_HINT),
+      )
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
         Text(stringResource(R.string.personal_info_first_name_section), style = labelStyle)
