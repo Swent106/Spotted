@@ -21,6 +21,7 @@ const {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } = require("firebase/firestore");
 
 describe("Firestore security rules", () => {
@@ -396,27 +397,81 @@ describe("Firestore alert access rules", () => {
       : testEnvironment.authenticatedContext(userId).firestore();
   }
 
+  /** A valid open alert of owner-1 for [petId]. */
+  function openAlert(id, petId = "pet-1") {
+    return {
+      id,
+      ownerId: "owner-1",
+      petId,
+      lostAtMillis: 1000000,
+      status: "OPEN",
+      petName: "Rex",
+      petSpecies: "DOG",
+      petAllergies: [],
+      petBehaviors: [],
+      lastKnownLocation: { latitude: 46.5, longitude: 6.6 },
+    };
+  }
+
+  /** Writes the alert and the pet's lock naming it together, as publishAlert does. */
+  function publishWithLock(db, alertId, petId = "pet-1") {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "alerts", alertId), openAlert(alertId, petId));
+    batch.set(doc(db, "openPetAlerts", petId), { alertId, ownerId: "owner-1" });
+    return batch.commit();
+  }
+
   it("create: owner of the pet is allowed to create an alert", async () => {
     await seedPet("pet-1", "owner-1");
     const db = firestoreForUser("owner-1");
 
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+  });
+
+  it("create: an open alert written without the pet's lock is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(setDoc(doc(db, "alerts", "alert-1"), openAlert("alert-1")));
+  });
+
+  it("create: a second open alert for the same pet is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+
+    await assertFails(publishWithLock(db, "alert-2"));
+  });
+
+  it("lock: deleting the lock of an open alert is denied, so no second alert gets in", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+
+    await assertFails(deleteDoc(doc(db, "openPetAlerts", "pet-1")));
+    await assertFails(publishWithLock(db, "alert-2"));
+  });
+
+  it("lock: deleting the lock once its alert is closed is allowed", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
     await assertSucceeds(
-      setDoc(doc(db, "alerts", "alert-1"), {
-        id: "alert-1",
-        ownerId: "owner-1",
-        petId: "pet-1",
-        lostAtMillis: 1000000,
-        status: "OPEN",
-        petName: "Rex",
-        petSpecies: "DOG",
-        petAllergies: [],
-        petBehaviors: [],
-        lastKnownLocation: {
-            latitude: 46.5,
-            longitude: 6.6
-        }
-      })
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 2000000 })
     );
+
+    await assertSucceeds(deleteDoc(doc(db, "openPetAlerts", "pet-1")));
+  });
+
+  it("create: a pet whose alert is closed can get a new one", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+    await assertSucceeds(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 2000000 })
+    );
+
+    await assertSucceeds(publishWithLock(db, "alert-2"));
   });
 
   it("create: user creating an alert for someone else's pet is denied", async () => {
@@ -585,7 +640,11 @@ describe("Firestore alert access rules", () => {
     await seedPet("pet-1", "owner-1");
     const db = firestoreForUser("owner-1");
 
-    await assertSucceeds(setDoc(doc(db, "alerts", "alert-1"), alertData()));
+    // The pet's lock is written with the alert, as publishAlert does
+    const batch = writeBatch(db);
+    batch.set(doc(db, "alerts", "alert-1"), alertData());
+    batch.set(doc(db, "openPetAlerts", "pet-1"), { alertId: "alert-1", ownerId: "owner-1" });
+    await assertSucceeds(batch.commit());
   });
 
   it("create: alert that is already closed is denied", async () => {
@@ -754,6 +813,61 @@ describe("Firestore alert access rules", () => {
     const db = firestoreForUser("owner-1");
 
     await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { petName: "Max" }));
+  });
+
+  // openPetAlerts/{petId}: the lock publishAlert writes with each alert (one open alert per pet)
+  it("lock: the pet's owner can read a missing lock and create one", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(getDoc(doc(db, "openPetAlerts", "pet-1")));
+    await assertSucceeds(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), { alertId: "alert-1", ownerId: "owner-1" })
+    );
+  });
+
+  it("lock: another user cannot read or write the pet's lock", async () => {
+    await seedPet("pet-1", "owner-1");
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "openPetAlerts", "pet-1"), {
+        alertId: "alert-1",
+        ownerId: "owner-1",
+      });
+    });
+    const db = firestoreForUser("intruder");
+
+    await assertFails(getDoc(doc(db, "openPetAlerts", "pet-1")));
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), { alertId: "alert-2", ownerId: "intruder" })
+    );
+    await assertFails(deleteDoc(doc(db, "openPetAlerts", "pet-1")));
+  });
+
+  it("lock: invalid fields or another owner's pet are denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    await seedPet("pet-2", "owner-2");
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), { alertId: "", ownerId: "owner-1" })
+    );
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), {
+        alertId: "alert-1",
+        ownerId: "owner-1",
+        extra: true,
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-2"), { alertId: "alert-1", ownerId: "owner-1" })
+    );
+  });
+
+  it("lock: anonymous user is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser(null);
+
+    await assertFails(getDoc(doc(db, "openPetAlerts", "pet-1")));
   });
 });
 

@@ -2,6 +2,7 @@ package com.android.spotted.e2e
 
 import android.Manifest
 import android.content.Context
+import android.os.Build
 import android.os.CancellationSignal
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -97,6 +98,7 @@ class MainUserFlowTest {
     CredentialManagerProvider.create = { TestCredentialManager }
     LocationRepositoryProvider.create = { FixedLocationRepository }
     grantLocationPermission()
+    grantNotificationPermission()
     scenario = ActivityScenario.launch(MainActivity::class.java)
   }
 
@@ -283,6 +285,16 @@ class MainUserFlowTest {
     val packageName = instrumentation.targetContext.packageName
     listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         .forEach { instrumentation.uiAutomation.grantRuntimePermission(packageName, it) }
+  }
+
+  /** Otherwise the system dialog would cover the app right after sign-in. */
+  private fun grantNotificationPermission() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    instrumentation.uiAutomation.grantRuntimePermission(
+        instrumentation.targetContext.packageName,
+        Manifest.permission.POST_NOTIFICATIONS,
+    )
   }
 
   /** Deletes every account and document in the emulators, so each run starts from nothing. */
