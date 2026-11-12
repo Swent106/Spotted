@@ -13,10 +13,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.android.spotted.data.tag.NfcTagReader
+import com.android.spotted.data.tag.NfcTagWriter
 import com.android.spotted.data.tag.UnsupportedTagReader
 import com.android.spotted.model.tag.NfcAvailability
 import com.android.spotted.model.tag.ScannedTag
 import com.android.spotted.model.tag.TagReader
+import com.android.spotted.model.tag.TagWriteError
+import com.android.spotted.model.tag.TagWriteException
+import com.android.spotted.model.tag.TagWriteOutcome
+import com.android.spotted.model.tag.TagWriter
 
 /**
  * The [TagReader] for the current activity, or [UnsupportedTagReader] when there is none
@@ -29,6 +34,24 @@ fun rememberNfcTagReader(): TagReader {
   return remember(activity) {
     if (activity == null) UnsupportedTagReader else NfcTagReader(activity)
   }
+}
+
+/**
+ * The [TagWriter] for the current activity, or one that always fails with
+ * [TagWriteError.NFC_UNAVAILABLE] when there is none (previews). Like the reader, it is created by
+ * the View and handed to the ViewModel per call, so the ViewModel never keeps an old activity.
+ */
+@Composable
+fun rememberNfcTagWriter(): TagWriter {
+  val activity = LocalActivity.current
+  return remember(activity) {
+    if (activity == null) UnsupportedTagWriter else NfcTagWriter(activity)
+  }
+}
+
+internal object UnsupportedTagWriter : TagWriter {
+  override suspend fun writeOnNextTap(newTagId: String): Result<TagWriteOutcome> =
+      Result.failure(TagWriteException(TagWriteError.NFC_UNAVAILABLE))
 }
 
 /**

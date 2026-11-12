@@ -3,6 +3,8 @@ package com.android.spotted
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -28,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
+import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
@@ -37,15 +40,19 @@ import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
 import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.components.RequestNotificationPermissionOnce
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
 import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.ui.home.HomeScreen
+import com.android.spotted.ui.linktag.LinkTagScreen
+import com.android.spotted.ui.linktag.LinkTagViewModel
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
 import com.android.spotted.ui.notifications.NotificationsScreen
+import com.android.spotted.ui.notifications.SightingNotifierViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -80,6 +87,9 @@ object Route {
   /** The edit form of one of the user's pets, opened from its profile. */
   private const val EDIT_PET_BASE = "edit_pet"
   const val EDIT_PET = "$EDIT_PET_BASE/{$PET_ID}"
+  /** Links an NFC tag to one of the user's pets, opened from its profile. */
+  private const val LINK_TAG_BASE = "link_tag"
+  const val LINK_TAG = "$LINK_TAG_BASE/{$PET_ID}"
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
@@ -89,6 +99,8 @@ object Route {
   fun petProfile(petId: String) = "$PET/$petId"
 
   fun editPet(petId: String) = "$EDIT_PET_BASE/$petId"
+
+  fun linkTag(petId: String) = "$LINK_TAG_BASE/$petId"
 
   fun myAlert(alertId: String) = "$MY_ALERT_BASE/$alertId"
 
@@ -101,25 +113,32 @@ class MainActivity : ComponentActivity() {
 
   private val mainViewModel: MainViewModel by viewModels { MainViewModel.Factory }
 
+  private val sightingNotifierViewModel: SightingNotifierViewModel by viewModels {
+    SightingNotifierViewModel.Factory(SystemNotifier(applicationContext))
+  }
+
   /** The route of a notification the user tapped, until it has been opened. */
   private var notificationRoute by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
-    if (savedInstanceState == null) notificationRoute = intent.getStringExtra(EXTRA_ROUTE)
+    if (savedInstanceState == null) notificationRoute = notificationRouteOf(intent)
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
             .components { add(FirestorePhotoFetcher.Factory()) }
             .build()
     )
+    keepSplashWhileLoading()
     setContent {
       SpottedTheme {
         Surface(
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,
         ) {
+          val notifierState by sightingNotifierViewModel.uiState.collectAsState()
+          if (notifierState.isSignedIn) RequestNotificationPermissionOnce()
           SpottedApp(
               viewModel = mainViewModel,
               notificationRoute = notificationRoute,
@@ -134,7 +153,35 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
+    notificationRouteOf(intent)?.let { notificationRoute = it }
+  }
+
+  /**
+   * Keeps the system splash screen until [MainViewModel] knows the start screen, so a signed-in
+   * user reopening the app goes straight to Home without a glimpse of Welcome.
+   */
+  private fun keepSplashWhileLoading() {
+    val content = findViewById<View>(android.R.id.content)
+    content.viewTreeObserver.addOnPreDrawListener(
+        object : ViewTreeObserver.OnPreDrawListener {
+          override fun onPreDraw(): Boolean {
+            if (mainViewModel.uiState.value == StartDestination.LOADING) return false
+            content.viewTreeObserver.removeOnPreDrawListener(this)
+            return true
+          }
+        }
+    )
+  }
+}
+
+/**
+ * The route a notification asks [intent] to open, if any. A relaunch from Recents repeats the old
+ * intent, so it opens nothing. MainActivity is exported, so only the alert screens are allowed.
+ */
+internal fun notificationRouteOf(intent: Intent): String? {
+  if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
+  return intent.getStringExtra(EXTRA_ROUTE)?.takeIf {
+    it.startsWith(Route.myAlert("")) || it.startsWith(Route.alertDetail(""))
   }
 }
 
@@ -181,13 +228,15 @@ fun StartRouting(destination: StartDestination, navController: NavController) {
 
   LaunchedEffect(destination) {
     if (destination == routedDestination) return@LaunchedEffect
-    routedDestination = destination
     val targetRoute =
         when (destination) {
+          // The splash screen hides the app until the start screen is known
+          StartDestination.LOADING -> return@LaunchedEffect
           StartDestination.SIGNIN -> Route.SIGNIN
           StartDestination.PERSONAL_INFO -> Route.PERSONAL_INFO
           StartDestination.HOME -> Route.HOME
         }
+    routedDestination = destination
     navController.navigate(targetRoute) {
       popUpTo(0) { inclusive = true }
       launchSingleTop = true
@@ -248,8 +297,9 @@ fun NavGraphBuilder.addPetsDestination(
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
  * profile (Profile tab), [editProfileContent] the profile form it opens, [editPetContent] the edit
- * form of a pet and [myAlertContent] the owner's own alert, opened from a missing pet on Home;
- * tests replace them to use hand-built states instead of the real ViewModels.
+ * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, and [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
+ * instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -280,7 +330,16 @@ fun NavGraphBuilder.homeDestinations(
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
-      ReportMissingScreen(onBack = onDone, onPublished = onDone)
+      ReportMissingScreen(
+          onBack = onDone,
+          onPublished = onDone,
+          // My alert replaces Report missing, so Back from it returns to Home
+          onOpenAlert = { alertId ->
+            navController.navigate(Route.myAlert(alertId)) {
+              popUpTo(Route.REPORT_MISSING) { inclusive = true }
+            }
+          },
+      )
     },
     alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
         { alertId, onReportSighting ->
@@ -306,18 +365,27 @@ fun NavGraphBuilder.homeDestinations(
             petId: String,
             onBack: () -> Unit,
             onEdit: (String) -> Unit,
+            onLinkTag: (String) -> Unit,
             onDeleted: () -> Unit,
         ) -> Unit =
-        { petId, onBack, onEdit, onDeleted ->
+        { petId, onBack, onEdit, onLinkTag, onDeleted ->
           PetProfileScreen(
               viewModel = viewModel(factory = PetProfileViewModel.Factory),
               petId = petId,
               deleteViewModel = viewModel(key = petId, factory = EditPetViewModel.factory(petId)),
               onBack = onBack,
               onEdit = onEdit,
+              onLinkTag = onLinkTag,
               onDeleted = onDeleted,
           )
         },
+    linkTagContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
+      LinkTagScreen(
+          viewModel = viewModel(key = petId, factory = LinkTagViewModel.factory(petId)),
+          onDone = onDone,
+          onCancel = onDone,
+      )
+    },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
       EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)
     },
@@ -389,9 +457,15 @@ fun NavGraphBuilder.homeDestinations(
         entry.arguments?.getString(Route.PET_ID).orEmpty(),
         { navController.popBackStackSafely() },
         { petId -> if (entry.isResumed()) navController.navigate(Route.editPet(petId)) },
+        { petId -> if (entry.isResumed()) navController.navigate(Route.linkTag(petId)) },
         // The pet no longer exists: back to Home, with its profile removed from the back stack
         { navController.popBackStack(Route.HOME, inclusive = false) },
     )
+  }
+  composable(Route.LINK_TAG) { entry ->
+    linkTagContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {
+      navController.popBackStackSafely()
+    }
   }
   composable(Route.EDIT_PET) { entry ->
     editPetContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {

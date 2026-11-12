@@ -36,7 +36,8 @@ import kotlinx.coroutines.launch
  * 3. Sends the token to [AuthRepository] to authenticate the user with Firebase.
  * 4. Updates [uiState]: `isLoading` while the sign-in runs, the signed-in user on success, or an
  *    `errorMessage` on failure (cancelled by the user, credential error, repository failure or
- *    unexpected error).
+ *    unexpected error). After a success `isLoading` stays true: the Google button stays hidden
+ *    until the app leaves this screen for Home or Personal info.
  *
  * The UI only observes [uiState] and calls [signIn] / [clearErrorMsg]; it never changes the state
  * directly.
@@ -86,7 +87,8 @@ class SignInViewModel(private val repository: AuthRepository) : ViewModel() {
         val credential = getCredential(context, signInRequest, credentialManager)
 
         repository.signInWithGoogle(extractGoogleIdToken(credential)).fold({ user ->
-          _uiState.update { it.copy(isLoading = false, user = user, errorMessage = null) }
+          // Still loading: the start route is being chosen, the button must not come back
+          _uiState.update { it.copy(user = user, errorMessage = null) }
         }) { failure ->
           showError(SIGN_IN_FAILED, failure)
         }
