@@ -1,50 +1,26 @@
 package com.android.spotted.e2e
 
-import android.Manifest
 import android.app.Activity
 import android.app.Instrumentation
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.CancellationSignal
-import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
-import androidx.credentials.ClearCredentialStateRequest
-import androidx.credentials.CreateCredentialRequest
-import androidx.credentials.CreateCredentialResponse
-import androidx.credentials.CredentialManager
-import androidx.credentials.CredentialManagerCallback
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetCredentialResponse
-import androidx.credentials.PrepareGetCredentialResponse
-import androidx.credentials.exceptions.ClearCredentialException
-import androidx.credentials.exceptions.CreateCredentialException
-import androidx.credentials.exceptions.GetCredentialException
-import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.matcher.IntentMatchers.anyIntent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.android.spotted.MainActivity
 import com.android.spotted.R
-import com.android.spotted.data.location.LocationRepositoryProvider
-import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
-import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.ui.addpets.AddPetsScreenTestTags
-import com.android.spotted.ui.authentification.CredentialManagerProvider
 import com.android.spotted.ui.authentification.SignInScreenTestTags
 import com.android.spotted.ui.components.MapPickerTestTags
 import com.android.spotted.ui.home.HomeScreenTestTags
@@ -52,21 +28,13 @@ import com.android.spotted.ui.personalinfo.PersonalInfoScreenTestTags
 import com.android.spotted.ui.profile.HelperProfileTestTags
 import com.android.spotted.ui.report.ReportMissingScreenTestTags
 import com.android.spotted.ui.sighting.ReportSightingScreenTestTags
-import com.android.spotted.utils.FakeJwtGenerator
-import com.google.android.gms.tasks.Tasks
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.firebase.FirebaseApp
+import com.android.spotted.utils.EndToEndTest
+import com.android.spotted.utils.TestAccount
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.Executor
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -75,19 +43,14 @@ import org.junit.runner.RunWith
  * (`firebase emulators:start --only auth,firestore`): sign in, create the profile, add pets, see
  * them on Home, report one missing, report a sighting, then sign out.
  *
- * Everything the user does goes through the UI. Two test seams replace what a test can't drive: the
- * system Google account chooser ([CredentialManagerProvider], returning a token for a fixed
- * emulator account) and the GPS ([LocationRepositoryProvider], returning a fixed position).
+ * Everything the user does goes through the UI. [EndToEndTest] replaces what a test can't drive:
+ * the system Google account chooser and the GPS.
  *
  * The number of pets comes from the `e2ePetCount` instrumentation argument (3 by default), e.g.
  * `-Pandroid.testInstrumentationRunnerArguments.e2ePetCount=5`.
  */
 @RunWith(AndroidJUnit4::class)
-class MainUserFlowTest {
-
-  @get:Rule val composeTestRule = createEmptyComposeRule()
-
-  private lateinit var scenario: ActivityScenario<MainActivity>
+class MainUserFlowTest : EndToEndTest() {
 
   /** Makes this run's pet names unique, on top of the emulators being cleared. */
   private val runId = System.currentTimeMillis().toString(36).takeLast(5)
@@ -99,24 +62,8 @@ class MainUserFlowTest {
   private val pets = (1..petCount).map { E2ePet(name = "Pet$it $runId", species = speciesFor(it)) }
 
   @Before
-  fun setUp() {
+  fun checkPetCount() {
     assertTrue("$PET_COUNT_ARGUMENT must be at least 1 to report a pet missing", petCount >= 1)
-    clearEmulators()
-    FirebaseAuth.getInstance().signOut()
-    CredentialManagerProvider.create = { TestCredentialManager }
-    LocationRepositoryProvider.create = { FixedLocationRepository }
-    grantLocationPermission()
-    scenario = ActivityScenario.launch(MainActivity::class.java)
-  }
-
-  @After
-  fun tearDown() {
-    if (::scenario.isInitialized) scenario.close()
-    FirebaseAuth.getInstance().signOut()
-    CredentialManagerProvider.create = { CredentialManager.create(it) }
-    LocationRepositoryProvider.create = {
-      com.android.spotted.data.location.LocationRepositoryFused(it)
-    }
   }
 
   @Test
@@ -141,7 +88,7 @@ class MainUserFlowTest {
     waitFor(PersonalInfoScreenTestTags.SCREEN, "Personal info should open after signing in")
     assertEquals(
         "The signed-in user should be the test account",
-        TEST_EMAIL,
+        TestAccount.DEFAULT.email,
         FirebaseAuth.getInstance().currentUser?.email,
     )
   }
@@ -233,48 +180,6 @@ class MainUserFlowTest {
     assertEquals("The sighting should be at the GPS position", GPS.longitude, location["longitude"])
   }
 
-  private fun signOut() {
-    node(HomeScreenTestTags.TAB_PROFILE).performClick()
-    waitFor(HelperProfileTestTags.SCREEN, "The Profile tab should open the Helper profile")
-    node(HelperProfileTestTags.ACCOUNT_BUTTON).scrollToAndClick()
-    waitFor(HelperProfileTestTags.SIGN_OUT, "The account button should offer to sign out")
-    node(HelperProfileTestTags.SIGN_OUT).scrollToAndClick()
-    waitFor(SignInScreenTestTags.SCREEN, "The Sign in screen should show after signing out")
-    waitUntil("Firebase should have no signed-in user after signing out") {
-      FirebaseAuth.getInstance().currentUser == null
-    }
-  }
-
-  // ---------------------------------------- Helpers ----------------------------------------
-
-  private fun node(tag: String): SemanticsNodeInteraction =
-      composeTestRule.onNodeWithTag(tag, useUnmergedTree = false)
-
-  /**
-   * Scrolls to the node when it is in a scrolling container, then clicks it. A click on a node
-   * outside the screen is lost, and CI emulators have smaller screens than most phones.
-   */
-  private fun SemanticsNodeInteraction.scrollToAndClick(): SemanticsNodeInteraction {
-    // performScrollTo fails when no parent scrolls: the node is then always on screen
-    runCatching { performScrollTo() }
-    return performClick()
-  }
-
-  private fun waitFor(tag: String, message: String) {
-    waitUntil(message) {
-      composeTestRule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
-    }
-    node(tag).assertIsDisplayed()
-  }
-
-  private fun waitUntil(message: String, condition: () -> Boolean) {
-    try {
-      composeTestRule.waitUntil(TIMEOUT_MILLIS, condition)
-    } catch (e: Throwable) {
-      throw AssertionError("Timed out after $TIMEOUT_MILLIS ms: $message", e)
-    }
-  }
-
   /**
    * "No matching alert" needs a photo of an animal, but the test can't drive the system Photo
    * Picker: its result is stubbed with a real photo of a cat, copied from the app's resources, so
@@ -310,134 +215,23 @@ class MainUserFlowTest {
     }
   }
 
-  /** Documents of [collection] whose [field] is [value], read from the Firestore emulator. */
-  private fun documents(collection: String, field: String, value: String): List<Map<String, Any>> =
-      Tasks.await(
-              FirebaseFirestore.getInstance()
-                  .collection(collection)
-                  .whereEqualTo(field, value)
-                  .limit(100)
-                  .get()
-          )
-          .documents
-          .mapNotNull { it.data }
-
-  private fun grantLocationPermission() {
-    val instrumentation = InstrumentationRegistry.getInstrumentation()
-    val packageName = instrumentation.targetContext.packageName
-    listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-        .forEach { instrumentation.uiAutomation.grantRuntimePermission(packageName, it) }
-  }
-
-  /** Deletes every account and document in the emulators, so each run starts from nothing. */
-  private fun clearEmulators() {
-    val projectId = FirebaseApp.getInstance().options.projectId
-    delete("http://$EMULATOR_HOST:9099/emulator/v1/projects/$projectId/accounts")
-    delete(
-        "http://$EMULATOR_HOST:8080/emulator/v1/projects/$projectId/databases/(default)/documents"
-    )
-  }
-
-  private fun delete(url: String) {
-    val connection = URL(url).openConnection() as HttpURLConnection
-    try {
-      connection.requestMethod = "DELETE"
-      val code = connection.responseCode
-      assertTrue(
-          "Could not clear the emulator ($url answered $code). Are the Firebase emulators running?",
-          code in 200..299,
-      )
-    } finally {
-      connection.disconnect()
+  private fun signOut() {
+    node(HomeScreenTestTags.TAB_PROFILE).performClick()
+    waitFor(HelperProfileTestTags.SCREEN, "The Profile tab should open the Helper profile")
+    node(HelperProfileTestTags.ACCOUNT_BUTTON).scrollToAndClick()
+    waitFor(HelperProfileTestTags.SIGN_OUT, "The account button should offer to sign out")
+    node(HelperProfileTestTags.SIGN_OUT).scrollToAndClick()
+    waitFor(SignInScreenTestTags.SCREEN, "The Sign in screen should show after signing out")
+    waitUntil("Firebase should have no signed-in user after signing out") {
+      FirebaseAuth.getInstance().currentUser == null
     }
   }
 
   private data class E2ePet(val name: String, val species: Species)
 
-  /** Returns a Google ID token for the test account, as the account chooser would. */
-  private object TestCredentialManager : CredentialManager {
-    private val token
-      get() =
-          FakeJwtGenerator.createFakeGoogleIdToken(
-              name = "E2E Tester",
-              email = TEST_EMAIL,
-              sub = TEST_SUB,
-          )
-
-    override suspend fun getCredential(
-        context: Context,
-        request: GetCredentialRequest,
-    ): GetCredentialResponse =
-        GetCredentialResponse(
-            GoogleIdTokenCredential.Builder().setId(TEST_EMAIL).setIdToken(token).build()
-        )
-
-    override fun getCredentialAsync(
-        context: Context,
-        request: GetCredentialRequest,
-        cancellationSignal: CancellationSignal?,
-        executor: Executor,
-        callback: CredentialManagerCallback<GetCredentialResponse, GetCredentialException>,
-    ) {
-      executor.execute {
-        callback.onResult(
-            GetCredentialResponse(
-                GoogleIdTokenCredential.Builder().setId(TEST_EMAIL).setIdToken(token).build()
-            )
-        )
-      }
-    }
-
-    override fun getCredentialAsync(
-        context: Context,
-        pendingGetCredentialHandle: PrepareGetCredentialResponse.PendingGetCredentialHandle,
-        cancellationSignal: CancellationSignal?,
-        executor: Executor,
-        callback: CredentialManagerCallback<GetCredentialResponse, GetCredentialException>,
-    ) = throw UnsupportedOperationException("Not used by the app")
-
-    override fun prepareGetCredentialAsync(
-        request: GetCredentialRequest,
-        cancellationSignal: CancellationSignal?,
-        executor: Executor,
-        callback: CredentialManagerCallback<PrepareGetCredentialResponse, GetCredentialException>,
-    ) = throw UnsupportedOperationException("Not used by the app")
-
-    override fun createCredentialAsync(
-        context: Context,
-        request: CreateCredentialRequest,
-        cancellationSignal: CancellationSignal?,
-        executor: Executor,
-        callback: CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException>,
-    ) = throw UnsupportedOperationException("Not used by the app")
-
-    override fun clearCredentialStateAsync(
-        request: ClearCredentialStateRequest,
-        cancellationSignal: CancellationSignal?,
-        executor: Executor,
-        callback: CredentialManagerCallback<Void?, ClearCredentialException>,
-    ) {
-      executor.execute { callback.onResult(null) }
-    }
-
-    override fun createSettingsPendingIntent() =
-        throw UnsupportedOperationException("Not used by the app")
-  }
-
-  /** A fixed position, so the sighting doesn't depend on the device's GPS. */
-  private object FixedLocationRepository : LocationRepository {
-    override suspend fun getCurrentLocation() = Result.success(GPS)
-  }
-
   private companion object {
     const val PET_COUNT_ARGUMENT = "e2ePetCount"
     const val DEFAULT_PET_COUNT = 3
-    const val TIMEOUT_MILLIS = 20_000L
-    const val EMULATOR_HOST = "10.0.2.2"
-    const val TEST_EMAIL = "e2e@spotted.test"
-    /** Fixed Google account id, so every run signs in as the same emulator account. */
-    const val TEST_SUB = "e2e-test-account"
-    val GPS = Location(latitude = 46.5191, longitude = 6.5668)
 
     fun speciesFor(index: Int) = Species.entries[(index - 1) % Species.entries.size]
   }
