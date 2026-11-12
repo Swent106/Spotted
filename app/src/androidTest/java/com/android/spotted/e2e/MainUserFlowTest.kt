@@ -38,6 +38,7 @@ import androidx.test.espresso.intent.matcher.IntentMatchers.anyIntent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.MainActivity
+import com.android.spotted.R
 import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
@@ -57,6 +58,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executor
@@ -217,7 +219,7 @@ class MainUserFlowTest {
       composeTestRule.onAllNodes(hasText("Taken from your GPS")).fetchSemanticsNodes().isNotEmpty()
     }
     node(ReportSightingScreenTestTags.NO_MATCH_OPTION).performScrollTo().performClick()
-    pickFakePhoto()
+    pickCatPhoto()
     node(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
@@ -273,21 +275,28 @@ class MainUserFlowTest {
     }
   }
 
-  /** Documents of [collection] whose [field] is [value], read from the Firestore emulator. */
   /**
-   * "No matching alert" needs a photo, but the test can't drive the system Photo Picker: its result
-   * is stubbed with a URI that isn't a real image. The animal check and the upload then fail, and
-   * both let the sighting through without a photo.
+   * "No matching alert" needs a photo of an animal, but the test can't drive the system Photo
+   * Picker: its result is stubbed with a real photo of a cat, copied from the app's resources, so
+   * the animal check accepts it and the upload succeeds.
    */
-  private fun pickFakePhoto() {
+  private fun pickCatPhoto() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val photo = File(context.cacheDir, "e2e_cat.png")
+    context.resources.openRawResource(R.drawable.hero_pet_lost).use { input ->
+      photo.outputStream().use { input.copyTo(it) }
+    }
     Intents.init()
     try {
       intending(anyIntent())
           .respondWith(
-              Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(FAKE_PHOTO))
+              Instrumentation.ActivityResult(
+                  Activity.RESULT_OK,
+                  Intent().setData(Uri.fromFile(photo)),
+              )
           )
       node(ReportSightingScreenTestTags.PHOTO_BUTTON).performScrollTo().performClick()
-      waitUntil("The stubbed photo should be accepted") {
+      waitUntil("The cat photo should be accepted") {
         listOf(
                 ReportSightingScreenTestTags.PHOTO_REQUIRED,
                 ReportSightingScreenTestTags.PHOTO_CHECKING,
@@ -301,6 +310,7 @@ class MainUserFlowTest {
     }
   }
 
+  /** Documents of [collection] whose [field] is [value], read from the Firestore emulator. */
   private fun documents(collection: String, field: String, value: String): List<Map<String, Any>> =
       Tasks.await(
               FirebaseFirestore.getInstance()
@@ -428,8 +438,6 @@ class MainUserFlowTest {
     /** Fixed Google account id, so every run signs in as the same emulator account. */
     const val TEST_SUB = "e2e-test-account"
     val GPS = Location(latitude = 46.5191, longitude = 6.5668)
-    /** Returned by the stubbed Photo Picker; nothing is behind it. */
-    val FAKE_PHOTO: Uri = Uri.parse("content://com.android.spotted.e2e/fake_photo.jpg")
 
     fun speciesFor(index: Int) = Species.entries[(index - 1) % Species.entries.size]
   }
