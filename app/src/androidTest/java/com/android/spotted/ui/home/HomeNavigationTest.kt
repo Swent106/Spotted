@@ -80,7 +80,7 @@ class HomeNavigationTest {
                   Modifier.testTag(REPORT_SIGHTING_SCREEN),
               )
             },
-            petProfileContent = { petId, _, _, _ ->
+            petProfileContent = { petId, _, _, _, _ ->
               Text("Pet $petId", Modifier.testTag(PET_SCREEN))
             },
             mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },

@@ -33,4 +33,18 @@ class RouteOfIntentTest {
     assertNull(routeOf(Intent(Intent.ACTION_MAIN)))
     assertNull(routeOf(Intent(Intent.ACTION_VIEW, Uri.parse("spotted://pet/a1"))))
   }
+
+  @Test
+  fun aLinkReopenedFromRecents_opensNothing() {
+    val intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse("spotted://alert/a1"))
+            .addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+
+    assertNull(routeOf(intent))
+  }
+
+  @Test
+  fun aNotificationForAnotherScreen_opensNothing() {
+    assertNull(routeOf(Intent().putExtra(EXTRA_ROUTE, Route.EDIT_PROFILE)))
+  }
 }
