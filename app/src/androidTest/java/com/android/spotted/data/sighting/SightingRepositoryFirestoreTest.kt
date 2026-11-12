@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.data.sighting
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -27,6 +28,7 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -75,12 +77,13 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun reportSighting_storesAllFieldsInFirestore() = runTest {
-    val alertId = repository.getNewId()
+    val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val sighting =
         sighting(
             id = repository.getNewId(),
             alertId = alertId,
             photoUrl = "https://example.test/milo.jpg",
+            headingDegrees = 45,
         )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
@@ -104,7 +107,7 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun reportSighting_sameIdAgain_replacesSighting() = runTest {
-    val alertId = repository.getNewId()
+    val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val first = sighting(id = repository.getNewId(), alertId = alertId, species = Species.DOG)
     val replacement = first.copy(species = Species.CAT, seenAtMillis = 5_000L)
 
@@ -125,8 +128,8 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun getSightingsForAlert_returnsOnlyThatAlertsSightings_mostRecentFirst() = runTest {
-    val alertId = repository.getNewId()
-    val otherAlertId = repository.getNewId()
+    val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
+    val otherAlertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val older =
         sighting(id = "b-${repository.getNewId()}", alertId = alertId, seenAtMillis = 1_000L)
     val newer = sighting(id = repository.getNewId(), alertId = alertId, seenAtMillis = 3_000L)
@@ -152,7 +155,7 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun getSightingsForAlert_skipsSightingsWithUnknownSpecies() = runTest {
-    val alertId = repository.getNewId()
+    val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val valid = sighting(id = repository.getNewId(), alertId = alertId)
     repository.reportSighting(valid).getOrThrow()
     val invalidId = repository.getNewId()
@@ -177,24 +180,36 @@ class SightingRepositoryFirestoreTest {
         listOf(legacyId to SightingStatus.PENDING),
         repository.getSightingsForAlert(alertId).getOrThrow().map { it.id to it.status },
     )
+    assertNull(repository.getSightingsForAlert(alertId).getOrThrow().single().headingDegrees)
   }
 
   @Test
   fun observeSightingsForAlert_emitsCurrentSightingsThenEveryChange() = runTest {
+    // The test user owns the alert, so its sightings come from another user, written as the admin
     val alertId = seedAlertBypassingRules(ownerId = currentUserId())
     val first =
-        sighting(id = "b-${repository.getNewId()}", alertId = alertId, seenAtMillis = 1_000L)
+        sighting(
+            id = "b-${repository.getNewId()}",
+            reporterId = OTHER_REPORTER,
+            alertId = alertId,
+            seenAtMillis = 1_000L,
+        )
     val sameTime =
-        sighting(id = "a-${repository.getNewId()}", alertId = alertId, seenAtMillis = 1_000L)
-    val otherAlert = sighting(id = repository.getNewId(), alertId = repository.getNewId())
-    repository.reportSighting(first).getOrThrow()
+        first.copy(id = "a-${repository.getNewId()}").also { insertedSightingIds += it.id }
+    val otherAlert =
+        sighting(
+            id = repository.getNewId(),
+            reporterId = OTHER_REPORTER,
+            alertId = repository.getNewId(),
+        )
+    seedBypassingRules(first)
 
     inRealTime {
       val updates = repository.observeSightingsForAlert(alertId).produceIn(this)
 
       updates.awaitSightings(listOf(first))
-      repository.reportSighting(otherAlert).getOrThrow()
-      repository.reportSighting(sameTime).getOrThrow()
+      seedBypassingRules(otherAlert)
+      seedBypassingRules(sameTime)
       updates.awaitSightings(listOf(sameTime, first))
       repository.setSightingStatus(first.id, SightingStatus.CONFIRMED).getOrThrow()
       updates.awaitSightings(listOf(sameTime, first.copy(status = SightingStatus.CONFIRMED)))
@@ -215,7 +230,7 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun observeSightingsForAlert_stopsListeningWhenCollectorIsCancelled() = runTest {
-    val alertId = repository.getNewId()
+    val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val before = sighting(id = repository.getNewId(), alertId = alertId)
     val after = sighting(id = repository.getNewId(), alertId = alertId, seenAtMillis = 2_000L)
     repository.reportSighting(before).getOrThrow()
@@ -243,11 +258,12 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun reportSighting_sameIdAfterReview_returnsFailureAndKeepsReview() = runTest {
-    val alertId = seedAlertBypassingRules(ownerId = currentUserId())
-    val sighting = sighting(id = repository.getNewId(), alertId = alertId)
-    repository.reportSighting(sighting).getOrThrow()
-    repository.setSightingStatus(sighting.id, SightingStatus.CONFIRMED).getOrThrow()
-    val confirmed = sighting.copy(status = SightingStatus.CONFIRMED)
+    // The test user reports on another user's alert; the owner's review is written as the admin
+    val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
+    val confirmed =
+        sighting(id = repository.getNewId(), alertId = alertId)
+            .copy(status = SightingStatus.CONFIRMED)
+    seedBypassingRules(confirmed)
 
     assertTrue(repository.reportSighting(confirmed.copy(seenAtMillis = 5_000L)).isFailure)
 
@@ -256,9 +272,11 @@ class SightingRepositoryFirestoreTest {
 
   @Test
   fun setSightingStatus_byAlertOwner_changesOnlyTheStatus() = runTest {
+    // The test user owns the alert, so the sighting comes from another user, written as the admin
     val alertId = seedAlertBypassingRules(ownerId = currentUserId())
-    val sighting = sighting(id = repository.getNewId(), alertId = alertId)
-    repository.reportSighting(sighting).getOrThrow()
+    val sighting =
+        sighting(id = repository.getNewId(), reporterId = OTHER_REPORTER, alertId = alertId)
+    seedBypassingRules(sighting)
 
     assertTrue(repository.setSightingStatus(sighting.id, SightingStatus.DISMISSED).isSuccess)
 
@@ -321,6 +339,34 @@ class SightingRepositoryFirestoreTest {
     )
     return id
   }
+
+  /** Writes [sighting] as the admin, e.g. one reported by another user on the test user's alert. */
+  private suspend fun seedBypassingRules(sighting: Sighting) {
+    val location =
+        JSONObject()
+            .put("latitude", JSONObject().put("doubleValue", sighting.location.latitude))
+            .put("longitude", JSONObject().put("doubleValue", sighting.location.longitude))
+    val fields =
+        JSONObject()
+            .put("id", JSONObject().put("stringValue", sighting.id))
+            .put("reporterId", JSONObject().put("stringValue", sighting.reporterId))
+            .put("location", JSONObject().put("mapValue", JSONObject().put("fields", location)))
+            .put("seenAtMillis", JSONObject().put("integerValue", sighting.seenAtMillis.toString()))
+            .put("species", JSONObject().put("stringValue", sighting.species.name))
+            .put("photoUrl", stringOrNull(sighting.photoUrl))
+            .put("alertId", stringOrNull(sighting.alertId))
+            .put("status", JSONObject().put("stringValue", sighting.status.name))
+            .put(
+                "headingDegrees",
+                sighting.headingDegrees?.let { JSONObject().put("integerValue", it.toString()) }
+                    ?: JSONObject().put("nullValue", JSONObject.NULL),
+            )
+    seedBypassingRules(collection = "sightings", id = sighting.id, fields = fields)
+  }
+
+  private fun stringOrNull(value: String?): JSONObject =
+      if (value == null) JSONObject().put("nullValue", JSONObject.NULL)
+      else JSONObject().put("stringValue", value)
 
   private suspend fun seedSightingBypassingRules(
       id: String,
@@ -395,6 +441,12 @@ class SightingRepositoryFirestoreTest {
 
   private companion object {
     const val TIMEOUT_MILLIS = 10_000L
+
+    /** Owner of the alerts the test user reports on: a sighting can't be on one's own alert. */
+    const val ALERT_OWNER = "alert-owner"
+
+    /** Reporter of the sightings on the test user's own alerts. */
+    const val OTHER_REPORTER = "other-reporter"
   }
 
   private fun sighting(
@@ -404,6 +456,7 @@ class SightingRepositoryFirestoreTest {
       seenAtMillis: Long = 1_000L,
       species: Species = Species.DOG,
       photoUrl: String? = null,
+      headingDegrees: Int? = null,
   ): Sighting {
     insertedSightingIds += id
     return Sighting(
@@ -414,6 +467,7 @@ class SightingRepositoryFirestoreTest {
         species = species,
         photoUrl = photoUrl,
         alertId = alertId,
+        headingDegrees = headingDegrees,
     )
   }
 }

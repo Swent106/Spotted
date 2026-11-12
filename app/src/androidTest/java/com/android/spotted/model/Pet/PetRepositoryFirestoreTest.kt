@@ -2,8 +2,12 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.Pet
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.Pet.PetRepositoryFirestore
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
+import com.android.spotted.model.photo.FakePhotoRepository
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -15,7 +19,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -23,6 +26,7 @@ import org.junit.runner.RunWith
 class PetRepositoryFirestoreTest {
   private lateinit var auth: FirebaseAuth
   private lateinit var firestore: FirebaseFirestore
+  private lateinit var photoRepository: PhotoRepositoryFirestore
   private lateinit var repository: PetRepositoryFirestore
   private val insertedPetIds = mutableListOf<String>()
 
@@ -31,7 +35,9 @@ class PetRepositoryFirestoreTest {
     withContext(Dispatchers.IO) {
       auth = FirebaseAuth.getInstance()
       firestore = FirebaseFirestore.getInstance()
-      repository = PetRepositoryFirestore(firestore)
+      photoRepository =
+          PhotoRepositoryFirestore(ApplicationProvider.getApplicationContext<Context>(), firestore)
+      repository = PetRepositoryFirestore(firestore, photoRepository)
       Tasks.await(auth.signInAnonymously())
     }
   }
@@ -77,19 +83,85 @@ class PetRepositoryFirestoreTest {
   }
 
   @Test
+  fun updatePet_updatesAnExistingPet() = runTest {
+    val original = pet(id = repository.getNewId(), ownerId = currentUserId())
+    insertedPetIds += original.id
+    repository.addPet(original).getOrThrow()
+    val updated = original.copy(name = "Updated", note = "New note")
+
+    assertTrue(repository.updatePet(updated).isSuccess)
+    assertEquals(updated, repository.getPet(updated.id).getOrThrow())
+  }
+
+  @Test
+  fun updatePet_whenPetDoesNotExist_returnsFailure() = runTest {
+    val result = repository.updatePet(pet(id = repository.getNewId(), ownerId = currentUserId()))
+
+    assertTrue(result.isFailure)
+  }
+
+  @Test
+  fun deletePet_removesTheDocumentAndFirestorePhoto() = runTest {
+    val pet =
+        pet(
+            id = repository.getNewId(),
+            ownerId = currentUserId(),
+            photoUrl = "firestore://photos/test",
+        )
+    insertedPetIds += pet.id
+    repository.addPet(pet).getOrThrow()
+    withContext(Dispatchers.IO) {
+      Tasks.await(
+          firestore
+              .collection(PhotoRepositoryFirestore.PHOTOS_COLLECTION)
+              .document(pet.id)
+              .set(mapOf("ownerId" to pet.ownerId, "contentType" to "image/jpeg", "data" to ""))
+      )
+    }
+
+    assertTrue(repository.deletePet(pet.id).isSuccess)
+    insertedPetIds.remove(pet.id)
+    assertFalse(repository.getPetsByOwner(pet.ownerId).getOrThrow().any { it.id == pet.id })
+    withContext(Dispatchers.IO) {
+      assertFalse(
+          Tasks.await(
+                  firestore
+                      .collection(PhotoRepositoryFirestore.PHOTOS_COLLECTION)
+                      .document(pet.id)
+                      .get()
+              )
+              .exists()
+      )
+    }
+  }
+
+  @Test
+  fun deletePet_whenPhotoDeletionFails_returnsFailureAndKeepsThePet() = runTest {
+    val pet = pet(id = repository.getNewId(), ownerId = currentUserId(), photoUrl = "fake://photo")
+    insertedPetIds += pet.id
+    repository.addPet(pet).getOrThrow()
+    val failingPhotoRepository =
+        FakePhotoRepository().apply { failure = IllegalStateException("photo deletion failed") }
+    val failingRepository = PetRepositoryFirestore(firestore, failingPhotoRepository)
+
+    val result = failingRepository.deletePet(pet.id)
+
+    assertTrue(result.isFailure)
+    assertEquals(pet, repository.getPet(pet.id).getOrThrow())
+  }
+
+  @Test
   fun addPet_whenOwnerDoesNotMatchAuthenticatedUser_returnsFailure() = runTest {
     val pet = pet(id = repository.getNewId(), ownerId = "another-owner")
 
     assertTrue(repository.addPet(pet).isFailure)
   }
 
-  @Ignore
   @Test
   fun getPet_whenDocumentIsMissing_returnsFailure() = runTest {
     val result = repository.getPet(repository.getNewId())
 
     assertTrue(result.isFailure)
-    // assertTrue(result.exceptionOrNull() is NoSuchElementException)
   }
 
   @Test

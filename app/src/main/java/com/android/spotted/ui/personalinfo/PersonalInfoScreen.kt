@@ -69,6 +69,7 @@ import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.rememberPhotoPickerActions
 import com.android.spotted.ui.theme.PlusJakartaSans
 import com.android.spotted.ui.theme.SpottedTheme
@@ -130,12 +131,13 @@ private val MapPickerHeight = 118.dp
  * Stateless "Create your profile" screen.
  *
  * The form scrolls, and the "Create profile" button stays pinned at the bottom. The button is
- * enabled only when [PersonalInfoUiState.canSave] is true.
+ * enabled only when [PersonalInfoUiState.canSave] is true. Back is shown only when [onBackClick] is
+ * given: during onboarding there is no screen to go back to.
  */
 @Composable
 fun PersonalInfoContent(
     state: PersonalInfoUiState,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)?,
     onChangePhotoClick: () -> Unit,
     onUsernameChange: (String) -> Unit,
     onFirstNameChange: (String) -> Unit,
@@ -193,36 +195,28 @@ fun PersonalInfoContent(
 }
 
 @Composable
-private fun Header(isEditing: Boolean, onBackClick: () -> Unit) {
+private fun Header(isEditing: Boolean, onBackClick: (() -> Unit)?) {
   Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically,
       modifier = Modifier.fillMaxWidth(),
   ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier.size(40.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(SpottedTheme.colors.surface)
-                .clickable(onClickLabel = "Back", role = Role.Button, onClick = onBackClick)
-                .testTag(PersonalInfoScreenTestTags.BACK_BUTTON),
-    ) {
-      Icon(
-          painterResource(R.drawable.ic_arrow_back),
-          contentDescription = "Back",
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(20.dp),
-      )
+    if (onBackClick != null) {
+      SpottedBackButton(onClick = onBackClick, testTag = PersonalInfoScreenTestTags.BACK_BUTTON)
     }
     Column(Modifier.weight(1f)) {
       Text(
-          if (isEditing) "Edit your profile" else "Create your profile",
+          stringResource(
+              if (isEditing) R.string.personal_info_title_edit
+              else R.string.personal_info_title_create
+          ),
           style = jakarta(23, 31, FontWeight.ExtraBold, SpottedTheme.colors.ink),
       )
       Text(
-          if (isEditing) "Changes are saved to your profile"
-          else "Step 1 of 2 · tell the community who you are",
+          stringResource(
+              if (isEditing) R.string.personal_info_edit_subtitle
+              else R.string.personal_info_onboarding_step
+          ),
           style = jakarta(12, 16, FontWeight.Medium, SpottedTheme.colors.textSecondary),
       )
     }
@@ -273,7 +267,12 @@ private fun Avatar(photoUri: String?, onChangePhotoClick: () -> Unit, enabled: B
                   .background(SpottedTheme.colors.blue)
                   .border(3.dp, SpottedTheme.colors.surface, CircleShape),
       ) {
-        Text("+", style = jakarta(16, 18, FontWeight.ExtraBold, SpottedTheme.colors.onAccent))
+        Icon(
+            painterResource(R.drawable.ic_plus),
+            contentDescription = null,
+            tint = SpottedTheme.colors.onAccent,
+            modifier = Modifier.size(14.dp),
+        )
       }
     }
     Text(
@@ -294,30 +293,30 @@ private fun IdentityCard(
     onLastNameChange: (String) -> Unit,
 ) {
   Card {
-    Text("USERNAME", style = labelStyle)
+    Text(stringResource(R.string.personal_info_username_section), style = labelStyle)
     InputField(
         value = state.username,
         onValueChange = onUsernameChange,
-        placeholder = "@username",
+        placeholder = stringResource(R.string.personal_info_username_placeholder),
         testTag = PersonalInfoScreenTestTags.USERNAME_INPUT,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
       Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-        Text("FIRST NAME", style = labelStyle)
+        Text(stringResource(R.string.personal_info_first_name_section), style = labelStyle)
         InputField(
             value = state.firstName,
             onValueChange = onFirstNameChange,
-            placeholder = "First name",
+            placeholder = stringResource(R.string.personal_info_first_name_placeholder),
             testTag = PersonalInfoScreenTestTags.FIRST_NAME_INPUT,
             capitalization = KeyboardCapitalization.Words,
         )
       }
       Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-        Text("LAST NAME", style = labelStyle)
+        Text(stringResource(R.string.personal_info_last_name_section), style = labelStyle)
         InputField(
             value = state.lastName,
             onValueChange = onLastNameChange,
-            placeholder = "Last name",
+            placeholder = stringResource(R.string.personal_info_last_name_placeholder),
             testTag = PersonalInfoScreenTestTags.LAST_NAME_INPUT,
             capitalization = KeyboardCapitalization.Words,
         )
@@ -335,17 +334,17 @@ private fun HomeLocationCard(
     onAlertRadiusSelect: (Int) -> Unit,
 ) {
   Card {
-    Text("HOME LOCATION", style = labelStyle)
+    Text(stringResource(R.string.personal_info_home_section), style = labelStyle)
     InputField(
         value = state.homeArea,
         onValueChange = onHomeAreaChange,
-        placeholder = "Neighbourhood, city",
+        placeholder = stringResource(R.string.personal_info_home_placeholder),
         testTag = PersonalInfoScreenTestTags.HOME_AREA_INPUT,
         capitalization = KeyboardCapitalization.Words,
         imeAction = ImeAction.Done,
     ) {
       Text(
-          "Use my location",
+          stringResource(R.string.personal_info_use_my_location),
           style = jakarta(12, 16, Bold, SpottedTheme.colors.blue),
           modifier =
               Modifier.padding(start = 8.dp)
@@ -354,16 +353,18 @@ private fun HomeLocationCard(
       )
     }
     Text(
-        "Used to alert you about pets missing near your home.",
+        stringResource(R.string.personal_info_home_explanation),
         style = jakarta(12, 16, FontWeight.Medium, SpottedTheme.colors.textSecondary),
     )
+    // The label is built outside composition, so the format is read here
+    val alertsWithinKm = stringResource(R.string.personal_info_alerts_within_km)
     MapPicker(
         location = state.homeLocation,
         radiusKm = state.alertRadiusKm,
         onLocationChange = onHomeLocationChange,
         modifier = Modifier.fillMaxWidth().height(MapPickerHeight),
-        hint = "Tap the map to place your home",
-        radiusLabel = { "Alerts within $it km" },
+        hint = stringResource(R.string.personal_info_map_hint),
+        radiusLabel = { alertsWithinKm.format(it) },
     )
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -397,7 +398,7 @@ private fun RowScope.RadiusChip(radiusKm: Int, selected: Boolean, onSelect: (Int
               .testTag(PersonalInfoScreenTestTags.radiusChip(radiusKm)),
   ) {
     Text(
-        "$radiusKm km",
+        stringResource(R.string.personal_info_radius_km, radiusKm),
         style =
             if (selected) jakarta(13, 16, Bold, SpottedTheme.colors.blue)
             else jakarta(13, 16, FontWeight.SemiBold, SpottedTheme.colors.inkSoft),
@@ -481,7 +482,10 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
       )
     } else {
       Text(
-          if (state.isEditing) "Save changes" else "Create profile",
+          stringResource(
+              if (state.isEditing) R.string.personal_info_save_changes
+              else R.string.personal_info_create_profile
+          ),
           style = jakarta(15, 20, Bold, SpottedTheme.colors.onAccent),
       )
     }
@@ -494,12 +498,13 @@ private fun CreateProfileButton(state: PersonalInfoUiState, onClick: () -> Unit)
  * Collects the [PersonalInfoViewModel] state, forwards user input to it, and calls [onSaved] once
  * the profile is saved. "Use my location" asks for the location permission (precise or approximate)
  * and, once granted, lets the ViewModel place the home pin and name the area. Tapping the avatar
- * offers the gallery (system Photo Picker) or the camera app, as for pet photos.
+ * offers the gallery (system Photo Picker) or the camera app, as for pet photos. Without [onBack]
+ * (onboarding), no Back button is shown.
  */
 @Composable
 fun PersonalInfoScreen(
     viewModel: PersonalInfoViewModel = viewModel(factory = PersonalInfoViewModel.Factory),
-    onBack: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
     onSaved: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -654,6 +659,7 @@ private fun PhotoOption(text: String, testTag: String, onClick: () -> Unit, enab
     Text(
         text,
         style = jakarta(15, 20, Bold, SpottedTheme.colors.blue),
+        textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
   }

@@ -1,3 +1,5 @@
+// Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.photo
 
 interface PhotoRepository {
@@ -7,8 +9,14 @@ interface PhotoRepository {
    */
   suspend fun uploadPetPhoto(ownerId: String, petId: String, localUri: String): Result<String>
 
+  /** Deletes the photo of pet [petId], owned by [ownerId]; a missing photo succeeds. */
+  suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit>
+
   /** Uploads the image at [localUri] as the profile photo of user [userId] and returns its URL. */
   suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String>
+
+  /** Deletes the profile photo of user [userId]; a missing photo succeeds. */
+  suspend fun deleteProfilePhoto(userId: String): Result<Unit>
 
   /** URL of the profile photo of [userId]; nothing is shown there until one is uploaded. */
   fun profilePhotoUrl(userId: String): String

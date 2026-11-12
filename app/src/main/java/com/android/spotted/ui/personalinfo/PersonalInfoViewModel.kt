@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.personalinfo
 
 import androidx.lifecycle.ViewModel
@@ -9,7 +10,6 @@ import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
-import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.location.AddressRepository
@@ -17,6 +17,7 @@ import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +27,6 @@ import kotlinx.coroutines.launch
 class PersonalInfoViewModel(
     private val user: User?,
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository,
     private val locationRepository: LocationRepository? = null,
     private val addressRepository: AddressRepository? = null,
     private val photoRepository: PhotoRepository? = null,
@@ -38,19 +38,32 @@ class PersonalInfoViewModel(
       )
   val uiState: StateFlow<PersonalInfoUiState> = _uiState.asStateFlow()
 
+  private var profileLoad: Job? = null
+
   init {
     loadExistingProfile()
   }
 
   /**
    * Fills the form with the saved profile, if there is one, so editing it doesn't start from empty
-   * fields. A new user has no profile yet: the form then stays empty.
+   * fields. A new user has no profile yet: the form then stays empty. If the profile can't be read,
+   * the form must not look like a new user's, or saving it would overwrite the real profile.
    */
   private fun loadExistingProfile() {
     val signedInUser = user ?: return
-    viewModelScope.launch {
-      val profile = userRepository.getUser(signedInUser.uid).getOrNull() ?: return@launch
-      // The name is saved as one string: the first word is the first name, the rest the last name
+    profileLoad = viewModelScope.launch {
+      val profile =
+          userRepository.getUser(signedInUser.uid).getOrElse { failure ->
+            // The repository reports a missing profile as NoSuchElementException
+            if (failure !is NoSuchElementException) {
+              _uiState.update {
+                it.copy(isProfileLoadFailed = true, errorMessage = PROFILE_LOAD_FAILED)
+              }
+            }
+            return@launch
+          }
+      // The name is saved as one string: the first word is the first name, the rest the last
+      // name
       val firstName = profile.name.substringBefore(' ')
       val lastName = profile.name.substringAfter(' ', missingDelimiterValue = "")
       _uiState.update {
@@ -68,10 +81,6 @@ class PersonalInfoViewModel(
         )
       }
     }
-  }
-
-  fun onNameChanged(name: String) {
-    _uiState.update { it.copy(name = name, isSaved = false, errorMessage = null) }
   }
 
   fun onUsernameChanged(username: String) {
@@ -108,10 +117,6 @@ class PersonalInfoViewModel(
 
   private fun fullName(firstName: String, lastName: String): String =
       listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
-
-  fun onPhoneChanged(phone: String) {
-    _uiState.update { it.copy(phone = phone, isSaved = false, errorMessage = null) }
-  }
 
   fun onHomeAreaChanged(homeArea: String) {
     _uiState.update { it.copy(homeArea = homeArea, isSaved = false, errorMessage = null) }
@@ -155,24 +160,39 @@ class PersonalInfoViewModel(
     _uiState.update { it.copy(errorMessage = LOCATION_PERMISSION_DENIED) }
   }
 
+  /**
+   * Saves the form as the user's profile. If the saved profile couldn't be read, this reads it
+   * again instead, so the form never replaces a profile it didn't load.
+   */
   fun saveProfile() {
-    val currentState = _uiState.value
-    if (!currentState.canSave) return
+    if (!_uiState.value.canSave) return
+    if (_uiState.value.isProfileLoadFailed) {
+      _uiState.update { it.copy(isProfileLoadFailed = false, errorMessage = null) }
+      loadExistingProfile()
+      return
+    }
     val signedInUser = user ?: return
-
-    val profile =
-        UserProfile(
-            uid = signedInUser.uid,
-            name = currentState.name.trim(),
-            phone = currentState.phone,
-            email = signedInUser.email,
-            homeArea = currentState.homeArea.trim(),
-            homeLocation = currentState.homeLocation,
-            alertRadiusKm = currentState.alertRadiusKm,
-        )
 
     _uiState.update { it.copy(isSaving = true, errorMessage = null) }
     viewModelScope.launch {
+      // Saving before the profile has loaded would overwrite it with what the form held then
+      profileLoad?.join()
+      val currentState = _uiState.value
+      if (currentState.isProfileLoadFailed) {
+        _uiState.update { it.copy(isSaving = false) }
+        return@launch
+      }
+      val profile =
+          UserProfile(
+              uid = signedInUser.uid,
+              name = currentState.name.trim(),
+              phone = currentState.phone,
+              email = signedInUser.email,
+              homeArea = currentState.homeArea.trim(),
+              homeLocation = currentState.homeLocation,
+              alertRadiusKm = currentState.alertRadiusKm,
+          )
+
       // A photo just picked or taken is a local URI: upload it before saving the profile
       val photoUri = currentState.photoUri
       val repository = photoRepository
@@ -186,17 +206,20 @@ class PersonalInfoViewModel(
           return@launch
         }
       }
+      // A removed photo is deleted too, or it would come back the next time the profile opens
+      if (repository != null && photoUri == null && currentState.isEditing) {
+        repository.deleteProfilePhoto(signedInUser.uid).onFailure {
+          _uiState.update { it.copy(isSaving = false, errorMessage = PHOTO_DELETE_FAILED) }
+          return@launch
+        }
+      }
       userRepository
           .saveUser(profile)
           .fold(
               onSuccess = { _uiState.update { it.copy(isSaving = false, isSaved = true) } },
-              onFailure = { failure ->
+              onFailure = {
                 _uiState.update {
-                  it.copy(
-                      isSaving = false,
-                      isSaved = false,
-                      errorMessage = failure.localizedMessage ?: "Unable to save profile",
-                  )
+                  it.copy(isSaving = false, isSaved = false, errorMessage = SAVE_FAILED)
                 }
               },
           )
@@ -208,39 +231,13 @@ class PersonalInfoViewModel(
     _uiState.update { it.copy(isSaved = false) }
   }
 
-  fun logout() {
-    if (_uiState.value.isLoggingOut || _uiState.value.isLoggedOut) return
-
-    _uiState.update { it.copy(isLoggingOut = true, errorMessage = null) }
-    viewModelScope.launch {
-      authRepository
-          .signOut()
-          .fold(
-              onSuccess = { _uiState.update { it.copy(isLoggingOut = false, isLoggedOut = true) } },
-              onFailure = { failure ->
-                _uiState.update {
-                  it.copy(
-                      isLoggingOut = false,
-                      isLoggedOut = false,
-                      errorMessage = failure.localizedMessage ?: "Unable to log out",
-                  )
-                }
-              },
-          )
-    }
-  }
-
-  fun requestNearbyAlerts() {
-    _uiState.update { it.copy(nearbyAlertsRequested = true) }
-  }
-
-  fun clearNearbyAlertsRequest() {
-    _uiState.update { it.copy(nearbyAlertsRequested = false) }
-  }
-
   companion object {
+    const val PROFILE_LOAD_FAILED =
+        "Couldn't load your profile. Check your connection, then tap the button to try again."
+    const val SAVE_FAILED = "Couldn't save your profile. Please try again."
     const val PHOTO_UPLOAD_FAILED =
         "Couldn't upload your photo. Try again, or remove it to save without one."
+    const val PHOTO_DELETE_FAILED = "Couldn't remove your photo. Please try again."
     const val LOCATION_UNAVAILABLE =
         "Couldn't find your position. Tap the map to place your home instead."
     const val LOCATION_PERMISSION_DENIED =
@@ -250,15 +247,13 @@ class PersonalInfoViewModel(
         object : ViewModelProvider.Factory {
           override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
             require(modelClass.isAssignableFrom(PersonalInfoViewModel::class.java))
-            val authRepository = AuthRepositoryProvider.authRepository
             val application = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
 
             return requireNotNull(
                 modelClass.cast(
                     PersonalInfoViewModel(
-                        user = authRepository.currentUser.value,
+                        user = AuthRepositoryProvider.authRepository.currentUser.value,
                         userRepository = UserRepositoryFirestore(),
-                        authRepository = authRepository,
                         locationRepository =
                             application?.let { LocationRepositoryProvider.create(it) },
                         addressRepository = application?.let { AddressRepositoryGeocoder(it) },

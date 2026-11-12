@@ -21,6 +21,7 @@ const {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } = require("firebase/firestore");
 
 describe("Firestore security rules", () => {
@@ -192,6 +193,16 @@ describe("Firestore security rules", () => {
       }
     });
   }
+
+  it("another user cannot update or delete a pet", async () => {
+    await seedPet("pet-1", "owner-1");
+    const otherUserDb = firestoreForUser("owner-2");
+
+    await assertFails(updateDoc(doc(otherUserDb, "pets", "pet-1"), { name: "Changed" }));
+    await assertFails(deleteDoc(doc(otherUserDb, "pets", "pet-1")));
+    const ownerPet = await getDoc(doc(firestoreForUser("owner-1"), "pets", "pet-1"));
+    assert.deepEqual(ownerPet.data(), { ownerId: "owner-1", name: "Pet pet-1" });
+  });
 
   it("denies reads and writes to unmatched collections", async () => {
     const ownerDb = testEnvironment.authenticatedContext("owner-1").firestore();
@@ -379,27 +390,81 @@ describe("Firestore alert access rules", () => {
       : testEnvironment.authenticatedContext(userId).firestore();
   }
 
+  /** A valid open alert of owner-1 for [petId]. */
+  function openAlert(id, petId = "pet-1") {
+    return {
+      id,
+      ownerId: "owner-1",
+      petId,
+      lostAtMillis: 1000000,
+      status: "OPEN",
+      petName: "Rex",
+      petSpecies: "DOG",
+      petAllergies: [],
+      petBehaviors: [],
+      lastKnownLocation: { latitude: 46.5, longitude: 6.6 },
+    };
+  }
+
+  /** Writes the alert and the pet's lock naming it together, as publishAlert does. */
+  function publishWithLock(db, alertId, petId = "pet-1") {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "alerts", alertId), openAlert(alertId, petId));
+    batch.set(doc(db, "openPetAlerts", petId), { alertId, ownerId: "owner-1" });
+    return batch.commit();
+  }
+
   it("create: owner of the pet is allowed to create an alert", async () => {
     await seedPet("pet-1", "owner-1");
     const db = firestoreForUser("owner-1");
 
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+  });
+
+  it("create: an open alert written without the pet's lock is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(setDoc(doc(db, "alerts", "alert-1"), openAlert("alert-1")));
+  });
+
+  it("create: a second open alert for the same pet is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+
+    await assertFails(publishWithLock(db, "alert-2"));
+  });
+
+  it("lock: deleting the lock of an open alert is denied, so no second alert gets in", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+
+    await assertFails(deleteDoc(doc(db, "openPetAlerts", "pet-1")));
+    await assertFails(publishWithLock(db, "alert-2"));
+  });
+
+  it("lock: deleting the lock once its alert is closed is allowed", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
     await assertSucceeds(
-      setDoc(doc(db, "alerts", "alert-1"), {
-        id: "alert-1",
-        ownerId: "owner-1",
-        petId: "pet-1",
-        lostAtMillis: 1000000,
-        status: "OPEN",
-        petName: "Rex",
-        petSpecies: "DOG",
-        petAllergies: [],
-        petBehaviors: [],
-        lastKnownLocation: {
-            latitude: 46.5,
-            longitude: 6.6
-        }
-      })
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 2000000 })
     );
+
+    await assertSucceeds(deleteDoc(doc(db, "openPetAlerts", "pet-1")));
+  });
+
+  it("create: a pet whose alert is closed can get a new one", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    await assertSucceeds(publishWithLock(db, "alert-1"));
+    await assertSucceeds(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 2000000 })
+    );
+
+    await assertSucceeds(publishWithLock(db, "alert-2"));
   });
 
   it("create: user creating an alert for someone else's pet is denied", async () => {
@@ -568,7 +633,11 @@ describe("Firestore alert access rules", () => {
     await seedPet("pet-1", "owner-1");
     const db = firestoreForUser("owner-1");
 
-    await assertSucceeds(setDoc(doc(db, "alerts", "alert-1"), alertData()));
+    // The pet's lock is written with the alert, as publishAlert does
+    const batch = writeBatch(db);
+    batch.set(doc(db, "alerts", "alert-1"), alertData());
+    batch.set(doc(db, "openPetAlerts", "pet-1"), { alertId: "alert-1", ownerId: "owner-1" });
+    await assertSucceeds(batch.commit());
   });
 
   it("create: alert that is already closed is denied", async () => {
@@ -738,6 +807,61 @@ describe("Firestore alert access rules", () => {
 
     await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { petName: "Max" }));
   });
+
+  // openPetAlerts/{petId}: the lock publishAlert writes with each alert (one open alert per pet)
+  it("lock: the pet's owner can read a missing lock and create one", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(getDoc(doc(db, "openPetAlerts", "pet-1")));
+    await assertSucceeds(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), { alertId: "alert-1", ownerId: "owner-1" })
+    );
+  });
+
+  it("lock: another user cannot read or write the pet's lock", async () => {
+    await seedPet("pet-1", "owner-1");
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "openPetAlerts", "pet-1"), {
+        alertId: "alert-1",
+        ownerId: "owner-1",
+      });
+    });
+    const db = firestoreForUser("intruder");
+
+    await assertFails(getDoc(doc(db, "openPetAlerts", "pet-1")));
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), { alertId: "alert-2", ownerId: "intruder" })
+    );
+    await assertFails(deleteDoc(doc(db, "openPetAlerts", "pet-1")));
+  });
+
+  it("lock: invalid fields or another owner's pet are denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    await seedPet("pet-2", "owner-2");
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), { alertId: "", ownerId: "owner-1" })
+    );
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-1"), {
+        alertId: "alert-1",
+        ownerId: "owner-1",
+        extra: true,
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, "openPetAlerts", "pet-2"), { alertId: "alert-1", ownerId: "owner-1" })
+    );
+  });
+
+  it("lock: anonymous user is denied", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser(null);
+
+    await assertFails(getDoc(doc(db, "openPetAlerts", "pet-1")));
+  });
 });
 
 describe("Firestore sighting access rules", () => {
@@ -773,6 +897,7 @@ describe("Firestore sighting access rules", () => {
       species: "DOG",
       photoUrl: null,
       alertId: "alert-1",
+      headingDegrees: null,
       ...overrides,
     };
   }
@@ -802,6 +927,7 @@ describe("Firestore sighting access rules", () => {
 
   for (const testCase of createCases) {
     it(`sighting create: ${testCase.who} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      await seedAlert("alert-1", "owner-1");
       const db = firestoreForUser(testCase.userId);
       const operation = setDoc(
         doc(db, "sightings", "sighting-1"),
@@ -815,6 +941,17 @@ describe("Firestore sighting access rules", () => {
       }
     });
   }
+
+  it("sighting create: allows a document without headingDegrees", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+    const sightingWithoutHeading = sighting("sighting-1", "user-1");
+    delete sightingWithoutHeading.headingDegrees;
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sightingWithoutHeading),
+    );
+  });
 
   const readCases = [
     { who: "reporter", userId: "user-1", allowed: true },
@@ -943,6 +1080,10 @@ describe("Firestore sighting access rules", () => {
       sighting("sighting-1", "user-1", { species: "PARROT" }),
       sighting("sighting-1", "user-1", { photoUrl: 42 }),
       sighting("sighting-1", "user-1", { alertId: "" }),
+      sighting("sighting-1", "user-1", { headingDegrees: -1 }),
+      sighting("sighting-1", "user-1", { headingDegrees: 360 }),
+      sighting("sighting-1", "user-1", { headingDegrees: 1.5 }),
+      sighting("sighting-1", "user-1", { headingDegrees: "45" }),
     ];
 
     for (const invalidSighting of invalidSightings) {
@@ -961,6 +1102,7 @@ describe("Firestore sighting access rules", () => {
       { species: "PARROT" },
       { photoUrl: "x".repeat(2049) },
       { alertId: "" },
+      { headingDegrees: 360 },
       { species: deleteField() },
     ];
 
@@ -969,12 +1111,51 @@ describe("Firestore sighting access rules", () => {
     }
   });
 
+  it("sighting update: reporter can preserve a legacy decimal heading", async () => {
+    await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { species: "CAT" }));
+    await assertFails(updateDoc(ref, { headingDegrees: 46.5 }));
+  });
+
+  it("sighting update: alert owner can review a sighting with a legacy decimal heading", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+  });
+
   // Only the fields the sighting rules read; the alert schema is tested above.
   async function seedAlert(id, ownerId) {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "alerts", id), { id, ownerId, status: "OPEN" });
     });
   }
+
+  it("sighting create: accepts only nullable headings in the range [0, 360)", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+
+    for (const [index, headingDegrees] of [null, 0, 45, 359].entries()) {
+      await assertSucceeds(
+        setDoc(
+          doc(db, "sightings", `valid-heading-${index}`),
+          sighting(`valid-heading-${index}`, "user-1", { headingDegrees }),
+        ),
+      );
+    }
+
+    for (const [index, headingDegrees] of [-1, 360, 45.5, "NE"].entries()) {
+      await assertFails(
+        setDoc(
+          doc(db, "sightings", `invalid-heading-${index}`),
+          sighting(`invalid-heading-${index}`, "user-1", { headingDegrees }),
+        ),
+      );
+    }
+  });
 
   const statusCases = [
     { who: "alert owner", userId: "owner-1", allowed: true },
@@ -1029,6 +1210,7 @@ describe("Firestore sighting access rules", () => {
   });
 
   it("sighting status: a new sighting must be pending", async () => {
+    await seedAlert("alert-1", "owner-1");
     const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
 
     await assertFails(setDoc(ref, sighting("sighting-1", "user-1", { status: "CONFIRMED" })));
@@ -1071,6 +1253,7 @@ describe("Firestore sighting access rules", () => {
   });
 
   it("sighting update: reporter can link a sighting that had no alert", async () => {
+    await seedAlert("alert-1", "owner-1");
     await seedSighting("sighting-1", "user-1", { alertId: null });
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       const { alertId, ...withoutAlert } = sighting("sighting-2", "user-1");
@@ -1080,6 +1263,22 @@ describe("Firestore sighting access rules", () => {
 
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-1"), { alertId: "alert-1" }));
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-2"), { alertId: "alert-1" }));
+  });
+
+  it("sighting update: linking to the reporter's own alert is denied", async () => {
+    await seedAlert("alert-1", "user-1");
+    await seedSighting("sighting-1", "user-1", { alertId: null });
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { alertId: "alert-1" }));
+  });
+
+  it("sighting update: moving the time more than 5 minutes ahead is denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(ref, { seenAtMillis: Date.now() + fiveMinutesMillis + 60 * 1000 }));
   });
 
   const boundaryCases = [
@@ -1096,12 +1295,21 @@ describe("Firestore sighting access rules", () => {
     { field: "location", value: { latitude: 90, longitude: 180 }, allowed: true },
     { field: "location", value: { latitude: -90.1, longitude: 0 }, allowed: false },
     { field: "location", value: { latitude: 0, longitude: 180.1 }, allowed: false },
+    { field: "headingDegrees", value: null, allowed: true },
+    { field: "headingDegrees", value: 0, allowed: true },
+    { field: "headingDegrees", value: 359, allowed: true },
+    { field: "headingDegrees", value: -1, allowed: false },
+    { field: "headingDegrees", value: 360, allowed: false },
+    { field: "headingDegrees", value: 1.5, allowed: false },
+    { field: "headingDegrees", value: "45", allowed: false },
   ];
 
   for (const testCase of boundaryCases) {
     const shown = JSON.stringify(testCase.value);
     const label = shown.length > 40 ? `${shown.length - 2} characters` : shown;
     it(`sighting create: ${testCase.field} ${label} ${testCase.allowed ? "is allowed" : "is denied"}`, async () => {
+      // A new sighting needs its alert to exist; for the alertId cases, that alert is the one tested
+      await seedAlert(testCase.field === "alertId" ? testCase.value : "alert-1", "owner-1");
       const db = firestoreForUser("user-1");
       const operation = setDoc(
         doc(db, "sightings", "sighting-1"),
@@ -1115,6 +1323,72 @@ describe("Firestore sighting access rules", () => {
       }
     });
   }
+
+  // Plausibility of a new sighting: not in the future, and only on an open alert of another user.
+
+  const fiveMinutesMillis = 5 * 60 * 1000;
+
+  it("sighting create: seen up to 5 minutes ahead is allowed", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+    // A second of margin for the time between Date.now() and the emulator's request.time
+    const seenAtMillis = Date.now() + fiveMinutesMillis - 1000;
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { seenAtMillis })),
+    );
+  });
+
+  it("sighting create: seen more than 5 minutes ahead is denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+    const seenAtMillis = Date.now() + fiveMinutesMillis + 60 * 1000;
+
+    await assertFails(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { seenAtMillis })),
+    );
+  });
+
+  it("sighting create: on an open alert of another user is allowed", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: on the reporter's own alert is denied", async () => {
+    await seedAlert("alert-1", "user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertFails(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: on a missing alert is denied", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertFails(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: on a closed alert is denied", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "alerts", "alert-1"), {
+        id: "alert-1",
+        ownerId: "owner-1",
+        status: "CLOSED",
+      });
+    });
+    const db = firestoreForUser("user-1");
+
+    await assertFails(setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1")));
+  });
+
+  it("sighting create: without an alert skips the alert checks", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      setDoc(doc(db, "sightings", "sighting-1"), sighting("sighting-1", "user-1", { alertId: null })),
+    );
+  });
 
   describe("pet tag access rules", () => {
     const tag = (tagId, petId, ownerId, extra = {}) => ({
@@ -1390,10 +1664,13 @@ describe("Firestore photo access rules", () => {
   });
 
   it("photo delete: the owner is allowed, other users are denied", async () => {
-    await seedPhoto("pet-1", "user-1");
+    // A pet photo and a profile photo follow the same rule
+    for (const id of ["pet-1", "profile_user-1"]) {
+      await seedPhoto(id, "user-1");
 
-    await assertFails(deleteDoc(doc(firestoreForUser("user-2"), "photos", "pet-1")));
-    await assertFails(deleteDoc(doc(firestoreForUser(null), "photos", "pet-1")));
-    await assertSucceeds(deleteDoc(doc(firestoreForUser("user-1"), "photos", "pet-1")));
+      await assertFails(deleteDoc(doc(firestoreForUser("user-2"), "photos", id)));
+      await assertFails(deleteDoc(doc(firestoreForUser(null), "photos", id)));
+      await assertSucceeds(deleteDoc(doc(firestoreForUser("user-1"), "photos", id)));
+    }
   });
 });

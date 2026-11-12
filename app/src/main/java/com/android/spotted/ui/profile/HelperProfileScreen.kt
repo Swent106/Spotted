@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.profile
 
 import androidx.compose.foundation.Image
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,8 +42,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -61,12 +65,16 @@ object HelperProfileTestTags {
   const val NAME = "helperProfile_name"
   const val AREA = "helperProfile_area"
   const val ACCOUNT_BUTTON = "helperProfile_accountButton"
+  const val ACCOUNT_BUTTON_VISUAL = "helperProfile_accountButtonVisual"
   const val PETS_BROUGHT_HOME = "helperProfile_petsBroughtHome"
   const val EDIT_PROFILE = "helperProfile_editProfile"
   const val ERROR = "helperProfile_error"
   const val ACCOUNT_OPTIONS = "helperProfile_accountOptions"
   const val SIGN_OUT = "helperProfile_signOut"
   const val DELETE_ACCOUNT = "helperProfile_deleteAccount"
+  const val DELETE_CONFIRM_DIALOG = "helperProfile_deleteConfirmDialog"
+  const val DELETE_CONFIRM = "helperProfile_deleteConfirm"
+  const val DELETE_CANCEL = "helperProfile_deleteCancel"
 
   fun badge(name: String) = "helperProfile_badge_$name"
 }
@@ -82,9 +90,9 @@ data class HelperProfileNavigation(
 /**
  * Helper profile (Figma "13 · Helper profile"), wired to its [HelperProfileViewModel].
  *
- * The red button at the top offers to sign out or to delete the account. Both first clear the
- * Google account remembered by Credential Manager (#75), so the next sign-in asks which account to
- * use; MainViewModel then sends the app back to Sign in.
+ * The red button at the top offers to sign out or to delete the account; deleting asks for a
+ * confirmation first. Both first clear the Google account remembered by Credential Manager (#75),
+ * so the next sign-in asks which account to use; MainViewModel then sends the app back to Sign in.
  */
 @Composable
 fun HelperProfileScreen(
@@ -118,8 +126,22 @@ fun HelperProfileScreen(
   if (showAccountOptions) {
     AccountOptionsDialog(
         onSignOut = { leave(viewModel::signOut) },
-        onDeleteAccount = { leave(viewModel::deleteAccount) },
+        onDeleteAccount = {
+          showAccountOptions = false
+          viewModel.requestDeleteAccount()
+        },
         onDismiss = { showAccountOptions = false },
+    )
+  }
+
+  if (state.isDeleteConfirmationVisible) {
+    DeleteAccountConfirmDialog(
+        onConfirm = {
+          // Hide the dialog first: clearing Credential Manager takes a moment
+          viewModel.cancelDeleteAccount()
+          leave(viewModel::deleteAccount)
+        },
+        onCancel = viewModel::cancelDeleteAccount,
     )
   }
 }
@@ -188,7 +210,8 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
             Modifier.align(Alignment.CenterStart)
                 // Leaves room for the account button on the right
                 .padding(end = 56.dp)
-                .clip(RoundedCornerShape(19.dp))
+                // Half the avatar's height: the round photo fits the card's rounded end
+                .clip(RoundedCornerShape(28.dp))
                 .background(SpottedTheme.colors.surface)
                 .padding(end = 16.dp),
     ) {
@@ -207,7 +230,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
               model = url,
               contentDescription = "Profile photo",
               contentScale = ContentScale.Crop,
-              modifier = Modifier.matchParentSize(),
+              modifier = Modifier.matchParentSize().clip(CircleShape),
           )
         }
       }
@@ -227,7 +250,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
         )
       }
     }
-    // 36 x 21 dp red pill as in Figma, inside a 48 dp touch target
+    // 48 x 32 dp red pill inside a 48 dp touch target
     Box(
         contentAlignment = Alignment.Center,
         modifier =
@@ -244,15 +267,16 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
       Box(
           contentAlignment = Alignment.Center,
           modifier =
-              Modifier.width(36.dp)
-                  .height(21.dp)
+              Modifier.width(48.dp)
+                  .height(32.dp)
                   .clip(RoundedCornerShape(10.dp))
-                  .background(SpottedTheme.colors.logoutRed),
+                  .background(SpottedTheme.colors.logoutRed)
+                  .testTag(HelperProfileTestTags.ACCOUNT_BUTTON_VISUAL),
       ) {
         Image(
             painterResource(R.drawable.ic_logout),
             contentDescription = "Sign out",
-            modifier = Modifier.size(10.dp),
+            modifier = Modifier.size(14.dp),
         )
       }
     }
@@ -427,23 +451,29 @@ internal fun AccountOptionsDialog(
         Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
           TextButton(
               onClick = onSignOut,
-              modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.SIGN_OUT),
+              modifier =
+                  Modifier.fillMaxWidth()
+                      .heightIn(min = 56.dp)
+                      .testTag(HelperProfileTestTags.SIGN_OUT),
           ) {
             Text(
                 "Sign out",
-                style = jakarta(15, 20f, FontWeight.SemiBold, colors.blue),
+                style = jakarta(16, 22f, FontWeight.SemiBold, colors.blue),
                 modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
             )
           }
           TextButton(
               onClick = onDeleteAccount,
               modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.DELETE_ACCOUNT),
           ) {
-            Column(Modifier.fillMaxWidth()) {
+            // Centred like the Sign out button above it
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
               Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, colors.error))
               Text(
                   "Removes your profile from Spotted. You can sign in again to start over.",
                   style = jakarta(12, 16f, FontWeight.Medium, colors.textSecondary),
+                  textAlign = TextAlign.Center,
               )
             }
           }
@@ -451,5 +481,53 @@ internal fun AccountOptionsDialog(
       },
       confirmButton = {},
       dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+  )
+}
+
+/**
+ * Asks the user to confirm the account deletion. Tapping outside the dialog or going back counts as
+ * [onCancel].
+ */
+@Composable
+internal fun DeleteAccountConfirmDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
+  val colors = SpottedTheme.colors
+  AlertDialog(
+      onDismissRequest = onCancel,
+      containerColor = colors.surface,
+      modifier = Modifier.testTag(HelperProfileTestTags.DELETE_CONFIRM_DIALOG),
+      title = {
+        Text(
+            stringResource(R.string.delete_account_confirm_title),
+            style = jakarta(18, 24f, FontWeight.ExtraBold, colors.ink),
+        )
+      },
+      text = {
+        Text(
+            stringResource(R.string.delete_account_confirm_text),
+            style = jakarta(14, 20f, FontWeight.Medium, colors.textSecondary),
+        )
+      },
+      confirmButton = {
+        TextButton(
+            onClick = onConfirm,
+            modifier = Modifier.testTag(HelperProfileTestTags.DELETE_CONFIRM),
+        ) {
+          Text(
+              stringResource(R.string.delete_account_confirm_delete),
+              style = jakarta(15, 20f, FontWeight.SemiBold, colors.error),
+          )
+        }
+      },
+      dismissButton = {
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.testTag(HelperProfileTestTags.DELETE_CANCEL),
+        ) {
+          Text(
+              stringResource(R.string.delete_account_confirm_cancel),
+              style = jakarta(15, 20f, FontWeight.SemiBold, colors.blue),
+          )
+        }
+      },
   )
 }

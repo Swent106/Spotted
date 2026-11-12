@@ -132,6 +132,9 @@ private const val METERS_PER_KM = 1000.0
 /** Vertical position of the pin's tip in `ic_map_pin`, as a fraction of its height (22 / 24). */
 internal const val PIN_TIP_Y = 22f / 24f
 
+/** Lowest zoom level of every map (about a continent), so a single world fills even a tablet. */
+internal const val MIN_MAP_ZOOM = 3.0
+
 /** Zoom level that fits a circle of [radiusKm] in a small map; one level per doubling. */
 internal fun zoomFor(radiusKm: Int): Float = (12.0 - log2(radiusKm.toDouble())).toFloat()
 
@@ -150,6 +153,16 @@ internal fun createMapView(context: Context, onTap: ((Location) -> Unit)? = null
     setMultiTouchControls(true)
     isTilesScaledToDpi = true
     zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+    // A single world: when zoomed out, repeated copies drew each pin on another copy as the map
+    // moved, so pins appeared more than once and jumped between them
+    isHorizontalMapRepetitionEnabled = false
+    isVerticalMapRepetitionEnabled = false
+    // Panning stops at the edges of the world, and zooming out stops before it gets smaller
+    // than the map
+    val world = MapView.getTileSystem()
+    setScrollableAreaLimitLatitude(world.maxLatitude, world.minLatitude, 0)
+    setScrollableAreaLimitLongitude(world.minLongitude, world.maxLongitude, 0)
+    setMinZoomLevel(MIN_MAP_ZOOM)
     if (onTap == null) return@apply
     overlays.add(
         MapEventsOverlay(

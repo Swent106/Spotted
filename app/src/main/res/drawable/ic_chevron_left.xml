@@ -1,0 +1,15 @@
+<!-- Portions of this code were generated with the help of Claude (Anthropic). -->
+<!-- Back chevron of the shared top bar (Figma "Top bar · Back button"). Tinted in code. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:autoMirrored="true"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M15,18L9,12L15,6"
+        android:strokeWidth="2.4"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

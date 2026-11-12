@@ -5,6 +5,9 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAlertRepository
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -116,6 +119,38 @@ class FakeAlertRepositoryTest {
         emptyList<Alert>(),
         repository.getOpenAlertsNear(center, radiusKm = 1.0).getOrThrow(),
     )
+  }
+
+  @Test
+  fun observeOpenAlertsNear_emitsCurrentListThenEveryNearbyChange() = runTest {
+    val older = alert(id = "alert-older", lostAtMillis = 1L, latitude = 0.0, longitude = 0.001)
+    val newer = alert(id = "alert-newer", lostAtMillis = 2L, latitude = 0.0, longitude = 0.002)
+    val far = alert(id = "alert-far", lostAtMillis = 3L, latitude = 0.0, longitude = 0.02)
+    repository.publishAlert(older)
+    val emissions = mutableListOf<Result<List<Alert>>>()
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+      repository.observeOpenAlertsNear(center, radiusKm = 1.0).toList(emissions)
+    }
+
+    repository.publishAlert(newer)
+    // Out of the radius: the nearby list is unchanged, so nothing is emitted
+    repository.publishAlert(far)
+    repository.closeAlert(older.id)
+
+    assertEquals(
+        listOf(listOf(older), listOf(newer, older), listOf(newer)),
+        emissions.map { it.getOrThrow() },
+    )
+  }
+
+  @Test
+  fun observeOpenAlertsNear_emitsConfiguredFailureAndEnds() = runTest {
+    val expectedFailure = IllegalStateException("listener failed")
+    repository.failure = expectedFailure
+
+    val emissions = repository.observeOpenAlertsNear(center, radiusKm = 1.0).toList()
+
+    assertEquals(listOf(Result.failure<List<Alert>>(expectedFailure)), emissions)
   }
 
   @Test

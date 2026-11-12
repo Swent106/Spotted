@@ -8,9 +8,11 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
@@ -49,7 +51,10 @@ class ReportMissingViewModel(
     loadPets()
   }
 
-  /** Loads the signed-in owner's pets. If the owner has exactly one pet, it is preselected. */
+  /**
+   * Loads the signed-in owner's pets and which of them are already reported missing. If the owner
+   * has exactly one pet and it isn't missing, it is preselected.
+   */
   fun loadPets() {
     val owner = authRepository.currentUser.value
     if (owner == null) {
@@ -62,10 +67,19 @@ class ReportMissingViewModel(
           .getPetsByOwner(owner.uid)
           .fold(
               onSuccess = { pets ->
+                // If this fails, every pet stays selectable: publishAlert still refuses a pet that
+                // is already missing, and the owner isn't kept from reporting a lost pet
+                val openAlertIdByPetId =
+                    alertRepository
+                        .getOpenAlertsByOwner(owner.uid)
+                        .getOrDefault(emptyList())
+                        .associate { alert -> alert.petId to alert.id }
                 _uiState.update {
                   it.copy(
                       pets = pets,
-                      selectedPetId = pets.singleOrNull()?.id,
+                      openAlertIdByPetId = openAlertIdByPetId,
+                      selectedPetId =
+                          pets.singleOrNull()?.id?.takeUnless { id -> id in openAlertIdByPetId },
                       isLoadingPets = false,
                   )
                 }
@@ -77,10 +91,29 @@ class ReportMissingViewModel(
     }
   }
 
-  /** Selects the pet that is missing. Ids that are not among the owner's pets are ignored. */
+  /**
+   * Selects the pet that is missing. Ids that are not among the owner's pets are ignored. A pet
+   * already reported missing isn't selected: the screen offers to open its alert instead.
+   */
   fun selectPet(petId: String) {
     if (_uiState.value.pets.none { it.id == petId }) return
-    _uiState.update { it.copy(selectedPetId = petId) }
+    if (petId in _uiState.value.openAlertIdByPetId) {
+      _uiState.update { it.copy(alreadyMissingPetId = petId) }
+    } else {
+      _uiState.update { it.copy(selectedPetId = petId) }
+    }
+  }
+
+  /** Opens the alert of the pet already missing that the owner tapped, in My alert. */
+  fun openExistingAlert() {
+    val state = _uiState.value
+    val alertId = state.openAlertIdByPetId[state.alreadyMissingPetId] ?: return
+    _uiState.update { it.copy(alreadyMissingPetId = null, openAlertId = alertId) }
+  }
+
+  /** Hides the offer to open the alert of a pet already missing. */
+  fun dismissAlreadyMissing() {
+    _uiState.update { it.copy(alreadyMissingPetId = null) }
   }
 
   /** Sets the last known location of the pet, as chosen on the map picker. */
@@ -130,8 +163,20 @@ class ReportMissingViewModel(
           .publishAlert(alert)
           .fold(
               onSuccess = { _uiState.update { it.copy(isPublishing = false, published = true) } },
-              onFailure = {
-                _uiState.update { it.copy(isPublishing = false, errorMessage = PUBLISH_FAILED) }
+              onFailure = { error ->
+                if (error is AlertAlreadyOpenException) {
+                  // Published meanwhile (another tap or device): mark the pet as missing
+                  _uiState.update {
+                    it.copy(
+                        isPublishing = false,
+                        errorMessage = ALREADY_MISSING,
+                        openAlertIdByPetId = it.openAlertIdByPetId + (pet.id to error.openAlertId),
+                        selectedPetId = null,
+                    )
+                  }
+                } else {
+                  _uiState.update { it.copy(isPublishing = false, errorMessage = PUBLISH_FAILED) }
+                }
               },
           )
     }
@@ -141,12 +186,15 @@ class ReportMissingViewModel(
     const val NOT_SIGNED_IN = "You need to be signed in to report a pet missing."
     const val LOAD_PETS_FAILED = "Couldn't load your pets. Please try again."
     const val PUBLISH_FAILED = "Couldn't publish the alert. Please try again."
+    const val ALREADY_MISSING = "This pet is already reported missing."
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
+        val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
         ReportMissingViewModel(
             alertRepository = AlertRepositoryFirestore(),
-            petRepository = PetRepositoryFirestore(),
+            petRepository =
+                PetRepositoryFirestore(photoRepository = PhotoRepositoryFirestore(application)),
             authRepository = AuthRepositoryProvider.authRepository,
         )
       }

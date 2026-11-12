@@ -1,8 +1,7 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.personalinfo
 
 import com.android.spotted.model.Location
-import com.android.spotted.model.auth.AuthRepository
-import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
@@ -13,6 +12,7 @@ import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -29,19 +29,16 @@ import org.junit.Test
 class PersonalInfoViewModelTest {
   private val testDispatcher = StandardTestDispatcher()
   private lateinit var userRepository: FakeUserRepository
-  private lateinit var authRepository: FakeAuthRepository
   private lateinit var viewModel: PersonalInfoViewModel
 
   @Before
   fun setUp() {
     Dispatchers.setMain(testDispatcher)
     userRepository = FakeUserRepository()
-    authRepository = FakeAuthRepository()
     viewModel =
         PersonalInfoViewModel(
             user = User(uid = "user-1", email = "jamie@example.com"),
             userRepository = userRepository,
-            authRepository = authRepository,
         )
   }
 
@@ -51,13 +48,10 @@ class PersonalInfoViewModelTest {
   }
 
   @Test
-  fun initialState_containsIdentityAndEmptyDashboardData() {
+  fun initialState_containsIdentityAndCannotSave() {
     val state = viewModel.uiState.value
 
     assertEquals("jamie@example.com", state.email)
-    assertEquals(emptyList<String>(), state.petsBroughtHome)
-    assertEquals(emptyList<String>(), state.achievements)
-    assertEquals(0, state.helpersThisYear)
     assertFalse(state.canSave)
   }
 
@@ -68,9 +62,8 @@ class PersonalInfoViewModelTest {
             PersonalInfoViewModel(
                 user = null,
                 userRepository = userRepository,
-                authRepository = authRepository,
             )
-        signedOutViewModel.onNameChanged("Jamie")
+        signedOutViewModel.onFirstNameChanged("Jamie")
         signedOutViewModel.onHomeAreaChanged("Lausanne")
 
         assertTrue(signedOutViewModel.uiState.value.isSignedOut)
@@ -84,13 +77,11 @@ class PersonalInfoViewModelTest {
 
   @Test
   fun fieldChanges_areImmediatelyReflectedInState() {
-    viewModel.onNameChanged("Jamie")
-    viewModel.onPhoneChanged("+41 79 123 45 67")
+    viewModel.onFirstNameChanged("Jamie")
     viewModel.onHomeAreaChanged("Lausanne")
 
     val state = viewModel.uiState.value
     assertEquals("Jamie", state.name)
-    assertEquals("+41 79 123 45 67", state.phone)
     assertEquals("Lausanne", state.homeArea)
     assertTrue(state.canSave)
   }
@@ -148,7 +139,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_withMissingHomeArea_doesNotSave() =
       runTest(testDispatcher) {
-        viewModel.onNameChanged("Jamie")
+        viewModel.onFirstNameChanged("Jamie")
 
         viewModel.saveProfile()
         advanceUntilIdle()
@@ -160,7 +151,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_withWhitespaceRequiredFields_doesNotSave() =
       runTest(testDispatcher) {
-        viewModel.onNameChanged("   ")
+        viewModel.onFirstNameChanged("   ")
         viewModel.onHomeAreaChanged("\t")
 
         assertFalse(viewModel.uiState.value.canSave)
@@ -173,8 +164,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_withValidFieldsPersistsTrimmedProfile() =
       runTest(testDispatcher) {
-        viewModel.onNameChanged(" Jamie ")
-        viewModel.onPhoneChanged("+41 79 123 45 67")
+        viewModel.onFirstNameChanged(" Jamie ")
         viewModel.onHomeAreaChanged(" Lausanne ")
 
         viewModel.saveProfile()
@@ -184,7 +174,6 @@ class PersonalInfoViewModelTest {
         assertEquals("Jamie", savedUser.name)
         assertEquals("Lausanne", savedUser.homeArea)
         assertEquals("jamie@example.com", savedUser.email)
-        assertEquals("+41 79 123 45 67", savedUser.phone)
         assertTrue(viewModel.uiState.value.isSaved)
         assertFalse(viewModel.uiState.value.isSaving)
       }
@@ -192,7 +181,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_doubleTapSavesOnlyOnce() =
       runTest(testDispatcher) {
-        viewModel.onNameChanged("Jamie")
+        viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
 
         viewModel.saveProfile()
@@ -204,32 +193,69 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
-  fun saveProfile_whenRepositoryFails_exposesError() =
+  fun saveProfile_whenRepositoryFails_showsAFixedMessage_whateverTheException() =
       runTest(testDispatcher) {
-        userRepository.failure = IllegalStateException("Save failed")
-        viewModel.onNameChanged("Jamie")
+        // Lets the profile load finish first, so only the save fails
+        advanceUntilIdle()
+        viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
 
-        viewModel.saveProfile()
-        advanceUntilIdle()
+        listOf(IllegalStateException("PERMISSION_DENIED: internal detail"), IllegalStateException())
+            .forEach { failure ->
+              userRepository.failure = failure
 
-        assertEquals("Save failed", viewModel.uiState.value.errorMessage)
-        assertFalse(viewModel.uiState.value.isSaved)
-        assertFalse(viewModel.uiState.value.isSaving)
+              viewModel.saveProfile()
+              advanceUntilIdle()
+
+              val state = viewModel.uiState.value
+              assertEquals(PersonalInfoViewModel.SAVE_FAILED, state.errorMessage)
+              assertFalse(state.isSaved)
+              assertFalse(state.isSaving)
+            }
       }
 
   @Test
-  fun saveProfile_failureWithoutMessage_usesFallbackText() =
+  fun existingProfile_whenItCannotBeRead_isNotOverwritten_andTheButtonReadsItAgain() =
       runTest(testDispatcher) {
-        userRepository.failure = IllegalStateException()
-        viewModel.onNameChanged("Jamie")
-        viewModel.onHomeAreaChanged("Lausanne")
-
-        viewModel.saveProfile()
+        val saved = savedProfile()
+        userRepository.saveUser(saved)
+        userRepository.failure = IllegalStateException("offline")
+        val editViewModel = viewModelFor(userRepository)
         advanceUntilIdle()
 
-        assertEquals("Unable to save profile", viewModel.uiState.value.errorMessage)
-        assertFalse(viewModel.uiState.value.isSaved)
+        val failed = editViewModel.uiState.value
+        assertEquals(PersonalInfoViewModel.PROFILE_LOAD_FAILED, failed.errorMessage)
+        assertFalse(failed.isEditing)
+        assertTrue(failed.canSave)
+
+        // Back online, the user fills the empty form and taps the button
+        userRepository.failure = null
+        editViewModel.onFirstNameChanged("Someone")
+        editViewModel.onHomeAreaChanged("Elsewhere")
+        editViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(saved, userRepository.getUser("user-1").getOrThrow())
+        val reloaded = editViewModel.uiState.value
+        assertTrue(reloaded.isEditing)
+        assertEquals("Ouchy, Lausanne", reloaded.homeArea)
+        assertNull(reloaded.errorMessage)
+      }
+
+  @Test
+  fun saveProfile_beforeTheProfileHasLoaded_doesNotOverwriteIt() =
+      runTest(testDispatcher) {
+        val saved = savedProfile()
+        userRepository.saveUser(saved)
+        val editViewModel = viewModelFor(userRepository)
+
+        // Tapped before the load has run: the form is still empty apart from what was typed
+        editViewModel.onFirstNameChanged("Someone")
+        editViewModel.onHomeAreaChanged("Elsewhere")
+        editViewModel.saveProfile()
+        advanceUntilIdle()
+
+        assertEquals(saved, userRepository.getUser("user-1").getOrThrow())
       }
 
   @Test
@@ -244,7 +270,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun onSavedHandled_resetsSavedFlag() =
       runTest(testDispatcher) {
-        viewModel.onNameChanged("Jamie")
+        viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
         viewModel.saveProfile()
         advanceUntilIdle()
@@ -258,7 +284,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun editingAfterSuccessfulSave_resetsSavedFlag() =
       runTest(testDispatcher) {
-        viewModel.onNameChanged("Jamie")
+        viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
         viewModel.saveProfile()
         advanceUntilIdle()
@@ -271,15 +297,6 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
-  fun canSave_isFalseWhileLoggingOutOrLoggedOut() {
-    val filled = PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne")
-
-    assertTrue(filled.canSave)
-    assertFalse(filled.copy(isLoggingOut = true).canSave)
-    assertFalse(filled.copy(isLoggedOut = true).canSave)
-  }
-
-  @Test
   fun canSave_staysTrueWithErrorMessage_soUserCanRetry() {
     val failed =
         PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne", errorMessage = "Save failed")
@@ -287,68 +304,22 @@ class PersonalInfoViewModelTest {
     assertTrue(failed.canSave)
   }
 
-  @Test
-  fun saveProfile_afterLogout_doesNotSave() =
-      runTest(testDispatcher) {
-        viewModel.onNameChanged("Jamie")
-        viewModel.onHomeAreaChanged("Lausanne")
-        viewModel.logout()
-        advanceUntilIdle()
+  private fun savedProfile() =
+      UserProfile(
+          uid = "user-1",
+          name = "Jamie Lee Curtis",
+          phone = "+41 79 123 45 67",
+          email = "jamie@example.com",
+          homeArea = "Ouchy, Lausanne",
+          homeLocation = Location(46.507, 6.627),
+          alertRadiusKm = 10,
+      )
 
-        viewModel.saveProfile()
-        advanceUntilIdle()
-
-        assertTrue(userRepository.getUser("user-1").isFailure)
-        assertFalse(viewModel.uiState.value.isSaved)
-      }
-
-  @Test
-  fun logout_signsOutAndUpdatesState() =
-      runTest(testDispatcher) {
-        authRepository.signInWithGoogle("token")
-
-        viewModel.logout()
-        assertTrue(viewModel.uiState.value.isLoggingOut)
-        advanceUntilIdle()
-
-        assertNull(authRepository.currentUser.value)
-        assertTrue(viewModel.uiState.value.isLoggedOut)
-        assertFalse(viewModel.uiState.value.isLoggingOut)
-      }
-
-  @Test
-  fun logout_whenRepositoryFails_exposesError() =
-      runTest(testDispatcher) {
-        val failedAuthRepository =
-            object : AuthRepository by authRepository {
-              override suspend fun signOut(): Result<Unit> {
-                return Result.failure(IllegalStateException("Logout failed"))
-              }
-            }
-        val failedViewModel =
-            PersonalInfoViewModel(
-                user = User(uid = "user-1", email = "jamie@example.com"),
-                userRepository = userRepository,
-                authRepository = failedAuthRepository,
-            )
-
-        failedViewModel.logout()
-        advanceUntilIdle()
-
-        assertEquals("Logout failed", failedViewModel.uiState.value.errorMessage)
-        assertFalse(failedViewModel.uiState.value.isLoggedOut)
-        assertFalse(failedViewModel.uiState.value.isLoggingOut)
-      }
-
-  @Test
-  fun requestNearbyAlerts_setsAndCanClearRequest() {
-    viewModel.requestNearbyAlerts()
-    assertTrue(viewModel.uiState.value.nearbyAlertsRequested)
-
-    viewModel.clearNearbyAlertsRequest()
-
-    assertFalse(viewModel.uiState.value.nearbyAlertsRequested)
-  }
+  private fun viewModelFor(userRepository: FakeUserRepository) =
+      PersonalInfoViewModel(
+          user = User(uid = "user-1", email = "jamie@example.com"),
+          userRepository = userRepository,
+      )
 
   private fun viewModelWithLocation(
       locationRepository: FakeLocationRepository,
@@ -357,7 +328,6 @@ class PersonalInfoViewModelTest {
       PersonalInfoViewModel(
           user = User(uid = "user-1", email = "jamie@example.com"),
           userRepository = userRepository,
-          authRepository = authRepository,
           locationRepository = locationRepository,
           addressRepository = addressRepository,
       )
@@ -462,7 +432,6 @@ class PersonalInfoViewModelTest {
             PersonalInfoViewModel(
                 user = User(uid = "user-1", email = "jamie@example.com"),
                 userRepository = userRepository,
-                authRepository = authRepository,
             )
         advanceUntilIdle()
 
@@ -519,7 +488,6 @@ class PersonalInfoViewModelTest {
             PersonalInfoViewModel(
                 user = User(uid = "user-1", email = "jamie@example.com"),
                 userRepository = userRepository,
-                authRepository = authRepository,
                 photoRepository = photoRepository,
             )
         photoViewModel.onFirstNameChanged("Jamie")
@@ -544,7 +512,6 @@ class PersonalInfoViewModelTest {
             PersonalInfoViewModel(
                 user = User(uid = "user-1", email = "jamie@example.com"),
                 userRepository = userRepository,
-                authRepository = authRepository,
                 photoRepository = photoRepository,
             )
         photoViewModel.onFirstNameChanged("Jamie")
@@ -559,4 +526,59 @@ class PersonalInfoViewModelTest {
         assertFalse(state.isSaved)
         assertTrue(userRepository.getUser("user-1").isFailure)
       }
+
+  @Test
+  fun saveProfile_deletesTheSavedPhotoOnlyOnceItIsRemoved() =
+      runTest(testDispatcher) {
+        val (photoRepository, editing) = editingWithASavedPhoto()
+        val photoUrl = photoRepository.profilePhotoUrl("user-1")
+
+        // Saving with the photo kept leaves it in place
+        editing.onHomeAreaChanged("Pully")
+        editing.saveProfile()
+        advanceUntilIdle()
+        assertTrue(photoRepository.uploadedPhotos.containsKey(photoUrl))
+
+        editing.onPhotoSelected(null)
+        editing.saveProfile()
+        advanceUntilIdle()
+
+        assertFalse(photoRepository.uploadedPhotos.containsKey(photoUrl))
+        assertTrue(editing.uiState.value.isSaved)
+      }
+
+  @Test
+  fun saveProfile_whenTheRemovedPhotoCannotBeDeleted_keepsTheFormAndSaysSo() =
+      runTest(testDispatcher) {
+        val (photoRepository, editing) = editingWithASavedPhoto()
+        val savesBefore = userRepository.saveCalls
+        photoRepository.failure = Exception("offline")
+
+        editing.onPhotoSelected(null)
+        editing.saveProfile()
+        advanceUntilIdle()
+
+        val state = editing.uiState.value
+        assertEquals(PersonalInfoViewModel.PHOTO_DELETE_FAILED, state.errorMessage)
+        assertFalse(state.isSaved)
+        assertFalse(state.isSaving)
+        assertEquals("the profile is not saved", savesBefore, userRepository.saveCalls)
+      }
+
+  /** A saved profile with a profile photo, loaded in a ViewModel for editing. */
+  private suspend fun TestScope.editingWithASavedPhoto():
+      Pair<FakePhotoRepository, PersonalInfoViewModel> {
+    val photoRepository = FakePhotoRepository()
+    photoRepository.uploadProfilePhoto("user-1", "content://photos/old").getOrThrow()
+    userRepository.saveUser(savedProfile()).getOrThrow()
+    val editing =
+        PersonalInfoViewModel(
+            user = User(uid = "user-1", email = "jamie@example.com"),
+            userRepository = userRepository,
+            photoRepository = photoRepository,
+        )
+    advanceUntilIdle()
+    assertTrue("the profile is loaded for editing", editing.uiState.value.isEditing)
+    return photoRepository to editing
+  }
 }

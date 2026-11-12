@@ -27,11 +27,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,12 +76,14 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
+import kotlinx.coroutines.launch
 
 /** Test tags of the Home screen (`<feature>_<element>`). */
 object HomeScreenTestTags {
   const val SCREEN = "home_screen"
   const val BODY = "home_body"
   const val SETTINGS_BUTTON = "home_settingsButton"
+  const val SNACKBAR = "home_snackbar"
   const val NOTIFICATIONS_BUTTON = "home_notificationsButton"
   const val ERROR_MESSAGE = "home_errorMessage"
   const val PETS_TITLE = "home_petsTitle"
@@ -122,6 +128,7 @@ object HomeScreenTexts {
   const val RETRY = "Retry"
   const val OFFLINE_ALERTS = "You're offline · showing the last 5 alerts"
   const val ADD_PET = "Add a pet"
+  const val SETTINGS_COMING_SOON = "Settings are coming soon"
 }
 
 /**
@@ -162,7 +169,11 @@ fun HomeScreen(
   )
 }
 
-/** Stateless Home ("Near you") screen, from the Figma frame "01 · Near you". */
+/**
+ * Stateless Home ("Near you") screen, from the Figma frame "01 · Near you".
+ *
+ * @param onSettingsClick opens Settings; while it is null, the button says Settings is coming soon.
+ */
 @Composable
 fun HomeScreenContent(
     state: HomeUiState,
@@ -173,7 +184,7 @@ fun HomeScreenContent(
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
     onMissingPetClick: (alertId: String) -> Unit = {},
-    onSettingsClick: () -> Unit = {},
+    onSettingsClick: (() -> Unit)? = null,
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
@@ -188,6 +199,9 @@ fun HomeScreenContent(
     lifecycleOwner.lifecycle.addObserver(observer)
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
+  // While Settings has no screen, say so instead of doing nothing (M1 feedback)
+  val snackbarHostState = remember { SnackbarHostState() }
+  val scope = rememberCoroutineScope()
 
   Box(
       Modifier.fillMaxSize()
@@ -206,6 +220,9 @@ fun HomeScreenContent(
     // hidden behind the tab bar, whatever the screen size or the number of items
     Scaffold(
         containerColor = Color.Transparent,
+        snackbarHost = {
+          SnackbarHost(snackbarHostState, Modifier.testTag(HomeScreenTestTags.SNACKBAR))
+        },
         bottomBar = {
           Box(Modifier.fillMaxWidth().navigationBarsPadding(), Alignment.Center) {
             TabBar(onClicks = listOf({}, onMapClick, onCameraClick, onProfileClick))
@@ -232,7 +249,16 @@ fun HomeScreenContent(
               onMissingPetClick(alertId)
             }
           },
-          onSettingsClick = onSettingsClick,
+          onSettingsClick = {
+            if (onSettingsClick != null) {
+              onSettingsClick()
+            } else {
+              scope.launch {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                snackbarHostState.showSnackbar(HomeScreenTexts.SETTINGS_COMING_SOON)
+              }
+            }
+          },
           onNotificationsClick = onNotificationsClick,
           modifier = Modifier.padding(innerPadding),
       )
@@ -317,7 +343,7 @@ private fun Header(
     PetPhoto(
         photoUrl,
         Modifier.size(58.dp)
-            .clip(RoundedCornerShape(27.dp))
+            .clip(CircleShape)
             .background(SpottedTheme.colors.avatarBackground)
             .testTag(HomeScreenTestTags.AVATAR),
     )
@@ -474,7 +500,14 @@ private fun PetCard(pet: Pet, missing: Boolean, onClick: () -> Unit) {
           .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
           .testTag(HomeScreenTestTags.petCard(pet.id))
   ) {
-    Column(Modifier.weight(1f).padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp)) {
+    // Name and status centred in the card's height, not stuck to its top
+    Column(
+        verticalArrangement = Arrangement.Center,
+        modifier =
+            Modifier.weight(1f)
+                .fillMaxHeight()
+                .padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp),
+    ) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             pet.name,

@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.alertdetail
 
 import android.Manifest
@@ -28,6 +29,7 @@ import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -221,6 +223,9 @@ class AlertDetailScreenWiringTest {
 
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(listOf(alert))
+
+    override fun observeOpenAlertsNear(center: Location, radiusKm: Double) =
+        flowOf(Result.success(listOf(alert)))
 
     override suspend fun getCachedOpenAlertsNear(
         center: Location,

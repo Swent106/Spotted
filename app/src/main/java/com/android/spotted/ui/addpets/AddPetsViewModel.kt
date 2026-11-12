@@ -193,10 +193,11 @@ class AddPetsViewModel(
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
         val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
+        val photoRepository = PhotoRepositoryFirestore(application)
         AddPetsViewModel(
             user = AuthRepositoryProvider.authRepository.currentUser.value,
-            petRepository = PetRepositoryFirestore(),
-            photoRepository = PhotoRepositoryFirestore(application),
+            petRepository = PetRepositoryFirestore(photoRepository = photoRepository),
+            photoRepository = photoRepository,
         )
       }
     }

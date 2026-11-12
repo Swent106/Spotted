@@ -116,9 +116,10 @@ Reporting:
 - One bounded, reviewable change per PR. If it sprawls across unrelated files,
   split it.
 - Stage only the files you changed; never `git add .` or `git add -A`.
-- Commit with an imperative, capitalized subject of at most 50 characters
-  (e.g. `Add user authentication`), and a body wrapped at 72 characters when
-  needed. End the message with a `Co-authored-by:` trailer crediting the AI agent.
+- Commit with a Conventional Commit subject of at most 50 characters
+  (e.g. `feat(auth): add user sign-in`), and a body wrapped at 72 characters
+  when needed. End the message with a `Co-authored-by:` trailer crediting the
+  AI agent.
 - **Acknowledge AI in every source file** you create or substantially edit, with a
   comment at the top of the file, e.g.
   `// Portions of this code were generated with the help of Claude (Anthropic).`
@@ -133,40 +134,57 @@ diffs, clear commits, and an honest report of what was and wasn't verified.
 ## Git branches
 
 - Never commit directly to `main`. All work goes through a PR.
-- One branch per task. Name it `<type>/<issue-number>-<short-description>`:
-  - lowercase, words separated by hyphens, at most ~5 words
-  - `<type>` is one of:
-    - `feature`: new functionality
-    - `fix`: bug fix
-    - `test`: adding or improving tests only
-    - `refactor`: restructuring code without changing behavior
-    - `docs`: documentation, architecture diagram, wiki
-    - `chore`: build, CI, dependencies, configuration
-- Examples: `feature/12-sign-in-screen`, `fix/31-home-empty-state-crash`, `chore/5-sonar-coverage`
+- Use one branch per task. The standard format is
+  `<type>/<issue-number>-<short-description>`, with a 2–5-word description.
+- Use lowercase and hyphens. The type is one of:
+  - `feature`: new feature or enhancement
+  - `fix`: bug fix
+  - `hotfix`: urgent production fix; still submit it through a PR
+  - `docs`: documentation only
+  - `refactor`: restructuring without behavior changes
+  - `test`: adding or updating tests
+  - `chore`: maintenance, dependencies, tooling, or CI
+  - `release`: preparing a release
+- Release branches are the exception to the issue-number format; use
+  `release/<version>`, e.g. `release/v1.2.0`.
+- Examples: `feature/42-report-lost-pet`, `fix/57-map-marker-offset`,
+  `hotfix/63-login-crash`, `docs/12-update-wiki-home`,
+  `refactor/30-split-pet-service`, `test/48-pet-search-endpoint`,
+  `chore/21-upgrade-dependencies`
 - Keep the branch up to date with `main` before opening a PR. Delete it after merging.
 
 ## Commit messages
 
-Format: a subject line, a blank line, then a body.
+Use this format:
 
-- Subject line:
-  - imperative mood: it completes "If applied, this commit will ___"
-  - at most 50 characters, capitalized, no final period
-  - Good: `Add home area picker to personal info screen`
-  - Bad: `added stuff`, `fix`, `Updated files.`, `WIP`
-- Body (skip it only for trivial changes):
-  - wrap lines at 72 characters
-  - explain **what** changed and **why**, not how (the diff shows how)
-  - end with the related issue: `Closes #12` or `Refs #12`
-- One logical change per commit. Don't mix unrelated changes,
-  e.g. a feature and a formatting pass of other files.
+    <type>[optional scope][!]: <lowercase imperative description>
+
+    [optional body]
+
+    [optional footer(s)]
+
+- Use one logical change per commit. Keep the whole subject line to 50
+  characters or fewer, use the imperative mood, and do not end it with a
+  period.
+- Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`,
+  `build`, `ci`, `chore`, and `revert`.
+- Scope is optional and identifies the affected area, e.g.
+  `feat(report): add lost pet form`.
+- Use a body when it helps explain what changed and why; wrap it at 72
+  characters. Keep commit messages in English.
+- Add an issue reference footer when relevant, such as `Closes #12` or
+  `Refs #12`.
+- Mark breaking changes with `!` before the colon or a `BREAKING CHANGE:`
+  footer.
+- Include the required `Co-authored-by:` trailer crediting the AI agent.
 
 Example:
 
-    Validate home area before saving profile
+    fix(map): correct marker offset on zoom
 
-    Users could finish onboarding without choosing a home area, so
-    they never received nearby alerts. Saving is now refused until a
-    home area is selected, and the error is shown in the form.
+    The marker position was computed before the map finished loading,
+    which shifted it on high zoom levels. Compute it after the load event.
 
-    Closes #18
+    Closes #57
+
+    Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
