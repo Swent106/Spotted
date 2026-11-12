@@ -11,6 +11,7 @@ import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Source
@@ -282,12 +283,17 @@ class AlertRepositoryFirestore(
     val openAlerts = db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100)
     // Firestore calls the listener with the current alerts, then after every change.
     // It runs on a background thread, so parsing the documents never blocks the UI.
+    // Lists from the local cache can miss alerts published while the app was closed,
+    // so they are skipped. Metadata changes are included so that a cached list the
+    // server confirms unchanged is still emitted once it comes from the server.
     val registration =
-        openAlerts.addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error ->
+        openAlerts.addSnapshotListener(Dispatchers.Default.asExecutor(), MetadataChanges.INCLUDE) {
+            snapshot,
+            error ->
           if (error != null) {
             trySend(Result.failure(error))
             close()
-          } else if (snapshot != null) {
+          } else if (snapshot != null && !snapshot.metadata.isFromCache) {
             trySend(Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm)))
           }
         }

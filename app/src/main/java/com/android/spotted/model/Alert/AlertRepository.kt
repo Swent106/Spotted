@@ -53,7 +53,8 @@ interface AlertRepository {
 
   /**
    * Emits the open alerts near [center] right away, then again after every change. Same filtering
-   * and order as [getOpenAlertsNear]. An error is emitted as a failure and ends the flow.
+   * and order as [getOpenAlertsNear]. Only lists confirmed by the server are emitted, never ones
+   * from the local cache. An error is emitted as a failure and ends the flow.
    */
   fun observeOpenAlertsNear(center: Location, radiusKm: Double): Flow<Result<List<Alert>>>
 
