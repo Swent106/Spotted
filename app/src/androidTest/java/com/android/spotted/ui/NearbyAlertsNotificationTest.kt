@@ -141,6 +141,9 @@ class NearbyAlertsNotificationTest {
 
     override suspend fun closeAlert(alertId: String) = error("unused")
 
+    override suspend fun updateLastSeen(alertId: String, location: Location, seenAtMillis: Long) =
+        error("unused")
+
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) = error("unused")
 
     override suspend fun getCachedOpenAlertsNear(center: Location, radiusKm: Double, limit: Int) =
