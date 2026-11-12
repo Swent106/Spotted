@@ -15,9 +15,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.MainActivity
 import com.android.spotted.data.location.LocationRepositoryFused
 import com.android.spotted.data.location.LocationRepositoryProvider
-import com.android.spotted.model.Location
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.ui.authentification.CredentialManagerProvider
+import com.android.spotted.ui.components.DefaultMapCenter
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -160,8 +160,12 @@ abstract class EndToEndTest {
   }
 
   companion object {
-    /** Where the fake GPS puts every user. */
-    val GPS = Location(latitude = 46.5191, longitude = 6.5668)
+    /**
+     * Where the fake GPS puts every user. It matches [DefaultMapCenter], where a tap in the middle
+     * of the map lands, so a sighting reported at the GPS is at the same place as the alert's last
+     * seen pin and stays within the sighting-plausibility distance.
+     */
+    val GPS = DefaultMapCenter
 
     /** Key of the document id in the maps [documents] returns. */
     const val DOCUMENT_ID = "documentId"
