@@ -33,9 +33,9 @@ service cloud.firestore {
     }
 
     function isValidUser(data, userId) {
-      return data.keys().hasAll(['uid', 'name', 'phone', 'email', 'homeArea'])
+      return data.keys().hasAll(['uid', 'name', 'username', 'phone', 'email', 'homeArea'])
           && data.keys().hasOnly([
-                'uid', 'name', 'phone', 'email', 'homeArea',
+                'uid', 'name', 'username', 'phone', 'email', 'homeArea',
                 'homeLatitude', 'homeLongitude', 'alertRadiusKm'])
           && data.uid is string
           && data.uid.size() > 0
@@ -44,6 +44,10 @@ service cloud.firestore {
           && data.name is string
           && data.name.size() > 0
           && data.name.size() <= 100
+          // Required since S5: older profiles get one at their next save
+          && data.username is string
+          && data.username.size() > 0
+          && data.username.size() <= 30
           && data.phone is string
           && data.phone.size() <= 32
           && data.email is string

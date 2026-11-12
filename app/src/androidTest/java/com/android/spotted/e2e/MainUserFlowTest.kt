@@ -138,6 +138,7 @@ class MainUserFlowTest {
   }
 
   private fun completeProfile() {
+    node(PersonalInfoScreenTestTags.USERNAME_INPUT).performScrollTo().performTextInput("e2e")
     node(PersonalInfoScreenTestTags.FIRST_NAME_INPUT).performScrollTo().performTextInput("E2E")
     node(PersonalInfoScreenTestTags.LAST_NAME_INPUT).performScrollTo().performTextInput("Tester")
     node(PersonalInfoScreenTestTags.HOME_AREA_INPUT).performScrollTo().performTextInput("Lausanne")

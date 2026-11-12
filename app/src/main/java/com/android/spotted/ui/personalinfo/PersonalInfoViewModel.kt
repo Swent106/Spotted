@@ -68,6 +68,7 @@ class PersonalInfoViewModel(
       val lastName = profile.name.substringAfter(' ', missingDelimiterValue = "")
       _uiState.update {
         it.copy(
+            username = profile.username,
             firstName = firstName,
             lastName = lastName,
             name = profile.name,
@@ -83,8 +84,15 @@ class PersonalInfoViewModel(
     }
   }
 
+  /** Longer input is cut, so the saved username always fits the Firestore rules. */
   fun onUsernameChanged(username: String) {
-    _uiState.update { it.copy(username = username, isSaved = false, errorMessage = null) }
+    _uiState.update {
+      it.copy(
+          username = username.take(UserProfile.MAX_USERNAME_LENGTH),
+          isSaved = false,
+          errorMessage = null,
+      )
+    }
   }
 
   /** First and last name are edited separately but saved together as [PersonalInfoUiState.name]. */
@@ -191,6 +199,7 @@ class PersonalInfoViewModel(
               homeArea = currentState.homeArea.trim(),
               homeLocation = currentState.homeLocation,
               alertRadiusKm = currentState.alertRadiusKm,
+              username = currentState.cleanUsername,
           )
 
       // A photo just picked or taken is a local URI: upload it before saving the profile

@@ -63,6 +63,7 @@
     <string name="personal_info_edit_subtitle">Changes are saved to your profile</string>
     <string name="personal_info_username_section">USERNAME</string>
     <string name="personal_info_username_placeholder">\@username</string>
+    <string name="personal_info_username_hint">Choose a username</string>
     <string name="personal_info_first_name_section">FIRST NAME</string>
     <string name="personal_info_first_name_placeholder">First name</string>
     <string name="personal_info_last_name_section">LAST NAME</string>

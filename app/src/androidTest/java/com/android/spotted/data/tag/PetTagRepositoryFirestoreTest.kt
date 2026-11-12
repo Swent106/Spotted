@@ -51,6 +51,7 @@ class PetTagRepositoryFirestoreTest {
                   name = "Jamie",
                   phone = "+41 79 123 45 67",
                   email = "jamie@example.com",
+                  username = "jamie",
               )
           )
           .getOrThrow()

@@ -46,10 +46,18 @@ class HelperProfileContentTest {
   }
 
   @Test
-  fun showsTheNameAreaAndCount() {
-    setContent(HelperProfileUiState(name = "Rayen", homeArea = "Lausanne", petsBroughtHome = 4))
+  fun showsTheNameUsernameAreaAndCount() {
+    setContent(
+        HelperProfileUiState(
+            name = "Rayen",
+            username = "rayen",
+            homeArea = "Lausanne",
+            petsBroughtHome = 4,
+        )
+    )
 
     composeTestRule.onNodeWithTag(HelperProfileTestTags.NAME).assertTextEquals("Rayen")
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.USERNAME).assertTextEquals("@rayen")
     composeTestRule
         .onNodeWithTag(HelperProfileTestTags.AREA)
         .assertTextEquals("Helping out in Lausanne")
@@ -68,12 +76,13 @@ class HelperProfileContentTest {
   }
 
   @Test
-  fun noProfilePhoto_showsOnlyTheInitial() {
+  fun noProfilePhotoOrUsername_showsOnlyTheInitialAndTheName() {
     setContent(HelperProfileUiState(name = "Rayen"))
 
     composeTestRule
         .onNodeWithContentDescription("Profile photo", useUnmergedTree = true)
         .assertDoesNotExist()
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.USERNAME).assertDoesNotExist()
   }
 
   @Test

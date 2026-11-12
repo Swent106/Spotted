@@ -67,6 +67,7 @@ describe("Firestore security rules", () => {
     return {
       uid,
       name: "Jamie",
+      username: "jamie",
       phone: "+41 79 123 45 67",
       email: "jamie@example.com",
       homeArea: "Lausanne",
@@ -323,6 +324,11 @@ describe("Firestore security rules", () => {
         userProfile("user-1", { name: "x".repeat(101) }),
       ),
     );
+    const { username, ...withoutUsername } = userProfile("user-1");
+    for (const invalid of [withoutUsername, { ...withoutUsername, username: "" },
+      { ...withoutUsername, username: "x".repeat(31) }]) {
+      await assertFails(setDoc(doc(db, "users", "user-1"), invalid));
+    }
   });
 
   it("denies profile updates that omit required or invalid fields", async () => {
@@ -331,6 +337,7 @@ describe("Firestore security rules", () => {
     const profile = doc(db, "users", "user-1");
 
     await assertFails(updateDoc(profile, { phone: deleteField() }));
+    await assertFails(updateDoc(profile, { username: deleteField() }));
     await assertFails(updateDoc(profile, { name: 42 }));
     await assertFails(updateDoc(profile, { name: "x".repeat(101) }));
   });
