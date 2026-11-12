@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.report
 
 import com.android.spotted.model.Location
@@ -83,6 +84,8 @@ class ReportMissingViewModelTest {
     override fun getNewId() = "unused"
 
     override suspend fun addPet(pet: Pet) = Result.failure<Unit>(Exception("offline"))
+
+    override suspend fun updatePet(pet: Pet) = Result.failure<Unit>(Exception("offline"))
 
     override suspend fun getPet(id: String) = Result.failure<Pet>(Exception("offline"))
 
@@ -346,6 +349,126 @@ class ReportMissingViewModelTest {
         viewModel.clearErrorMsg()
 
         assertNull(viewModel.uiState.value.errorMessage)
+      }
+
+  // ===================== Pets already missing =====================
+
+  /** Publishes an open alert for [pet] directly in the repository, and returns it. */
+  private fun openAlertFor(pet: Pet, id: String = "open-${pet.id}"): Alert = runBlocking {
+    val alert =
+        Alert(
+            id = id,
+            petId = pet.id,
+            ownerId = pet.ownerId,
+            lastKnownLocation = PARC_BERTRAND,
+            lostAtMillis = NOW - 1,
+            petName = pet.name,
+            petSpecies = pet.species,
+        )
+    alertRepository.publishAlert(alert).getOrThrow()
+    alert
+  }
+
+  @Test
+  fun init_petAlreadyMissing_isMarkedAndCannotBeSelected() =
+      runTest(testDispatcher) {
+        openAlertFor(LUNA)
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+
+        viewModel.selectPet(LUNA.id)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isAlreadyMissing(LUNA))
+        assertNull(state.selectedPet)
+        assertFalse(state.canPublish)
+      }
+
+  @Test
+  fun selectPet_alreadyMissing_offersToOpenItsAlert() =
+      runTest(testDispatcher) {
+        val alert = openAlertFor(LUNA)
+        val viewModel = loadedViewModel(LUNA, MILO)
+
+        viewModel.selectPet(LUNA.id)
+        assertEquals(LUNA, viewModel.uiState.value.alreadyMissingPet)
+
+        viewModel.openExistingAlert()
+
+        assertEquals(alert.id, viewModel.uiState.value.openAlertId)
+        assertNull(viewModel.uiState.value.alreadyMissingPet)
+      }
+
+  @Test
+  fun dismissAlreadyMissing_hidesTheOfferWithoutOpeningTheAlert() =
+      runTest(testDispatcher) {
+        openAlertFor(LUNA)
+        val viewModel = loadedViewModel(LUNA, MILO)
+        viewModel.selectPet(LUNA.id)
+
+        viewModel.dismissAlreadyMissing()
+
+        assertNull(viewModel.uiState.value.alreadyMissingPet)
+        assertNull(viewModel.uiState.value.openAlertId)
+      }
+
+  @Test
+  fun init_allPetsMissing_saysSoAndPublishStaysDisabled() =
+      runTest(testDispatcher) {
+        openAlertFor(LUNA)
+        openAlertFor(MILO)
+        val viewModel = loadedViewModel(LUNA, MILO)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.selectPet(MILO.id)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.allPetsMissing)
+        assertFalse(state.canPublish)
+      }
+
+  @Test
+  fun alertClosed_petCanBeReportedMissingAgain() =
+      runTest(testDispatcher) {
+        val alert = openAlertFor(LUNA)
+        runBlocking { alertRepository.closeAlert(alert.id).getOrThrow() }
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.published)
+        assertEquals(2, alertRepository.publishedAlerts.size)
+      }
+
+  @Test
+  fun publish_refusedBecauseReportedMeanwhile_showsMessageAndMarksThePet() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        // Reported from another device after the screen was loaded
+        val other = openAlertFor(LUNA)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(ReportMissingViewModel.ALREADY_MISSING, state.errorMessage)
+        assertFalse(state.published)
+        assertEquals(other.id, state.openAlertIdByPetId[LUNA.id])
+        assertFalse(state.canPublish)
+        assertEquals(listOf(other), alertRepository.publishedAlerts)
+      }
+
+  @Test
+  fun init_openAlertsFailToLoad_petsStaySelectable() =
+      runTest(testDispatcher) {
+        alertRepository.failure = Exception("offline")
+        val viewModel = loadedViewModel(LUNA)
+
+        val state = viewModel.uiState.value
+        assertEquals(LUNA, state.selectedPet)
+        assertNull(state.errorMessage)
       }
 
   private companion object {

@@ -1,9 +1,13 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.petprofile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,13 +48,13 @@ class PetProfileViewModel(private val petRepository: PetRepository) : ViewModel(
   }
 
   companion object {
-    val Factory: ViewModelProvider.Factory =
-        object : ViewModelProvider.Factory {
-          @Suppress("UNCHECKED_CAST")
-          override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            require(modelClass.isAssignableFrom(PetProfileViewModel::class.java))
-            return PetProfileViewModel(PetRepositoryFirestore()) as T
-          }
-        }
+    val Factory: ViewModelProvider.Factory = viewModelFactory {
+      initializer {
+        val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
+        PetProfileViewModel(
+            PetRepositoryFirestore(photoRepository = PhotoRepositoryFirestore(application))
+        )
+      }
+    }
   }
 }

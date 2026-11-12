@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.Pet
 
 import java.util.UUID
@@ -14,6 +15,13 @@ class PetRepositoryLocal : PetRepository {
     pets[pet.id] = pet
     return Result.success(Unit)
   }
+
+  override suspend fun updatePet(pet: Pet): Result<Unit> =
+      if (pets.replace(pet.id, pet) != null) {
+        Result.success(Unit)
+      } else {
+        Result.failure(NoSuchElementException("Pet with id ${pet.id} was not found"))
+      }
 
   override suspend fun getPet(id: String): Result<Pet> {
     val pet = pets[id]

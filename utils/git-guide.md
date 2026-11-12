@@ -72,10 +72,14 @@ Then on GitHub:
 
 See `AGENTS.md` for the full rules. In short:
 
-- **Branch:** `<type>/<issue>-<short-description>`, with type ∈ `feature | fix | test | refactor | docs | chore`
-  e.g. `feature/18-home-nearby-alerts`
-- **Commit subject:** imperative, ≤ 50 characters, capitalized, no period, e.g. `Add home area picker to personal info screen`
-- **Commit body:** wrap at 72 characters; explain what and why, not how; end with `Closes #18`
+- **Branch:** `<type>/<issue>-<short-description>`, e.g.
+  `feature/42-report-lost-pet`; supported types include `feature`, `fix`,
+  `hotfix`, `docs`, `refactor`, `test`, `chore`, and `release`. Release
+  branches use `release/<version>` without an issue number.
+- **Commit subject:** `<type>[optional scope][!]: <lowercase imperative description>`,
+  ≤ 50 characters, e.g. `feat(report): add lost pet form`.
+- **Commit body:** optional, wrap at 72 characters; explain what and why.
+  Add issue references and breaking-change markers when relevant.
 
 ---
 

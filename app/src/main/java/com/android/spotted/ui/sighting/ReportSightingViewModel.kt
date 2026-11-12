@@ -21,8 +21,10 @@ import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.PhotoRepository
+import com.android.spotted.model.sighting.PlausibilityIssue
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
+import com.android.spotted.model.sighting.checkPlausibility
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +74,11 @@ class ReportSightingViewModel(
   fun setLocation(location: Location, address: String = "Location on map") {
     _uiState.update { it.copy(location = location, locationAddress = address) }
     loadNearbyAlerts(location)
+  }
+
+  fun setDirection(degrees: Int?) {
+    val normalized = degrees?.let { ((it % 360) + 360) % 360 }
+    _uiState.update { it.copy(direction = normalized) }
   }
 
   /**
@@ -211,6 +218,26 @@ class ReportSightingViewModel(
       try {
         val sightingId = sightingRepository.getNewId()
         val reporterId = currentUser.uid
+        val nowMillis = now()
+        val alertId =
+            if (currentState.isNoMatchingAlertSelected) null else currentState.selectedAlertId
+        val plausibilitySighting =
+            Sighting(
+                id = sightingId,
+                reporterId = reporterId,
+                location = location,
+                seenAtMillis = nowMillis,
+                species = species,
+                alertId = alertId,
+                headingDegrees = currentState.direction,
+            )
+
+        // Checked before the photo is uploaded, so nothing is uploaded for a refused sighting
+        val refusal = alertId?.let { implausibilityMessage(plausibilitySighting, it, nowMillis) }
+        if (refusal != null) {
+          _uiState.update { it.copy(isSubmitting = false, errorMessage = refusal) }
+          return@launch
+        }
 
         var uploadedPhotoUrl: String? = null
         val photoUri = currentState.photoUri
@@ -226,18 +253,7 @@ class ReportSightingViewModel(
           uploadedPhotoUrl = uploadResult.getOrNull()
         }
 
-        val sighting =
-            Sighting(
-                id = sightingId,
-                reporterId = reporterId,
-                location = location,
-                seenAtMillis = now(),
-                species = species,
-                photoUrl = uploadedPhotoUrl,
-                alertId =
-                    if (currentState.isNoMatchingAlertSelected) null
-                    else currentState.selectedAlertId,
-            )
+        val sighting = plausibilitySighting.copy(photoUrl = uploadedPhotoUrl)
 
         val reportResult = sightingRepository.reportSighting(sighting)
 
@@ -261,7 +277,37 @@ class ReportSightingViewModel(
     }
   }
 
+  /**
+   * Loads the alert [alertId] and checks that [sighting] can be a sighting of its pet. Returns why
+   * it can't, one line per issue, or null when it is plausible. A sighting is also refused when the
+   * alert can't be loaded, as nothing could then be checked.
+   */
+  private suspend fun implausibilityMessage(
+      sighting: Sighting,
+      alertId: String,
+      nowMillis: Long,
+  ): String? {
+    val alert = alertRepository?.getAlertById(alertId)?.getOrNull() ?: return ALERT_NOT_LOADED
+    val issues = checkPlausibility(sighting, alert, nowMillis)
+    return if (issues.isEmpty()) null else issues.joinToString("\n") { it.message() }
+  }
+
+  /** What the user is told about each [PlausibilityIssue]. */
+  private fun PlausibilityIssue.message(): String =
+      when (this) {
+        PlausibilityIssue.SEEN_IN_THE_FUTURE -> SEEN_IN_THE_FUTURE_MESSAGE
+        PlausibilityIssue.SEEN_BEFORE_LOST -> SEEN_BEFORE_LOST_MESSAGE
+        PlausibilityIssue.TOO_FAR -> TOO_FAR_MESSAGE
+        PlausibilityIssue.OWN_ALERT -> OWN_ALERT_MESSAGE
+      }
+
   companion object {
+    const val ALERT_NOT_LOADED = "Couldn't check this alert. Try again."
+    const val SEEN_IN_THE_FUTURE_MESSAGE = "The time of this sighting is in the future."
+    const val SEEN_BEFORE_LOST_MESSAGE = "This pet was seen before it was lost."
+    const val TOO_FAR_MESSAGE = "This is too far from where the pet was lost for the time elapsed."
+    const val OWN_ALERT_MESSAGE = "You can't report a sighting of your own pet."
+
     /** Radius of the alerts offered as "Which pet did you see?", in kilometres. */
     const val NEARBY_RADIUS_KM = 5.0
 

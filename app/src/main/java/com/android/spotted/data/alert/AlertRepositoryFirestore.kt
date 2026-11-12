@@ -5,6 +5,7 @@ package com.android.spotted.data.alert
 import android.util.Log
 import com.android.spotted.model.Location
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
@@ -13,6 +14,12 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Source
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.tasks.await
 
 class AlertRepositoryFirestore(
@@ -30,14 +37,43 @@ class AlertRepositoryFirestore(
 
   override suspend fun publishAlert(alert: Alert): Result<Unit> {
     return try {
-      db.collection(collectionPath).document(alert.id).set(alert.toDto()).await()
+      // Alerts opened before the locks existed have none: find them with a query first. The
+      // transaction below is what stops two publishes made at the same time.
+      val alreadyOpen =
+          getOpenAlertsByOwner(alert.ownerId).getOrThrow().firstOrNull {
+            it.petId == alert.petId && it.id != alert.id
+          }
+      if (alreadyOpen != null) return Result.failure(AlertAlreadyOpenException(alreadyOpen.id))
+      val alertRef = db.collection(collectionPath).document(alert.id)
+      // A transaction cannot run a query, so each pet has one lock document (its id is the pet id)
+      // naming its latest alert. Reading and writing it in the same transaction means two
+      // concurrent publishes conflict on it: Firestore retries the second one, which then sees the
+      // first alert open and refuses.
+      val lockRef = db.collection(LOCK_COLLECTION).document(alert.petId)
+      db.runTransaction { transaction ->
+            val lockedAlertId = transaction.get(lockRef).getString(LOCK_ALERT_ID)
+            if (lockedAlertId != null && lockedAlertId != alert.id) {
+              val locked = transaction.get(db.collection(collectionPath).document(lockedAlertId))
+              // Closed or deleted alerts free the pet, so closeAlert needs no change
+              if (locked.exists() && locked.getString("status") == AlertStatus.OPEN.name) {
+                throw AlertAlreadyOpenException(lockedAlertId)
+              }
+            }
+            transaction.set(alertRef, alert.toDto())
+            transaction.set(lockRef, mapOf(LOCK_ALERT_ID to alert.id, "ownerId" to alert.ownerId))
+          }
+          .await()
       Result.success(Unit)
     } catch (e: Exception) {
       // Check if it's a coroutine cancellation
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
       }
-      Result.failure(e)
+      // Firestore may wrap what the transaction throws: give back the refusal as it is
+      val alreadyOpen =
+          generateSequence<Throwable>(e) { it.cause }
+              .firstOrNull { it is AlertAlreadyOpenException }
+      Result.failure(alreadyOpen ?: e)
     }
   }
 
@@ -140,6 +176,9 @@ class AlertRepositoryFirestore(
       val snapshot =
           db.collection(collectionPath).whereEqualTo("ownerId", ownerId).limit(100).get().await()
       snapshot.documents.forEach { it.reference.delete().await() }
+      val locks =
+          db.collection(LOCK_COLLECTION).whereEqualTo("ownerId", ownerId).limit(100).get().await()
+      locks.documents.forEach { it.reference.delete().await() }
       Result.success(Unit)
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
@@ -158,14 +197,7 @@ class AlertRepositoryFirestore(
               .get(Source.SERVER)
               .await()
 
-      val alerts = snapshot.toAlerts()
-      // Filter by distance and sort by lostAtMillis (descending) locally
-      val nearbyAlerts =
-          alerts
-              .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
-              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-
-      Result.success(nearbyAlerts)
+      Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm))
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
@@ -188,20 +220,41 @@ class AlertRepositoryFirestore(
               .get(Source.CACHE)
               .await()
 
-      val alerts =
-          snapshot
-              .toAlerts()
-              .filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
-              .sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
-              .take(limit)
-
-      Result.success(alerts)
+      Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm).take(limit))
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
       }
       Result.failure(e)
     }
+  }
+
+  override fun observeOpenAlertsNear(
+      center: Location,
+      radiusKm: Double,
+  ): Flow<Result<List<Alert>>> = callbackFlow {
+    val openAlerts = db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100)
+    // Firestore calls the listener with the current alerts, then after every change.
+    // It runs on a background thread, so parsing the documents never blocks the UI.
+    val registration =
+        openAlerts.addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error ->
+          if (error != null) {
+            trySend(Result.failure(error))
+            close()
+          } else if (snapshot != null) {
+            trySend(Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm)))
+          }
+        }
+    // Runs when the collector is cancelled, so the listener does not leak
+    awaitClose { registration.remove() }
+  }
+      // Each emission is the full list, so a slow collector only needs the latest one
+      .conflate()
+
+  /** The alerts within the inclusive [radiusKm] of [center], newest first, ties by id. */
+  private fun List<Alert>.nearNewestFirst(center: Location, radiusKm: Double): List<Alert> {
+    val nearby = filter { center.distanceKm(it.lastKnownLocation) <= radiusKm }
+    return nearby.sortedWith(compareByDescending<Alert> { it.lostAtMillis }.thenBy { it.id })
   }
 
   /** The alerts of this snapshot, in order. Documents that aren't valid alerts are logged. */
@@ -213,5 +266,8 @@ class AlertRepositoryFirestore(
 
   private companion object {
     const val TAG = "AlertRepositoryFirestore"
+    /** openPetAlerts/{petId}: alertId of the pet's latest alert, and its ownerId. */
+    const val LOCK_COLLECTION = "openPetAlerts"
+    const val LOCK_ALERT_ID = "alertId"
   }
 }

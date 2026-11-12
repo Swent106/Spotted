@@ -9,6 +9,11 @@
     <!-- Device position for the location repository (precise or approximate) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -29,6 +34,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/title_activity_main"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.SampleApp">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

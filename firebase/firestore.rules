@@ -12,8 +12,9 @@ service cloud.firestore {
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
     // behaviors, and note; existing pet authorization rules are unchanged.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
-    // and optional photoUrl, alertId and status; only the reporter may change or
-    // delete them, until the owner of the linked alert reviews the status.
+    // and optional photoUrl, alertId, status and headingDegrees (null or 0..359);
+    // only the reporter may change or delete them until the alert owner reviews it.
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -133,7 +134,11 @@ service cloud.firestore {
           && validAlert(request.resource.data)
           && request.resource.data.ownerId == request.auth.uid
           && request.resource.data.status == 'OPEN'
-          && ownsPet(request.resource.data.petId);
+          && ownsPet(request.resource.data.petId)
+          // One open alert per pet: the pet's lock must name this alert once the write is done
+          // (see openPetAlerts below, which refuses to move a lock off an open alert)
+          && getAfter(/databases/$(database)/documents/openPetAlerts/$(request.resource.data.petId))
+               .data.alertId == alertId;
 
       // The owner may only close an open alert or move it; identity fields are immutable.
       // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
@@ -149,6 +154,55 @@ service cloud.firestore {
           && resource.data.ownerId == request.auth.uid;
     }
 
+    // openPetAlerts/{petId}: alertId of the pet's latest alert and its ownerId. Written by
+    // AlertRepositoryFirestore.publishAlert in the same transaction as the alert, so a pet never
+    // gets two open alerts. Only the pet's owner may read or change it.
+    match /openPetAlerts/{petId} {
+      function ownsLockedPet() {
+        let petPath = /databases/$(database)/documents/pets/$(petId);
+        return exists(petPath) && get(petPath).data.ownerId == request.auth.uid;
+      }
+
+      function validLock(d) {
+        return d.keys().hasAll(['alertId', 'ownerId'])
+          && d.keys().hasOnly(['alertId', 'ownerId'])
+          && d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128
+          && d.ownerId == request.auth.uid;
+      }
+
+      // The lock may only move to another alert once the one it names is closed or gone
+      // True if the alert the lock names is closed or gone, so the pet is free
+      function namedAlertNotOpen() {
+        let alertPath = /databases/$(database)/documents/alerts/$(resource.data.alertId);
+        return !exists(alertPath) || get(alertPath).data.get('status', 'OPEN') != 'OPEN';
+      }
+
+      // The lock may only move to another alert once the one it names is closed or gone
+      function lockedAlertFree() {
+        return request.resource.data.alertId == resource.data.alertId || namedAlertNotOpen();
+      }
+
+      // A pet without a lock yet reads as missing, which the transaction needs to see
+      allow get: if isAuthenticated()
+          && (resource == null || resource.data.ownerId == request.auth.uid);
+      allow list: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && request.query.limit <= 100;
+      allow create: if isAuthenticated()
+          && validLock(request.resource.data)
+          && ownsLockedPet();
+      allow update: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && validLock(request.resource.data)
+          && ownsLockedPet()
+          && lockedAlertFree();
+      // Same check, or deleting the lock would let a second open alert in
+      // (deleteAlertsByOwner deletes the alerts first)
+      allow delete: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && namedAlertNotOpen();
+    }
+
     match /sightings/{sightingId} {
 
       function validSightingLocation(l) {
@@ -160,11 +214,11 @@ service cloud.firestore {
 
       // Full schema of a sighting document (matches SightingRepositoryFirestore).
       // species and status must be names of the Species and SightingStatus enums.
-      function validSighting(d) {
+      function validSighting(d, previousHeadingDegrees) {
         return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
           && d.keys().hasOnly([
                 'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
-                'status'])
+                'status', 'headingDegrees'])
           && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED']
           && d.id == sightingId
           && d.reporterId is string
@@ -174,7 +228,14 @@ service cloud.firestore {
           && (!('photoUrl' in d) || d.photoUrl == null
               || (d.photoUrl is string && d.photoUrl.size() <= 2048))
           && (!('alertId' in d) || d.alertId == null
-              || (d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128));
+              || (d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128))
+          && (!('headingDegrees' in d) || d.headingDegrees == null
+              || ((d.headingDegrees is int
+                   && d.headingDegrees >= 0 && d.headingDegrees <= 359)
+                  || (d.headingDegrees is number
+                      && d.headingDegrees >= 0 && d.headingDegrees <= 359
+                      && d.headingDegrees == previousHeadingDegrees)));
+
       }
 
       allow get: if request.auth != null;
@@ -194,10 +255,27 @@ service cloud.firestore {
           && get(alertPath).data.ownerId == request.auth.uid;
       }
 
+      // A new sighting is at most 5 minutes in the future (clocks are not always in sync).
+      function notInTheFuture(d) {
+        return d.seenAtMillis <= request.time.toMillis() + 300000;
+      }
+
+      // A new sighting may only be linked to an open alert of another user.
+      function canBeLinkedTo(d) {
+        let alertId = d.get('alertId', null);
+        let alertPath = /databases/$(database)/documents/alerts/$(alertId);
+        return alertId == null
+          || (exists(alertPath)
+              && get(alertPath).data.status == 'OPEN'
+              && get(alertPath).data.ownerId != request.auth.uid);
+      }
+
       allow create: if request.auth != null
-          && validSighting(request.resource.data)
+          && validSighting(request.resource.data, null)
           && request.resource.data.reporterId == request.auth.uid
-          && statusOf(request.resource.data) == 'PENDING';
+          && statusOf(request.resource.data) == 'PENDING'
+          && notInTheFuture(request.resource.data)
+          && canBeLinkedTo(request.resource.data);
 
       // Once linked to an alert, a sighting stays on it (it may still be linked later).
       function alertIdKept() {
@@ -206,21 +284,33 @@ service cloud.firestore {
           || request.resource.data.get('alertId', null) == savedAlertId;
       }
 
+      // A sighting linked to an alert later gets the same checks as on create. When the alert
+      // stays the same (e.g. it has closed since), the edit isn't refused.
+      function linkedAlertAllowed() {
+        return request.resource.data.get('alertId', null) == resource.data.get('alertId', null)
+          || canBeLinkedTo(request.resource.data);
+      }
+
       // The author may change their sighting until the alert owner reviews it. It stays theirs,
-      // on the same alert, and they cannot review it themselves.
+      // on the same alert, and they cannot review it themselves. It gets the same plausibility
+      // checks as on create, so they cannot be bypassed by creating first and editing after.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
           && statusOf(resource.data) == 'PENDING'
-          && validSighting(request.resource.data)
+          && validSighting(
+              request.resource.data, resource.data.get('headingDegrees', null))
           && request.resource.data.reporterId == resource.data.reporterId
           && statusOf(request.resource.data) == 'PENDING'
-          && alertIdKept();
+          && alertIdKept()
+          && notInTheFuture(request.resource.data)
+          && linkedAlertAllowed();
 
       // The owner of the linked alert may confirm or dismiss it, and change nothing else.
       // The status stays explicit once reviewed (it cannot be deleted).
       allow update: if request.auth != null
           && ownsLinkedAlert()
-          && validSighting(request.resource.data)
+          && validSighting(
+              request.resource.data, resource.data.get('headingDegrees', null))
           && 'status' in request.resource.data
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
 

@@ -1,9 +1,12 @@
+// Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.photo
 
 import android.net.Uri
 import com.android.spotted.model.photo.PhotoRepository
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,28 @@ class PhotoRepositoryFirebaseStorage(
       val metadata = StorageMetadata.Builder().setContentType(PHOTO_CONTENT_TYPE).build()
       Tasks.await(photoRef.putFile(Uri.parse(localUri), metadata))
       Tasks.await(photoRef.downloadUrl).toString()
+    }
+  }
+
+  override suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit> =
+      delete(petPhotoPath(ownerId, petId))
+
+  override suspend fun deleteProfilePhoto(userId: String): Result<Unit> =
+      delete(profilePhotoPath(userId))
+
+  /** Deletes the file at [path]; a missing file succeeds. */
+  private suspend fun delete(path: String): Result<Unit> = storageResult {
+    withContext(Dispatchers.IO) {
+      try {
+        Tasks.await(storage.reference.child(path).delete())
+      } catch (exception: Exception) {
+        val isMissingPhoto =
+            generateSequence(exception as Throwable?) { it.cause }
+                .filterIsInstance<StorageException>()
+                .any { it.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND }
+        if (!isMissingPhoto) throw exception
+      }
+      Unit
     }
   }
 

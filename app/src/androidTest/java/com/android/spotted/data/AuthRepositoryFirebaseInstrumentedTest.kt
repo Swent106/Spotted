@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -6,8 +7,11 @@ import com.android.spotted.data.auth.AuthRepositoryFirebase
 import com.android.spotted.model.auth.User
 import com.android.spotted.utils.FakeJwtGenerator
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -66,13 +70,8 @@ class AuthRepositoryFirebaseInstrumentedTest {
     assertNotNull("Returned user should not be null", returnedUser)
     assertEquals("Email should match the fake token", fakeEmail, returnedUser?.email)
 
-    // Wait for the auth state listener to update the StateFlow
-    var flowUser: User? = null
-    for (i in 1..30) {
-      flowUser = authRepository.currentUser.value
-      if (flowUser != null) break
-      kotlinx.coroutines.delay(100)
-    }
+    awaitCurrentUser { it != null }
+    val flowUser: User? = authRepository.currentUser.value
 
     assertNotNull("StateFlow user should not be null after sign-in", flowUser)
     assertEquals("StateFlow email should match", fakeEmail, flowUser?.email)
@@ -85,28 +84,29 @@ class AuthRepositoryFirebaseInstrumentedTest {
     val signInResult = authRepository.signInWithGoogle(fakeToken)
     assertTrue("Sign-in should be successful", signInResult.isSuccess)
 
-    // Wait until the auth state listener has emitted the signed-in user
-    for (i in 1..30) {
-      if (authRepository.currentUser.value != null) break
-      kotlinx.coroutines.delay(100L)
-    }
+    awaitCurrentUser { it != null }
     assertNotNull("User should be signed in initially", authRepository.currentUser.value)
 
     val result = authRepository.signOut()
 
     assertTrue("Sign-out should be successful", result.isSuccess)
+    assertTrue("StateFlow user should be null after sign-out", awaitCurrentUser { it == null })
+  }
 
-    // Wait for the auth state listener to update the StateFlow
-    // Firebase auth state changes are asynchronous, so we wait for the value to become null
-    var isNull = false
-    for (i in 1..30) {
-      if (authRepository.currentUser.value == null) {
-        isNull = true
-        break
+  /**
+   * Waits until [currentUser][AuthRepositoryFirebase.currentUser] matches [condition], and returns
+   * whether it did. Firebase calls the auth state listener later, on another thread. `runTest`
+   * skips `delay`, so the wait runs on [Dispatchers.Default] to last for real.
+   */
+  private suspend fun awaitCurrentUser(condition: (User?) -> Boolean): Boolean =
+      withContext(Dispatchers.Default) {
+        withTimeoutOrNull(TIMEOUT_MILLIS) {
+          authRepository.currentUser.first(condition)
+          true
+        } ?: false
       }
-      kotlinx.coroutines.delay(100L) // Wait 100ms
-    }
 
-    assertTrue("StateFlow user should be null after sign-out", isNull)
+  private companion object {
+    const val TIMEOUT_MILLIS = 5_000L
   }
 }

@@ -1,11 +1,17 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
+import kotlinx.coroutines.flow.Flow
 
 interface AlertRepository {
   fun getNewId(): String
 
+  /**
+   * Publishes [alert]. Fails with [AlertAlreadyOpenException] if its pet already has an open alert,
+   * also when two publishes for the same pet race (from two taps or two devices).
+   */
   suspend fun publishAlert(alert: Alert): Result<Unit>
 
   /** Returns the alert with [id], or null when no such alert exists. */
@@ -32,6 +38,12 @@ interface AlertRepository {
       center: Location,
       radiusKm: Double,
   ): Result<List<Alert>>
+
+  /**
+   * Emits the open alerts near [center] right away, then again after every change. Same filtering
+   * and order as [getOpenAlertsNear]. An error is emitted as a failure and ends the flow.
+   */
+  fun observeOpenAlertsNear(center: Location, radiusKm: Double): Flow<Result<List<Alert>>>
 
   /** Returns up to [limit] open alerts near [center] from the local cache, newest first. */
   suspend fun getCachedOpenAlertsNear(

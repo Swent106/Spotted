@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Copilot.
 package com.android.spotted.model.Pet
 
 import java.util.UUID
@@ -26,6 +27,51 @@ class PetRepositoryLocalTest {
 
     assertTrue(repository.addPet(pet).isSuccess)
     assertEquals(pet, repository.getPet(pet.id).getOrThrow())
+  }
+
+  @Test
+  fun updatePet_replacesAnExistingPet() = runBlocking {
+    val original = pet(id = "pet-1")
+    val updated = original.copy(name = "Updated", note = "New note")
+    repository.addPet(original)
+
+    assertTrue(repository.updatePet(updated).isSuccess)
+    assertEquals(updated, repository.getPet(updated.id).getOrThrow())
+  }
+
+  @Test
+  fun updatePet_whenPetDoesNotExist_returnsFailure() = runBlocking {
+    val result = repository.updatePet(pet(id = "missing"))
+
+    assertTrue(result.isFailure)
+    assertTrue(result.exceptionOrNull() is NoSuchElementException)
+  }
+
+  @Test
+  fun fakePetRepository_supportsUpdateAndDelete() = runBlocking {
+    val fake = FakePetRepository()
+    val original = pet(id = "pet-1")
+    fake.addPet(original)
+
+    val updated = original.copy(name = "Updated")
+    assertTrue(fake.updatePet(updated).isSuccess)
+    assertEquals(updated, fake.getPet(updated.id).getOrThrow())
+    assertTrue(fake.deletePet(updated.id).isSuccess)
+    assertTrue(fake.getPet(updated.id).isFailure)
+  }
+
+  @Test
+  fun deletePet_whenPetDoesNotExist_succeeds() = runBlocking {
+    assertTrue(repository.deletePet("missing").isSuccess)
+  }
+
+  @Test
+  fun deletePet_removesThePet() = runBlocking {
+    val pet = pet(id = "pet-1")
+    repository.addPet(pet)
+
+    assertTrue(repository.deletePet(pet.id).isSuccess)
+    assertTrue(repository.getPet(pet.id).isFailure)
   }
 
   @Test

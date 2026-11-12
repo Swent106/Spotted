@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.personalinfo
 
 import android.net.Uri
@@ -25,7 +26,6 @@ import androidx.compose.ui.test.performTextInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.R
-import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.ui.components.CameraPhotoFile
@@ -56,7 +56,7 @@ class PersonalInfoScreenTest {
 
   private fun setContent(
       state: PersonalInfoUiState,
-      onBackClick: () -> Unit = {},
+      onBackClick: (() -> Unit)? = {},
       onFirstNameChange: (String) -> Unit = {},
       onAlertRadiusSelect: (Int) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
@@ -209,6 +209,13 @@ class PersonalInfoScreenTest {
   }
 
   @Test
+  fun onboarding_withNowhereToGoBack_showsNoBackButton() {
+    setContent(PersonalInfoUiState(), onBackClick = null)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.BACK_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
   fun backButton_callsOnBackClick() {
     var clicks = 0
     setContent(PersonalInfoUiState(), onBackClick = { clicks++ })
@@ -241,7 +248,6 @@ class PersonalInfoScreenTest {
         PersonalInfoViewModel(
             user = User(uid = "user-1", email = "rayen@example.com"),
             userRepository = FakeUserRepository(),
-            authRepository = FakeAuthRepository(),
         )
     var savedCalls = 0
     var isShown by mutableStateOf(true)
@@ -269,7 +275,6 @@ class PersonalInfoScreenTest {
         PersonalInfoViewModel(
             user = User(uid = "user-1", email = "rayen@example.com"),
             userRepository = FakeUserRepository(),
-            authRepository = FakeAuthRepository(),
         )
     composeTestRule.setContent { PersonalInfoScreen(viewModel = viewModel) }
 
@@ -310,7 +315,6 @@ class PersonalInfoScreenTest {
         PersonalInfoViewModel(
             user = User(uid = "user-1", email = "rayen@example.com"),
             userRepository = FakeUserRepository(),
-            authRepository = FakeAuthRepository(),
         )
     composeTestRule.setContent { PersonalInfoScreen(viewModel = viewModel) }
 
@@ -331,7 +335,6 @@ class PersonalInfoScreenTest {
         PersonalInfoViewModel(
             user = User(uid = "user-1", email = "rayen@example.com"),
             userRepository = FakeUserRepository(),
-            authRepository = FakeAuthRepository(),
         )
     viewModel.onPhotoSelected("content://photos/1")
     composeTestRule.setContent { PersonalInfoScreen(viewModel = viewModel) }
@@ -402,7 +405,6 @@ class PersonalInfoScreenTest {
       PersonalInfoViewModel(
           user = User(uid = "user-1", email = "rayen@example.com"),
           userRepository = FakeUserRepository(),
-          authRepository = FakeAuthRepository(),
       )
 
   /**

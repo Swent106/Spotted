@@ -1,7 +1,9 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
@@ -9,10 +11,15 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.android.spotted.model.Location
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
 
 class MapPickerTest {
 
@@ -88,6 +95,31 @@ class MapPickerTest {
     val location = tapped!!
     assertEquals(DefaultMapCenter.latitude, location.latitude, COORDINATE_TOLERANCE)
     assertEquals(DefaultMapCenter.longitude, location.longitude, COORDINATE_TOLERANCE)
+  }
+
+  @Test
+  fun createMapView_showsASingleWorld_andStopsAtItsEdges() {
+    lateinit var mapView: MapView
+    composeTestRule.setContent {
+      AndroidView(
+          factory = { context -> createMapView(context).also { mapView = it } },
+          modifier = Modifier.size(300.dp),
+      )
+    }
+
+    composeTestRule.runOnIdle {
+      assertFalse("world repeated sideways", mapView.isHorizontalMapRepetitionEnabled)
+      assertFalse("world repeated up and down", mapView.isVerticalMapRepetitionEnabled)
+      mapView.controller.setZoom(0.0)
+      mapView.controller.setCenter(GeoPoint(0.0, 179.9))
+    }
+    composeTestRule.waitForIdle()
+
+    composeTestRule.runOnIdle {
+      assertEquals(MIN_MAP_ZOOM, mapView.zoomLevelDouble, 0.0)
+      // The east edge of the world stays at the edge of the map, so the centre can't reach it
+      assertTrue(mapView.mapCenter.longitude < 179.0)
+    }
   }
 
   private companion object {

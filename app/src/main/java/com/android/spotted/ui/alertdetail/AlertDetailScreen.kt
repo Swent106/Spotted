@@ -25,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +40,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +53,9 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.ui.components.BACK_BUTTON_SIZE
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
+import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.theme.SpottedIllustration
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
@@ -245,8 +245,8 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      HeaderCircleButton(onClick = onBack, tag = AlertDetailTestTags.BACK)
-      HeaderCircleButton("↗", onClick = onShare, tag = AlertDetailTestTags.SHARE)
+      SpottedBackButton(onClick = onBack, testTag = AlertDetailTestTags.BACK)
+      ShareButton(onClick = onShare)
     }
     if (alert.status == AlertStatus.OPEN) {
       Row(
@@ -269,31 +269,23 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit, onShare: () -> Unit
   }
 }
 
+/** "↗" in a circle the size of the back button, so both sides of the photo match. */
 @Composable
-private fun HeaderCircleButton(symbol: String? = null, onClick: () -> Unit, tag: String) {
+private fun ShareButton(onClick: () -> Unit) {
   Box(
       modifier =
-          Modifier.size(38.dp)
+          Modifier.size(BACK_BUTTON_SIZE)
               .clip(CircleShape)
               .background(SpottedTheme.colors.surface)
               .clickable(
-                  onClickLabel = if (symbol == null) "Back" else "Share",
+                  onClickLabel = stringResource(R.string.share),
                   role = Role.Button,
                   onClick = onClick,
               )
-              .testTag(tag),
+              .testTag(AlertDetailTestTags.SHARE),
       contentAlignment = Alignment.Center,
   ) {
-    if (symbol == null) {
-      Icon(
-          painter = painterResource(R.drawable.ic_arrow_back),
-          contentDescription = "Back",
-          tint = SpottedTheme.colors.ink,
-          modifier = Modifier.size(20.dp),
-      )
-    } else {
-      Text(symbol, style = jakarta(22, 26f, 600, SpottedTheme.colors.ink))
-    }
+    Text("↗", style = jakarta(22, 26f, 600, SpottedTheme.colors.ink))
   }
 }
 
