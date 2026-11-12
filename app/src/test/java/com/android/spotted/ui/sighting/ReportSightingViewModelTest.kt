@@ -343,7 +343,7 @@ class ReportSightingViewModelTest {
   }
 
   @Test
-  fun submitSighting_photoUploadFailure_sendsTheSightingWithoutPhoto() = runTest {
+  fun submitSighting_photoUploadFailureWithNoMatchingAlert_keepsTheFormAndShowsAnError() = runTest {
     viewModel.setSpecies(Species.CAT)
     viewModel.setLocation(Location(46.5, 6.6))
     viewModel.setPhotoUri("content://media/cat.jpg")
@@ -353,7 +353,35 @@ class ReportSightingViewModelTest {
 
     viewModel.submitSighting()
 
-    assertTrue(viewModel.uiState.value.submitted)
+    val state = viewModel.uiState.value
+    assertFalse(state.submitted)
+    assertFalse(state.isSubmitting)
+    assertEquals(ReportSightingViewModel.PHOTO_UPLOAD_FAILED, state.errorMessage)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_photoUploadFailureWithAnAlert_sendsTheSightingWithoutPhoto() = runTest {
+    val alertRepository = FakeAlertRepository().apply { publishAlert(alertOwnedBy("someone-else")) }
+    val vm =
+        ReportSightingViewModel(
+                sightingRepository = sightingRepository,
+                photoRepository = photoRepository,
+                authRepository = authRepository,
+                now = { 1L },
+                alertRepository = alertRepository,
+            )
+            .apply {
+              setSpecies(Species.DOG)
+              setLocation(ALERT_PLACE)
+              selectAlert(ALERT_ID)
+              setPhotoUri(PHOTO)
+            }
+    photoRepository.failure = Exception("Upload failed")
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
     assertNull(sightingRepository.reportedSightings.single().photoUrl)
   }
 
