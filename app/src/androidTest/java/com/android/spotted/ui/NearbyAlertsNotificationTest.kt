@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import android.service.notification.StatusBarNotification
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.model.Location
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 
@@ -71,6 +73,15 @@ class NearbyAlertsNotificationTest {
     val posted = awaitPostedNotification()
     assertEquals("near", posted.tag)
     assertEquals(SystemNotifier.CHANNEL_NEARBY_ALERTS, posted.notification.channelId)
+  }
+
+  @Test
+  fun factory_createsTheViewModel() {
+    val viewModel =
+        NearbyAlertsViewModel.factory(SystemNotifier(context))
+            .create(NearbyAlertsViewModel::class.java, CreationExtras.Empty)
+
+    assertNotNull(viewModel)
   }
 
   /** notify() returns before Android has posted the notification, so wait for it to appear. */

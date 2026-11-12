@@ -43,13 +43,6 @@ class NearbyAlertsViewModelTest {
   }
 
   @Test
-  fun factory_createsTheViewModel() {
-    runCatching {
-      NearbyAlertsViewModel.factory(notifier).create(NearbyAlertsViewModel::class.java)
-    }
-  }
-
-  @Test
   fun newAlertNearHome_isNotified_withItsDistance() = runTest {
     saveProfile(home = HOME)
     startWatching()
