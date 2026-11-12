@@ -403,6 +403,50 @@ class AlertRepositoryFirestoreInstrumentedTest {
   }
 
   @Test
+  fun updateLastSeen_withNewerTime_movesTheAlert() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0), lostAtMillis = 1000L)
+    val seenAt = Location(latitude = 46.01, longitude = 6.02)
+
+    val result = repository.updateLastSeen(alert.id, seenAt, seenAtMillis = 2000L)
+
+    assertTrue("Should move: ${result.exceptionOrNull()?.message}", result.getOrNull() == true)
+    assertEquals(
+        alert.copy(lastKnownLocation = seenAt, lastSeenAtMillis = 2000L),
+        repository.getAlertById(alert.id).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun updateLastSeen_withOlderTime_leavesTheAlert() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0), lostAtMillis = 1000L)
+    val newer = Location(latitude = 46.01, longitude = 6.02)
+    repository.updateLastSeen(alert.id, newer, seenAtMillis = 3000L).getOrThrow()
+
+    val result = repository.updateLastSeen(alert.id, Location(46.03, 6.04), seenAtMillis = 2000L)
+
+    assertTrue("Should not move: ${result.exceptionOrNull()?.message}", result.getOrNull() == false)
+    assertEquals(
+        alert.copy(lastKnownLocation = newer, lastSeenAtMillis = 3000L),
+        repository.getAlertById(alert.id).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun updateLastSeen_returnsNoSuchElementWhenAlertDoesNotExist() = runBlocking {
+    val result =
+        repository.updateLastSeen(
+            "missing-${java.util.UUID.randomUUID()}",
+            Location(46.0, 6.0),
+            2000L,
+        )
+
+    assertTrue(
+        "Expected NoSuchElementException, got ${result.exceptionOrNull()}",
+        result.exceptionOrNull() is NoSuchElementException,
+    )
+  }
+
+  @Test
   fun closeAlert_returnsNoSuchElementWhenAlertDoesNotExist() = runBlocking {
     val result = repository.closeAlert("missing-${java.util.UUID.randomUUID()}")
 

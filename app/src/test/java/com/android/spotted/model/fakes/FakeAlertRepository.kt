@@ -72,6 +72,25 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     return Result.success(Unit)
   }
 
+  override suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    val alert =
+        alerts.value[alertId]
+            ?: return Result.failure(NoSuchElementException("No alert with id $alertId"))
+    if (alert.status == AlertStatus.CLOSED || seenAtMillis <= alert.lastSeenAt) {
+      return Result.success(false)
+    }
+    val moved = alert.copy(lastKnownLocation = location, lastSeenAtMillis = seenAtMillis)
+    alerts.update { it + (alertId to moved) }
+    return Result.success(true)
+  }
+
   override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> {
     failure?.let {
       return Result.failure(it)

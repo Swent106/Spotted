@@ -748,6 +748,69 @@ describe("Firestore alert access rules", () => {
 
     await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { petName: "Max" }));
   });
+
+  const seenThere = (lastSeenAtMillis) => ({
+    lastKnownLocation: { latitude: 46.52, longitude: 6.63 },
+    lastSeenAtMillis,
+  });
+
+  it("last seen: owner is allowed to move their open alert to a newer sighting", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1500000)));
+  });
+
+  it("last seen: another user is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-2");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1500000)));
+  });
+
+  it("last seen: anonymous user is denied", async () => {
+    await seedAlert();
+    const db = testEnvironment.unauthenticatedContext().firestore();
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1500000)));
+  });
+
+  it("last seen: a time older than the current last seen is denied", async () => {
+    await seedAlert({ lastSeenAtMillis: 1500000 });
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1200000)));
+  });
+
+  it("last seen: a time before the pet was lost is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(999999)));
+  });
+
+  it("last seen: a time far in the future is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), seenThere(Date.now() + 60 * 60 * 1000))
+    );
+  });
+
+  it("last seen: removing the last seen time is denied", async () => {
+    await seedAlert({ lastSeenAtMillis: 1500000 });
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { lastSeenAtMillis: null }));
+  });
+
+  it("last seen: a closed alert can't be moved", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(2500000)));
+  });
 });
 
 describe("Firestore sighting access rules", () => {

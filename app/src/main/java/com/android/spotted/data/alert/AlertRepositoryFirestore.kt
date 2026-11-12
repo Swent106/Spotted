@@ -117,6 +117,52 @@ class AlertRepositoryFirestore(
     }
   }
 
+  override suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean> {
+    return try {
+      val ref = db.collection(collectionPath).document(alertId)
+      // Read and write in one transaction, so an older sighting confirmed at the same time can't
+      // overwrite a newer one
+      val moved =
+          db.runTransaction { transaction ->
+                val snapshot = transaction.get(ref)
+                if (!snapshot.exists()) throw NoSuchElementException("No alert with id $alertId")
+                val lastSeenAt =
+                    snapshot.getLong("lastSeenAtMillis") ?: snapshot.getLong("lostAtMillis") ?: 0L
+                val isOpen = snapshot.getString("status") != AlertStatus.CLOSED.name
+                if (isOpen && seenAtMillis > lastSeenAt) {
+                  transaction.update(
+                      ref,
+                      mapOf(
+                          "lastKnownLocation" to
+                              mapOf(
+                                  "latitude" to location.latitude,
+                                  "longitude" to location.longitude,
+                              ),
+                          "lastSeenAtMillis" to seenAtMillis,
+                      ),
+                  )
+                  true
+                } else {
+                  false
+                }
+              }
+              .await()
+      Result.success(moved)
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      // Firestore may wrap what the transaction throws: give back the missing alert as it is
+      val missing =
+          generateSequence<Throwable>(e) { it.cause }.firstOrNull { it is NoSuchElementException }
+      Result.failure(missing ?: e)
+    }
+  }
+
   override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> {
     return try {
       // Two equality filters: served by Firestore's single-field indexes, no composite index
