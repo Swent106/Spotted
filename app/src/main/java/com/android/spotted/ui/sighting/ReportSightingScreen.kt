@@ -68,6 +68,7 @@ object ReportSightingScreenTestTags {
   const val LOCATION_CARD = "sightingLocationCard"
   const val PET_OPTION_PREFIX = "sightingPetOption_"
   const val NO_MATCH_OPTION = "sightingNoMatchOption"
+  const val NO_NEARBY_MATCHES = "sightingNoNearbyMatches"
   const val SUBMIT_BUTTON = "sightingSubmitButton"
   const val LOADER = "sightingLoader"
   const val ERROR_MESSAGE = "sightingErrorMessage"
@@ -246,11 +247,13 @@ fun ReportSightingContent(
       )
 
       // Nearby Alerts list
-      if (state.location != null && state.nearbyAlerts.isEmpty()) {
+      if (state.isNearbyAlertsLoaded && state.nearbyAlerts.isEmpty()) {
         Text(
-            "No missing pet matches nearby",
+            stringResource(R.string.sighting_no_missing_pet_matches_nearby),
             style = jakarta(14, 18f, 500, SpottedTheme.colors.textSecondary),
-            modifier = Modifier.padding(vertical = 8.dp),
+            modifier =
+                Modifier.padding(vertical = 8.dp)
+                    .testTag(ReportSightingScreenTestTags.NO_NEARBY_MATCHES),
         )
       }
       state.nearbyAlerts.forEach { alert ->

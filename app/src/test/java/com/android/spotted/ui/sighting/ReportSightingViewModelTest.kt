@@ -566,6 +566,48 @@ class ReportSightingViewModelTest {
   }
 
   @Test
+  fun nearbyAlerts_selectingNoMatchDoesNotFilterByAutoFilledDogSpecies() = runTest {
+    val alertRepository = FakeAlertRepository()
+    alertRepository.publishAlert(alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT))
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+    vm.setLocation(ALERT_PLACE)
+
+    vm.selectNoMatchingAlert()
+
+    assertEquals(Species.DOG, vm.uiState.value.selectedSpecies)
+    assertEquals(listOf("cat"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+  }
+
+  @Test
+  fun nearbyAlerts_selectingAlertDoesNotHideOtherSpecies() = runTest {
+    val alertRepository = FakeAlertRepository()
+    listOf(
+            alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT),
+            alertOwnedBy("owner").copy(id = "dog", petSpecies = Species.DOG),
+        )
+        .forEach { alertRepository.publishAlert(it) }
+    val vm =
+        ReportSightingViewModel(
+            sightingRepository = sightingRepository,
+            photoRepository = photoRepository,
+            authRepository = authRepository,
+            alertRepository = alertRepository,
+        )
+    vm.setLocation(ALERT_PLACE)
+
+    vm.selectAlert("cat")
+
+    assertEquals(Species.CAT, vm.uiState.value.selectedSpecies)
+    assertEquals(listOf("cat", "dog"), vm.uiState.value.nearbyAlerts.map { it.alertId })
+  }
+
+  @Test
   fun nearbyAlerts_filtersByDetectedSpecies() = runTest {
     val alertRepositoryDelegate = FakeAlertRepository()
     var nearbyAlertLoads = 0

@@ -75,11 +75,37 @@ class ReportSightingContentTest {
   @Test
   fun emptyNearbyAlerts_displaysNoMatchesMessageAndNoMatchingOption() {
     composeTestRule.setContent {
-      ReportSightingContent(state = ReportSightingUiState(location = Location(46.5, 6.6)))
+      ReportSightingContent(
+          state =
+              ReportSightingUiState(
+                  location = Location(46.5, 6.6),
+                  isNearbyAlertsLoaded = true,
+              )
+      )
     }
 
-    composeTestRule.onNodeWithText("No missing pet matches nearby").assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.NO_NEARBY_MATCHES)
+        .assertIsDisplayed()
+        .assertTextEquals("No missing pet matches nearby")
     composeTestRule.onNodeWithText("No matching alert").assertIsDisplayed()
+  }
+
+  @Test
+  fun nearbyAlertsLoading_doesNotShowEmptyMessage() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state =
+              ReportSightingUiState(
+                  location = Location(46.5, 6.6),
+                  isNearbyAlertsLoaded = false,
+              )
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.NO_NEARBY_MATCHES)
+        .assertDoesNotExist()
   }
 
   @Test

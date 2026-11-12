@@ -54,7 +54,7 @@ class ReportSightingViewModel(
   private var nearbyAlertsRequestId = 0L
   private var nearbyAlertCandidates: List<Alert> = emptyList()
   private var preselectedAlert: Alert? = null
-  private var nearbyAlertsLoaded = false
+  private var speciesChosenByUser: Species? = null
 
   fun loadCurrentLocation() {
     val repo = locationRepository ?: return
@@ -75,6 +75,7 @@ class ReportSightingViewModel(
   }
 
   fun setSpecies(species: Species) {
+    speciesChosenByUser = species
     _uiState.update { it.copy(selectedSpecies = species) }
     refreshNearbyAlertOptions()
   }
@@ -117,12 +118,12 @@ class ReportSightingViewModel(
     nearbyAlertsJob?.cancel()
     val requestId = ++nearbyAlertsRequestId
     nearbyAlertCandidates = emptyList()
-    nearbyAlertsLoaded = false
+    _uiState.update { it.copy(isNearbyAlertsLoaded = false) }
     refreshNearbyAlertOptions()
 
     val repository = alertRepository
     if (repository == null) {
-      nearbyAlertsLoaded = true
+      _uiState.update { it.copy(isNearbyAlertsLoaded = true) }
       refreshNearbyAlertOptions()
       return
     }
@@ -131,7 +132,7 @@ class ReportSightingViewModel(
       repository.getOpenAlertsNear(location, NEARBY_RADIUS_KM).onSuccess { alerts ->
         if (requestId != nearbyAlertsRequestId) return@onSuccess
         nearbyAlertCandidates = alerts
-        nearbyAlertsLoaded = true
+        _uiState.update { it.copy(isNearbyAlertsLoaded = true) }
         refreshNearbyAlertOptions()
       }
     }
@@ -140,7 +141,7 @@ class ReportSightingViewModel(
   /** Refilters the last nearby-alert result whenever position or species changes. */
   private fun refreshNearbyAlertOptions() {
     _uiState.update { state ->
-      val species = state.selectedSpecies ?: state.detectedSpecies
+      val species = speciesChosenByUser ?: state.detectedSpecies
       val ownerId = authRepository.currentUser.value?.uid
       val nearby =
           state.location
@@ -166,7 +167,8 @@ class ReportSightingViewModel(
       val selectedAlertId = state.selectedAlertId
       val selectionWasRemoved =
           selectedAlertId != null && options.none { it.alertId == selectedAlertId }
-      val shouldSelectNoMatch = selectionWasRemoved || (nearbyAlertsLoaded && options.isEmpty())
+      val shouldSelectNoMatch =
+          selectionWasRemoved || (state.isNearbyAlertsLoaded && options.isEmpty())
 
       state.copy(
           nearbyAlerts = options,
