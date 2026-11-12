@@ -320,7 +320,16 @@ fun NavGraphBuilder.homeDestinations(
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
-      ReportMissingScreen(onBack = onDone, onPublished = onDone)
+      ReportMissingScreen(
+          onBack = onDone,
+          onPublished = onDone,
+          // My alert replaces Report missing, so Back from it returns to Home
+          onOpenAlert = { alertId ->
+            navController.navigate(Route.myAlert(alertId)) {
+              popUpTo(Route.REPORT_MISSING) { inclusive = true }
+            }
+          },
+      )
     },
     alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
         { alertId, onReportSighting ->
