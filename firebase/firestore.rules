@@ -104,7 +104,8 @@ service cloud.firestore {
                 'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
           && d.keys().hasOnly([
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
-                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors',
+                'lastSeenAtMillis'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
@@ -124,7 +125,21 @@ service cloud.firestore {
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
               || (d.petPhotoUrl is string && d.petPhotoUrl.size() <= 2048))
           && d.petAllergies is list && d.petAllergies.size() <= 50
-          && d.petBehaviors is list && d.petBehaviors.size() <= 50;
+          && d.petBehaviors is list && d.petBehaviors.size() <= 50
+          // Set when a confirmed sighting moves the last seen place: after the pet was lost, and
+          // at most 5 minutes in the future, like a sighting
+          && (d.get('lastSeenAtMillis', null) == null
+              || (d.lastSeenAtMillis is int
+                  && d.lastSeenAtMillis >= d.lostAtMillis
+                  && d.lastSeenAtMillis <= request.time.toMillis() + 300000));
+      }
+
+      // The last seen time only moves forward: an older sighting can't move the pet back
+      function lastSeenNotMovedBack() {
+        let before = resource.data.get('lastSeenAtMillis', null);
+        let after = request.resource.data.get('lastSeenAtMillis', null);
+        return after == before
+          || (after != null && after > (before == null ? resource.data.lostAtMillis : before));
       }
 
       allow get: if request.auth != null;
@@ -140,7 +155,8 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/openPetAlerts/$(request.resource.data.petId))
                .data.alertId == alertId;
 
-      // The owner may only close an open alert or move it; identity fields are immutable.
+      // The owner may only close an open alert or move it (last seen place and time); identity
+      // fields are immutable.
       // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
       // field existed count as open.
       allow update: if request.auth != null
@@ -148,7 +164,8 @@ service cloud.firestore {
           && resource.data.get('status', 'OPEN') == 'OPEN'
           && validAlert(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis']);
+               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis', 'lastSeenAtMillis'])
+          && lastSeenNotMovedBack();
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;

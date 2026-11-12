@@ -30,6 +30,18 @@ interface AlertRepository {
   suspend fun closeAlert(alertId: String): Result<Unit>
 
   /**
+   * Moves the last seen place of the open alert [alertId] to [location], seen at [seenAtMillis],
+   * when that is newer than its current [Alert.lastSeenAt]. Returns true if the alert moved, false
+   * if it was left as it is (older or same time, or alert closed). Fails with
+   * [NoSuchElementException] if it doesn't exist.
+   */
+  suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean>
+
+  /**
    * Returns open alerts within the inclusive [radiusKm] of [center], filtered by exact distance and
    * ordered newest first. Alerts with the same [Alert.lostAtMillis] are ordered by ascending
    * [Alert.id].
