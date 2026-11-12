@@ -173,6 +173,7 @@ class PetProfileContentTest {
 
   private var deleted = 0
   private val editedIds = mutableListOf<String>()
+  private val linkedIds = mutableListOf<String>()
 
   /**
    * [deletePets] is what the delete ViewModel reads the pet from; the profile uses the real one.
@@ -190,6 +191,7 @@ class PetProfileContentTest {
           petId = luna.id,
           deleteViewModel = deleteViewModel,
           onEdit = { editedIds += it },
+          onLinkTag = { linkedIds += it },
           onDeleted = { deleted++ },
       )
     }
@@ -208,6 +210,18 @@ class PetProfileContentTest {
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.EDIT_BUTTON).performClick()
 
     assertEquals(listOf(luna.id), editedIds)
+  }
+
+  @Test
+  fun screen_linkTag_opensTheLinkTagScreenOfThePet() {
+    setScreen()
+
+    composeTestRule
+        .onNodeWithTag(PetProfileScreenTestTags.LINK_TAG_BUTTON)
+        .assertTextEquals("Link a tag")
+        .performClick()
+
+    assertEquals(listOf(luna.id), linkedIds)
   }
 
   @Test

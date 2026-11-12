@@ -46,6 +46,8 @@ import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
 import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.ui.home.HomeScreen
+import com.android.spotted.ui.linktag.LinkTagScreen
+import com.android.spotted.ui.linktag.LinkTagViewModel
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
@@ -84,6 +86,9 @@ object Route {
   /** The edit form of one of the user's pets, opened from its profile. */
   private const val EDIT_PET_BASE = "edit_pet"
   const val EDIT_PET = "$EDIT_PET_BASE/{$PET_ID}"
+  /** Links an NFC tag to one of the user's pets, opened from its profile. */
+  private const val LINK_TAG_BASE = "link_tag"
+  const val LINK_TAG = "$LINK_TAG_BASE/{$PET_ID}"
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
@@ -91,6 +96,8 @@ object Route {
   fun petProfile(petId: String) = "$PET/$petId"
 
   fun editPet(petId: String) = "$EDIT_PET_BASE/$petId"
+
+  fun linkTag(petId: String) = "$LINK_TAG_BASE/$petId"
 
   fun myAlert(alertId: String) = "$MY_ALERT_BASE/$alertId"
 
@@ -287,8 +294,9 @@ fun NavGraphBuilder.addPetsDestination(
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
  * profile (Profile tab), [editProfileContent] the profile form it opens, [editPetContent] the edit
- * form of a pet and [myAlertContent] the owner's own alert, opened from a missing pet on Home;
- * tests replace them to use hand-built states instead of the real ViewModels.
+ * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, and [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
+ * instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -338,18 +346,27 @@ fun NavGraphBuilder.homeDestinations(
             petId: String,
             onBack: () -> Unit,
             onEdit: (String) -> Unit,
+            onLinkTag: (String) -> Unit,
             onDeleted: () -> Unit,
         ) -> Unit =
-        { petId, onBack, onEdit, onDeleted ->
+        { petId, onBack, onEdit, onLinkTag, onDeleted ->
           PetProfileScreen(
               viewModel = viewModel(factory = PetProfileViewModel.Factory),
               petId = petId,
               deleteViewModel = viewModel(key = petId, factory = EditPetViewModel.factory(petId)),
               onBack = onBack,
               onEdit = onEdit,
+              onLinkTag = onLinkTag,
               onDeleted = onDeleted,
           )
         },
+    linkTagContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
+      LinkTagScreen(
+          viewModel = viewModel(key = petId, factory = LinkTagViewModel.factory(petId)),
+          onDone = onDone,
+          onCancel = onDone,
+      )
+    },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
       EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)
     },
@@ -414,9 +431,15 @@ fun NavGraphBuilder.homeDestinations(
         entry.arguments?.getString(Route.PET_ID).orEmpty(),
         { navController.popBackStackSafely() },
         { petId -> if (entry.isResumed()) navController.navigate(Route.editPet(petId)) },
+        { petId -> if (entry.isResumed()) navController.navigate(Route.linkTag(petId)) },
         // The pet no longer exists: back to Home, with its profile removed from the back stack
         { navController.popBackStack(Route.HOME, inclusive = false) },
     )
+  }
+  composable(Route.LINK_TAG) { entry ->
+    linkTagContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {
+      navController.popBackStackSafely()
+    }
   }
   composable(Route.EDIT_PET) { entry ->
     editPetContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {
