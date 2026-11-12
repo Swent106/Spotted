@@ -61,8 +61,10 @@ class OwnerFlowTest : EndToEndTest() {
     signOut()
 
     signInAgain(OWNER)
-    // #373: the owner is notified of the passerby's sighting.
-    awaitSightingNotification(petName)
+    // #373: the owner's sighting notification isn't asserted here. The notifier only fires for
+    // sightings that arrive while the owner is watching, but this turn-based flow creates the
+    // sighting before the owner signs back in. It's covered by SightingNotifierViewModelTest and
+    // SystemNotifierInstrumentedTest.
     // TODO(#356): once the notifications screen and bell badge land, assert the bell shows a badge
     // of 1 here, open Notifications from the bell, and open My alert from the notification.
     confirmSightingAndCloseAlert(alertId, sightingId, ownerId)
