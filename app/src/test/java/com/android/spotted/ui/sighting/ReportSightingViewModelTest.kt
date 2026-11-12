@@ -513,7 +513,7 @@ class ReportSightingViewModelTest {
     val alertRepository = FakeAlertRepository()
     listOf(
             alertOwnedBy(signedInUid()).copy(petName = "Mine"),
-            alertOwnedBy("someone-else").copy(id = "other", petName = "Other"),
+            alertOwnedBy("someone-else").copy(id = "other", petId = "other", petName = "Other"),
         )
         .forEach { alertRepository.publishAlert(it) }
     val vm =
@@ -544,8 +544,8 @@ class ReportSightingViewModelTest {
           }
         }
     listOf(
-            alertOwnedBy("owner").copy(id = "dog", petSpecies = Species.DOG),
-            alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT),
+            alertOwnedBy("owner").copy(id = "dog", petId = "dog", petSpecies = Species.DOG),
+            alertOwnedBy("owner").copy(id = "cat", petId = "cat", petSpecies = Species.CAT),
         )
         .forEach { alertRepository.publishAlert(it) }
     val vm =
@@ -588,8 +588,8 @@ class ReportSightingViewModelTest {
   fun nearbyAlerts_selectingAlertDoesNotHideOtherSpecies() = runTest {
     val alertRepository = FakeAlertRepository()
     listOf(
-            alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT),
-            alertOwnedBy("owner").copy(id = "dog", petSpecies = Species.DOG),
+            alertOwnedBy("owner").copy(id = "cat", petId = "cat", petSpecies = Species.CAT),
+            alertOwnedBy("owner").copy(id = "dog", petId = "dog", petSpecies = Species.DOG),
         )
         .forEach { alertRepository.publishAlert(it) }
     val vm =
@@ -622,8 +622,8 @@ class ReportSightingViewModelTest {
           }
         }
     listOf(
-            alertOwnedBy("owner").copy(id = "dog", petSpecies = Species.DOG),
-            alertOwnedBy("owner").copy(id = "cat", petSpecies = Species.CAT),
+            alertOwnedBy("owner").copy(id = "dog", petId = "dog", petSpecies = Species.DOG),
+            alertOwnedBy("owner").copy(id = "cat", petId = "cat", petSpecies = Species.CAT),
         )
         .forEach { alertRepository.publishAlert(it) }
     val detector = FakeAnimalDetector().apply { result = AnimalDetection(true, Species.CAT) }
@@ -653,6 +653,7 @@ class ReportSightingViewModelTest {
           alertOwnedBy("owner")
               .copy(
                   id = "alert-$index",
+                  petId = "pet-$index",
                   lastKnownLocation =
                       Location(location.latitude, location.longitude + longitudeOffset),
               )
@@ -680,10 +681,11 @@ class ReportSightingViewModelTest {
     val lausanne = Location(46.52, 6.63)
     val zurich = Location(47.37, 8.54)
     alertRepository.publishAlert(
-        alertOwnedBy("owner").copy(id = "lausanne", lastKnownLocation = lausanne)
+        alertOwnedBy("owner")
+            .copy(id = "lausanne", petId = "lausanne", lastKnownLocation = lausanne)
     )
     alertRepository.publishAlert(
-        alertOwnedBy("owner").copy(id = "zurich", lastKnownLocation = zurich)
+        alertOwnedBy("owner").copy(id = "zurich", petId = "zurich", lastKnownLocation = zurich)
     )
     val vm =
         ReportSightingViewModel(
@@ -728,12 +730,13 @@ class ReportSightingViewModelTest {
         alertOwnedBy(signedInUid())
             .copy(
                 id = "preselected",
+                petId = "preselected",
                 petSpecies = Species.CAT,
                 lastKnownLocation = Location(47.37, 8.54),
             )
     alertRepository.publishAlert(distantAlert)
     alertRepository.publishAlert(
-        alertOwnedBy("owner").copy(id = "nearby", petSpecies = Species.DOG)
+        alertOwnedBy("owner").copy(id = "nearby", petId = "nearby", petSpecies = Species.DOG)
     )
     val vm =
         ReportSightingViewModel(
