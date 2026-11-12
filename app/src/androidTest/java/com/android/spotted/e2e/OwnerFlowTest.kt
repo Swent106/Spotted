@@ -48,7 +48,10 @@ class OwnerFlowTest : EndToEndTest() {
     signInAsNewUser(OWNER, firstName = "Owner")
     addPet()
     val ownerId = currentUid()
+    val petId = documents("pets", "ownerId", ownerId).single()[DOCUMENT_ID] as String
     val alertId = reportPetMissing(ownerId)
+    // #376: the pet now has an open alert, so it can't be reported missing again.
+    assertAlreadyReportedMissing(petId)
     signOut()
 
     signInAsNewUser(PASSERBY, firstName = "Passerby")
@@ -58,7 +61,13 @@ class OwnerFlowTest : EndToEndTest() {
     signOut()
 
     signInAgain(OWNER)
+    // #373: the owner is notified of the passerby's sighting.
+    awaitSightingNotification(petName)
+    // TODO(#356): once the notifications screen and bell badge land, assert the bell shows a badge
+    // of 1 here, open Notifications from the bell, and open My alert from the notification.
     confirmSightingAndCloseAlert(alertId, sightingId, ownerId)
+    // #376: with the pet home and its alert closed, it can be reported missing again.
+    assertReportableAgain(petId)
     signOut()
 
     signInAgain(PASSERBY)
@@ -198,6 +207,54 @@ class OwnerFlowTest : EndToEndTest() {
 
     val alert = documents("alerts", "ownerId", ownerId).single()
     assertEquals("The alert should be closed", "CLOSED", alert["status"])
+  }
+
+  /**
+   * #376: a pet with an open alert can't be reported missing again. Reopens Report missing, checks
+   * the pet is marked "Already reported missing", and that tapping it offers the existing alert
+   * (the dialog) instead of selecting it. Leaves Report missing without changing anything.
+   */
+  private fun assertAlreadyReportedMissing(petId: String) {
+    openReportMissing()
+    waitFor(
+        "${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}$petId",
+        "The missing pet should be marked as already reported",
+    )
+    node("${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId").scrollToAndClick()
+    waitFor(
+        ReportMissingScreenTestTags.ALREADY_MISSING_DIALOG,
+        "Tapping an already-missing pet should offer its existing alert",
+    )
+    node(ReportMissingScreenTestTags.DISMISS_ALREADY_MISSING_BUTTON).scrollToAndClick()
+    node(ReportMissingScreenTestTags.BACK_BUTTON).scrollToAndClick()
+    waitFor(HomeScreenTestTags.SCREEN, "Home should show again after leaving Report missing")
+  }
+
+  /**
+   * #376: once the pet is home and its alert is closed, it can be reported missing again. Reopens
+   * Report missing and checks the pet is no longer marked as already reported. Leaves without
+   * publishing.
+   */
+  private fun assertReportableAgain(petId: String) {
+    openReportMissing()
+    waitFor(
+        "${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId",
+        "The pet should be offered again once it is home",
+    )
+    assertFalse(
+        "The pet should no longer be marked as already reported",
+        exists("${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}$petId"),
+    )
+    node(ReportMissingScreenTestTags.BACK_BUTTON).scrollToAndClick()
+    waitFor(HomeScreenTestTags.SCREEN, "Home should show again after leaving Report missing")
+  }
+
+  /** Opens Report missing from Home. */
+  private fun openReportMissing() {
+    node(HomeScreenTestTags.BODY)
+        .performScrollToNode(hasTestTag(HomeScreenTestTags.REPORT_MISSING_BUTTON))
+    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).scrollToAndClick()
+    waitFor(ReportMissingScreenTestTags.SCREEN, "Report missing should open")
   }
 
   private fun signOut() {
