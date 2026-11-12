@@ -255,6 +255,107 @@ class ReportMissingContentTest {
   }
 
   @Test
+  fun petAlreadyMissing_isLabelledAndItsRadioIsDisabled() {
+    composeTestRule.setContent {
+      ReportMissingContent(
+          state =
+              ReportMissingUiState(
+                  pets = listOf(milo, luna),
+                  openAlertIdByPetId = mapOf("milo" to "alert-milo"),
+              )
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(
+            "${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}milo",
+            useUnmergedTree = true,
+        )
+        .assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag("${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}luna")
+        .assertDoesNotExist()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.ALL_PETS_MISSING).assertDoesNotExist()
+  }
+
+  @Test
+  fun allPetsMissing_saysSoAndPublishIsDisabled() {
+    composeTestRule.setContent {
+      ReportMissingContent(
+          state = ready.copy(openAlertIdByPetId = mapOf("milo" to "alert-milo")),
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.ALL_PETS_MISSING).assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+        .performScrollTo()
+        .assertIsNotEnabled()
+  }
+
+  @Test
+  fun alreadyMissingDialog_reportsOpenAndCancel() {
+    var opened = false
+    var dismissed = false
+    composeTestRule.setContent {
+      ReportMissingContent(
+          state =
+              ReportMissingUiState(
+                  pets = listOf(milo),
+                  openAlertIdByPetId = mapOf("milo" to "alert-milo"),
+                  alreadyMissingPetId = "milo",
+              ),
+          onOpenExistingAlert = { opened = true },
+          onDismissAlreadyMissing = { dismissed = true },
+      )
+    }
+
+    composeTestRule.onNodeWithText("Milo is already reported missing").assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.OPEN_ALERT_BUTTON).performClick()
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.DISMISS_ALREADY_MISSING_BUTTON)
+        .performClick()
+
+    assertTrue(opened)
+    assertTrue(dismissed)
+  }
+
+  @Test
+  fun screen_tappingAPetAlreadyMissing_opensItsAlert() {
+    val auth = FakeAuthRepository()
+    val owner = runBlocking { auth.signInWithGoogle("fake-token").getOrThrow() }
+    val pets = PetRepositoryLocal()
+    runBlocking { pets.addPet(milo.copy(ownerId = owner.uid)) }
+    val alerts = InMemoryAlertRepository()
+    alerts.published +=
+        Alert(
+            id = "alert-milo",
+            petId = "milo",
+            ownerId = owner.uid,
+            lastKnownLocation = parcBertrand,
+            lostAtMillis = 500L,
+            petName = "Milo",
+            petSpecies = Species.CAT,
+        )
+    val viewModel = ReportMissingViewModel(alerts, pets, auth, now = { 1_000L })
+    var openedAlertId: String? = null
+    composeTestRule.setContent {
+      ReportMissingScreen(
+          onBack = {},
+          onPublished = {},
+          onOpenAlert = { openedAlertId = it },
+          viewModel = viewModel,
+      )
+    }
+
+    composeTestRule.waitUntil(5_000) { viewModel.uiState.value.allPetsMissing }
+    composeTestRule.onNodeWithTag(petTag("milo")).performClick()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.OPEN_ALERT_BUTTON).performClick()
+
+    composeTestRule.waitUntil(5_000) { openedAlertId == "alert-milo" }
+  }
+
+  @Test
   fun back_reportsTheTap() {
     var back = false
     composeTestRule.setContent {

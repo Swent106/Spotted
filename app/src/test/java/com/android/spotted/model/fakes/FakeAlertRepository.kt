@@ -4,6 +4,7 @@ package com.android.spotted.model.fakes
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
@@ -35,6 +36,12 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     failure?.let {
       return Result.failure(it)
     }
+    // Like the real repository: a pet has at most one open alert
+    val open =
+        alerts.value.values.firstOrNull {
+          it.petId == alert.petId && it.id != alert.id && it.status == AlertStatus.OPEN
+        }
+    if (open != null) return Result.failure(AlertAlreadyOpenException(open.id))
     alerts.update { it + (alert.id to alert) }
     return Result.success(Unit)
   }

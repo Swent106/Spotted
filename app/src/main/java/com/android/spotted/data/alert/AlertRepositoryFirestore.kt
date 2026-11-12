@@ -5,6 +5,7 @@ package com.android.spotted.data.alert
 import android.util.Log
 import com.android.spotted.model.Location
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
@@ -36,14 +37,43 @@ class AlertRepositoryFirestore(
 
   override suspend fun publishAlert(alert: Alert): Result<Unit> {
     return try {
-      db.collection(collectionPath).document(alert.id).set(alert.toDto()).await()
+      // Alerts opened before the locks existed have none: find them with a query first. The
+      // transaction below is what stops two publishes made at the same time.
+      val alreadyOpen =
+          getOpenAlertsByOwner(alert.ownerId).getOrThrow().firstOrNull {
+            it.petId == alert.petId && it.id != alert.id
+          }
+      if (alreadyOpen != null) return Result.failure(AlertAlreadyOpenException(alreadyOpen.id))
+      val alertRef = db.collection(collectionPath).document(alert.id)
+      // A transaction cannot run a query, so each pet has one lock document (its id is the pet id)
+      // naming its latest alert. Reading and writing it in the same transaction means two
+      // concurrent publishes conflict on it: Firestore retries the second one, which then sees the
+      // first alert open and refuses.
+      val lockRef = db.collection(LOCK_COLLECTION).document(alert.petId)
+      db.runTransaction { transaction ->
+            val lockedAlertId = transaction.get(lockRef).getString(LOCK_ALERT_ID)
+            if (lockedAlertId != null && lockedAlertId != alert.id) {
+              val locked = transaction.get(db.collection(collectionPath).document(lockedAlertId))
+              // Closed or deleted alerts free the pet, so closeAlert needs no change
+              if (locked.exists() && locked.getString("status") == AlertStatus.OPEN.name) {
+                throw AlertAlreadyOpenException(lockedAlertId)
+              }
+            }
+            transaction.set(alertRef, alert.toDto())
+            transaction.set(lockRef, mapOf(LOCK_ALERT_ID to alert.id, "ownerId" to alert.ownerId))
+          }
+          .await()
       Result.success(Unit)
     } catch (e: Exception) {
       // Check if it's a coroutine cancellation
       if (e is kotlinx.coroutines.CancellationException) {
         throw e
       }
-      Result.failure(e)
+      // Firestore may wrap what the transaction throws: give back the refusal as it is
+      val alreadyOpen =
+          generateSequence<Throwable>(e) { it.cause }
+              .firstOrNull { it is AlertAlreadyOpenException }
+      Result.failure(alreadyOpen ?: e)
     }
   }
 
@@ -192,6 +222,9 @@ class AlertRepositoryFirestore(
       val snapshot =
           db.collection(collectionPath).whereEqualTo("ownerId", ownerId).limit(100).get().await()
       snapshot.documents.forEach { it.reference.delete().await() }
+      val locks =
+          db.collection(LOCK_COLLECTION).whereEqualTo("ownerId", ownerId).limit(100).get().await()
+      locks.documents.forEach { it.reference.delete().await() }
       Result.success(Unit)
     } catch (e: Exception) {
       if (e is kotlinx.coroutines.CancellationException) {
@@ -279,5 +312,8 @@ class AlertRepositoryFirestore(
 
   private companion object {
     const val TAG = "AlertRepositoryFirestore"
+    /** openPetAlerts/{petId}: alertId of the pet's latest alert, and its ownerId. */
+    const val LOCK_COLLECTION = "openPetAlerts"
+    const val LOCK_ALERT_ID = "alertId"
   }
 }

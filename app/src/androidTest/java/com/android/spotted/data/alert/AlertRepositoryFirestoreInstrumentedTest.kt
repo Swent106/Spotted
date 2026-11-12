@@ -7,11 +7,17 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.first
@@ -20,6 +26,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -60,6 +67,7 @@ class AlertRepositoryFirestoreInstrumentedTest {
       runCatching { firestore.collection("alerts").document(id).delete().await() }
     }
     createdPetIds.forEach { id ->
+      runCatching { firestore.collection("openPetAlerts").document(id).delete().await() }
       runCatching { firestore.collection("pets").document(id).delete().await() }
     }
     createdAlertIds.clear()
@@ -369,6 +377,107 @@ class AlertRepositoryFirestoreInstrumentedTest {
     createdAlertIds.add(alert.id)
     assertTrue("Alert should be published: ${result.exceptionOrNull()?.message}", result.isSuccess)
     return alert
+  }
+
+  /** A new open alert of the signed-in user for [petId], not published. */
+  private fun alertFor(petId: String) =
+      Alert(
+          id = repository.getNewId(),
+          petId = petId,
+          ownerId = auth.currentUser!!.uid,
+          lastKnownLocation = Location(latitude = 46.0, longitude = 6.0),
+          lostAtMillis = 1000L,
+          petName = "Rex",
+          petSpecies = Species.DOG,
+      )
+
+  @Test
+  fun publishAlert_twoAtOnceForTheSamePet_publishesOnlyOne() = runBlocking {
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, auth.currentUser!!.uid, "Rex")
+    val first = alertFor(petId)
+    val second = alertFor(petId)
+    createdAlertIds += listOf(first.id, second.id)
+
+    val results =
+        listOf(first, second)
+            .map { alert -> async(Dispatchers.IO) { repository.publishAlert(alert) } }
+            .awaitAll()
+
+    assertEquals("Exactly one publish should succeed: $results", 1, results.count { it.isSuccess })
+    val refusal = results.single { it.isFailure }.exceptionOrNull()
+    assertTrue(
+        "Expected AlertAlreadyOpenException, got $refusal",
+        refusal is AlertAlreadyOpenException,
+    )
+    val stored = firestore.collection("alerts").whereEqualTo("petId", petId).limit(10).get().await()
+    assertEquals(1, stored.size())
+  }
+
+  @Test
+  fun publishAlert_petWithAnOpenAlertFromBeforeTheLocks_isRefused() = runBlocking {
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, auth.currentUser!!.uid, "Rex")
+    val old = alertFor(petId)
+    createdAlertIds += old.id
+    repository.publishAlert(old).getOrThrow()
+    // Alerts opened before this change have no lock. The rules no longer let a client delete the
+    // lock of an open alert, so it is deleted as the emulator's admin.
+    deleteBypassingRules("openPetAlerts/$petId")
+    val second = alertFor(petId)
+    createdAlertIds += second.id
+
+    val result = repository.publishAlert(second)
+
+    assertEquals(old.id, (result.exceptionOrNull() as? AlertAlreadyOpenException)?.openAlertId)
+    assertEquals(null, repository.getAlertById(second.id).getOrThrow())
+  }
+
+  /**
+   * Deletes the document at [path] through the emulator's REST API as its admin, skipping rules.
+   */
+  private suspend fun deleteBypassingRules(path: String) {
+    val url =
+        URL(
+            "http://${firestore.firestoreSettings.host}/v1/projects/" +
+                "${firestore.app.options.projectId}/databases/(default)/documents/$path"
+        )
+    val code =
+        withContext(Dispatchers.IO) {
+          val connection = url.openConnection() as HttpURLConnection
+          try {
+            connection.requestMethod = "DELETE"
+            connection.setRequestProperty("Authorization", "Bearer owner")
+            connection.responseCode
+          } finally {
+            connection.disconnect()
+          }
+        }
+    assertEquals(HttpURLConnection.HTTP_OK, code)
+  }
+
+  @Test
+  fun publishAlert_afterTheOpenAlertIsClosed_succeeds() = runBlocking {
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, auth.currentUser!!.uid, "Rex")
+    val first = alertFor(petId)
+    createdAlertIds += first.id
+    repository.publishAlert(first).getOrThrow()
+    val second = alertFor(petId)
+    createdAlertIds += second.id
+    val refused = repository.publishAlert(second)
+    assertEquals(first.id, (refused.exceptionOrNull() as? AlertAlreadyOpenException)?.openAlertId)
+
+    // The rules refuse a closing time before lostAtMillis (1000)
+    nowMillis = 5_000L
+    repository.closeAlert(first.id).getOrThrow()
+    val result = repository.publishAlert(second)
+
+    assertTrue(
+        "Publish after closing should succeed: ${result.exceptionOrNull()}",
+        result.isSuccess,
+    )
+    assertEquals(AlertStatus.OPEN, repository.getAlertById(second.id).getOrThrow()?.status)
   }
 
   @Test

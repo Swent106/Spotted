@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.Flow
 interface AlertRepository {
   fun getNewId(): String
 
+  /**
+   * Publishes [alert]. Fails with [AlertAlreadyOpenException] if its pet already has an open alert,
+   * also when two publishes for the same pet race (from two taps or two devices).
+   */
   suspend fun publishAlert(alert: Alert): Result<Unit>
 
   /** Returns the alert with [id], or null when no such alert exists. */
