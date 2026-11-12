@@ -468,6 +468,8 @@ class AlertRepositoryFirestoreInstrumentedTest {
     val refused = repository.publishAlert(second)
     assertEquals(first.id, (refused.exceptionOrNull() as? AlertAlreadyOpenException)?.openAlertId)
 
+    // The rules refuse a closing time before lostAtMillis (1000)
+    nowMillis = 5_000L
     repository.closeAlert(first.id).getOrThrow()
     val result = repository.publishAlert(second)
 
