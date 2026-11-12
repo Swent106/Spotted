@@ -42,6 +42,7 @@ class MyAlertContentTest {
       onDismiss: (String) -> Unit = {},
       onMarkFound: () -> Unit = {},
       onBack: () -> Unit = {},
+      onShare: () -> Unit = {},
   ) {
     composeTestRule.setContent {
       MyAlertContent(
@@ -50,6 +51,7 @@ class MyAlertContentTest {
           onConfirm = onConfirm,
           onDismiss = onDismiss,
           onMarkFound = onMarkFound,
+          onShare = onShare,
           map = { markers, likelyArea, _, modifier ->
             drawnMarkers = markers
             drawnArea = likelyArea
@@ -192,6 +194,16 @@ class MyAlertContentTest {
     node(MyAlertScreenTestTags.PET_HOME_BUTTON).performScrollTo().performClick()
     node(MyAlertScreenTestTags.PET_HOME_CONFIRM).performClick()
     assertTrue(markedFound)
+  }
+
+  @Test
+  fun share_reportsTheTap() {
+    var shares = 0
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT), onShare = { shares++ })
+
+    node(MyAlertScreenTestTags.SHARE_BUTTON).performScrollTo().performClick()
+
+    assertEquals(1, shares)
   }
 
   @Test

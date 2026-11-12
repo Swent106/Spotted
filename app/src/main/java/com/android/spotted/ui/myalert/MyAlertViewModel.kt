@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.myalert
 
 import androidx.lifecycle.ViewModel
@@ -7,12 +8,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.alert.AlertRepositoryFirestore
+import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.location.AddressRepository
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.estimateLikelyArea
@@ -28,6 +31,8 @@ class MyAlertViewModel(
     private val sightingRepository: SightingRepository,
     private val authRepository: AuthRepository,
     private val now: () -> Long = System::currentTimeMillis,
+    /** Names the place the pet was last seen, for the shared text; null: coordinates instead. */
+    private val addressRepository: AddressRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(MyAlertUiState())
@@ -61,6 +66,7 @@ class MyAlertViewModel(
                       )
                     }
                     observeSightings(alert)
+                    loadPlaceName(alert)
                   }
                 }
               },
@@ -74,6 +80,11 @@ class MyAlertViewModel(
               },
           )
     }
+  }
+
+  private suspend fun loadPlaceName(alert: Alert) {
+    val name = addressRepository?.areaName(alert.lastKnownLocation)?.getOrNull() ?: return
+    _uiState.update { it.copy(placeName = name) }
   }
 
   private fun observeSightings(alert: Alert) {
@@ -164,6 +175,10 @@ class MyAlertViewModel(
               alertRepository = AlertRepositoryFirestore(),
               sightingRepository = SightingRepositoryFirestore(),
               authRepository = AuthRepositoryProvider.authRepository,
+              addressRepository =
+                  this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]?.let {
+                    AddressRepositoryGeocoder(it)
+                  },
           )
         }
       }

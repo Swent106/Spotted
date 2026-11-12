@@ -36,6 +36,17 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Shared alert links: spotted://alert/<alertId> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="alert"
+                    android:scheme="spotted" />
+            </intent-filter>
         </activity>
         <provider
             android:name="androidx.core.content.FileProvider"

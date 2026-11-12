@@ -33,6 +33,7 @@ import coil.ImageLoader
 import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
+import com.android.spotted.model.alert.alertIdFromLink
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.StartDestination
@@ -114,13 +115,16 @@ class MainActivity : ComponentActivity() {
     SightingNotifierViewModel.Factory(SystemNotifier(applicationContext))
   }
 
-  /** The route of a notification the user tapped, until it has been opened. */
+  /**
+   * The route of a notification the user tapped, or of an alert link they opened, until it has been
+   * opened.
+   */
   private var notificationRoute by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
-    if (savedInstanceState == null) notificationRoute = notificationRouteOf(intent)
+    if (savedInstanceState == null) notificationRoute = routeOf(intent)
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
@@ -146,11 +150,11 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  /** The app was already running when a notification was tapped (it is `singleTop`). */
+  /** The app was already running when a notification or a link was tapped (it is `singleTop`). */
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    notificationRouteOf(intent)?.let { notificationRoute = it }
+    routeOf(intent)?.let { notificationRoute = it }
   }
 
   /**
@@ -169,6 +173,16 @@ class MainActivity : ComponentActivity() {
         }
     )
   }
+}
+
+/**
+ * The screen [intent] asks for: the route of a tapped notification, or the alert of a
+ * `spotted://alert/<alertId>` link; null for any other intent (e.g. the launcher's). Like a
+ * notification, a link reopened from Recents opens nothing.
+ */
+fun routeOf(intent: Intent): String? {
+  if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
+  return notificationRouteOf(intent) ?: alertIdFromLink(intent.dataString)?.let(Route::alertDetail)
 }
 
 /**
@@ -242,8 +256,9 @@ fun StartRouting(destination: StartDestination, navController: NavController) {
 }
 
 /**
- * Opens the [route] of a tapped notification, above Home. It waits for Home, so a cold start isn't
- * undone by [StartRouting] clearing the back stack. Must come after [StartRouting].
+ * Opens the [route] of a tapped notification or an opened alert link, above Home. It waits for
+ * Home, so a cold start isn't undone by [StartRouting] clearing the back stack, and a signed-out
+ * user signs in first. Must come after [StartRouting].
  */
 @Composable
 fun NotificationRouting(
