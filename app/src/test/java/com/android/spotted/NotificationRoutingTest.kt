@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted
 
+import android.content.Intent
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,8 +12,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.ui.StartDestination
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -91,5 +94,19 @@ class NotificationRoutingTest {
 
     assertEquals(Route.HOME, currentRoute())
     assertEquals(1, opened)
+  }
+
+  @Test
+  fun notificationRouteOf_acceptsOnlyAlertRoutes_andIgnoresRelaunchesFromRecents() {
+    fun intentWith(route: String) = Intent().putExtra(EXTRA_ROUTE, route)
+
+    assertEquals(Route.myAlert("a"), notificationRouteOf(intentWith(Route.myAlert("a"))))
+    assertEquals(Route.alertDetail("a"), notificationRouteOf(intentWith(Route.alertDetail("a"))))
+
+    assertNull("no notification", notificationRouteOf(Intent()))
+    assertNull("another screen", notificationRouteOf(intentWith(Route.EDIT_PROFILE)))
+    val relaunch =
+        intentWith(Route.myAlert("a")).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+    assertNull("relaunch from Recents", notificationRouteOf(relaunch))
   }
 }

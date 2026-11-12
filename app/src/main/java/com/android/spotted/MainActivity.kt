@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
+import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
@@ -39,6 +40,7 @@ import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
 import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.components.RequestNotificationPermissionOnce
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
@@ -49,6 +51,8 @@ import com.android.spotted.ui.linktag.LinkTagViewModel
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
+import com.android.spotted.ui.notifications.NotificationsScreen
+import com.android.spotted.ui.notifications.SightingNotifierViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -89,6 +93,8 @@ object Route {
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
+  /** New sightings on all the owner's alerts, opened from the Home bell. */
+  const val NOTIFICATIONS = "notifications"
 
   fun petProfile(petId: String) = "$PET/$petId"
 
@@ -107,13 +113,17 @@ class MainActivity : ComponentActivity() {
 
   private val mainViewModel: MainViewModel by viewModels { MainViewModel.Factory }
 
+  private val sightingNotifierViewModel: SightingNotifierViewModel by viewModels {
+    SightingNotifierViewModel.Factory(SystemNotifier(applicationContext))
+  }
+
   /** The route of a notification the user tapped, until it has been opened. */
   private var notificationRoute by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
-    if (savedInstanceState == null) notificationRoute = intent.getStringExtra(EXTRA_ROUTE)
+    if (savedInstanceState == null) notificationRoute = notificationRouteOf(intent)
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
@@ -127,6 +137,8 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,
         ) {
+          val notifierState by sightingNotifierViewModel.uiState.collectAsState()
+          if (notifierState.isSignedIn) RequestNotificationPermissionOnce()
           SpottedApp(
               viewModel = mainViewModel,
               notificationRoute = notificationRoute,
@@ -141,7 +153,7 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
+    notificationRouteOf(intent)?.let { notificationRoute = it }
   }
 
   /**
@@ -159,6 +171,17 @@ class MainActivity : ComponentActivity() {
           }
         }
     )
+  }
+}
+
+/**
+ * The route a notification asks [intent] to open, if any. A relaunch from Recents repeats the old
+ * intent, so it opens nothing. MainActivity is exported, so only the alert screens are allowed.
+ */
+internal fun notificationRouteOf(intent: Intent): String? {
+  if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
+  return intent.getStringExtra(EXTRA_ROUTE)?.takeIf {
+    it.startsWith(Route.myAlert("")) || it.startsWith(Route.alertDetail(""))
   }
 }
 
@@ -291,8 +314,15 @@ fun NavGraphBuilder.homeDestinations(
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
+          onNotificationsClick = navigation.onNotificationsClick,
       )
     },
+    notificationsContent:
+        @Composable
+        (onBack: () -> Unit, onOpenAlert: (alertId: String) -> Unit) -> Unit =
+        { onBack, onOpenAlert ->
+          NotificationsScreen(onBack = onBack, onOpenAlert = onOpenAlert)
+        },
     myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
       MyAlertScreen(
           viewModel = viewModel(key = alertId, factory = MyAlertViewModel.Factory(alertId)),
@@ -300,7 +330,16 @@ fun NavGraphBuilder.homeDestinations(
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
-      ReportMissingScreen(onBack = onDone, onPublished = onDone)
+      ReportMissingScreen(
+          onBack = onDone,
+          onPublished = onDone,
+          // My alert replaces Report missing, so Back from it returns to Home
+          onOpenAlert = { alertId ->
+            navController.navigate(Route.myAlert(alertId)) {
+              popUpTo(Route.REPORT_MISSING) { inclusive = true }
+            }
+          },
+      )
     },
     alertDetailContent:
         @Composable
@@ -388,8 +427,15 @@ fun NavGraphBuilder.homeDestinations(
             onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
             onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
+            onNotificationsClick =
+                dropUnlessResumed { navController.navigate(Route.NOTIFICATIONS) },
         )
     )
+  }
+  composable(Route.NOTIFICATIONS) { entry ->
+    notificationsContent({ navController.popBackStackSafely() }) { alertId ->
+      if (entry.isResumed()) navController.navigate(Route.myAlert(alertId))
+    }
   }
   composable(Route.PROFILE) {
     profileContent(
@@ -466,4 +512,6 @@ data class HomeNavigation(
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
+    /** Opens the Notifications screen (the bell). */
+    val onNotificationsClick: () -> Unit = {},
 )
