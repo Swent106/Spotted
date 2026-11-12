@@ -84,6 +84,9 @@ firebase emulators:start                     # start Auth + Firestore emulators
 ## Links
 
 - Mockups: https://www.figma.com/design/Bb3hpy0YXe1jnjbBdt3Puk/Spotted-%E2%80%94-App-Screens?node-id=0-1&m=dev&t=wCctH9Uyp2n25q7d-1)
+- Architecture diagram: [`docs/architecture/Full Diagram.svg`](docs/architecture/Full%20Diagram.svg).
+  Its editable source is [`architecture.excalidraw`](docs/architecture/architecture.excalidraw):
+  open it in https://excalidraw.com, update it when a feature is merged, then export the SVG again.
 
 
 ---
