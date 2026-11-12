@@ -151,6 +151,8 @@ class OwnerFlowTest : EndToEndTest() {
     waitUntil("The GPS position should fill the sighting's location") {
       composeTestRule.onAllNodes(hasText("Taken from your GPS")).fetchSemanticsNodes().isNotEmpty()
     }
+    // The passerby says the pet went north-east: NE is 45 degrees clockwise from north
+    node(DIRECTION_NE_TAG).performScrollTo().performClick()
     node(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
@@ -159,6 +161,7 @@ class OwnerFlowTest : EndToEndTest() {
 
     val sighting = documents("sightings", "reporterId", reporterId).single()
     assertEquals("The sighting should be for the alert", alertId, sighting["alertId"])
+    assertEquals("The sighting should record the NE heading", 45L, sighting["headingDegrees"])
     return sighting[DOCUMENT_ID] as String
   }
 
@@ -177,6 +180,12 @@ class OwnerFlowTest : EndToEndTest() {
 
     val status = MyAlertScreenTestTags.status(sightingId)
     waitFor(MyAlertScreenTestTags.sighting(sightingId), "My alert should list the sighting")
+    waitUntil("My alert should show the sighting went NE") {
+      composeTestRule
+          .onAllNodes(hasTestTag(directionTag(sightingId)) and hasText("Went NE"))
+          .fetchSemanticsNodes()
+          .isNotEmpty()
+    }
     assertStatus(status, "To review")
     node(MyAlertScreenTestTags.confirm(sightingId)).scrollToAndClick()
     waitUntil("The sighting should show as confirmed") { hasStatus(status, "Confirmed") }
@@ -221,5 +230,11 @@ class OwnerFlowTest : EndToEndTest() {
     val OWNER = TestAccount(name = "Owner Tester", email = "owner@spotted.test", sub = "e2e-owner")
     val PASSERBY =
         TestAccount(name = "Passerby Tester", email = "passerby@spotted.test", sub = "e2e-passerby")
+
+    /** The north-east tile of the sighting form's DirectionPicker (see DirectionPicker). */
+    const val DIRECTION_NE_TAG = "sighting_direction_ne"
+
+    /** My alert's direction row for a sighting (see MyAlertScreen). */
+    fun directionTag(sightingId: String) = "alertDetail_sightingDirection_$sightingId"
   }
 }
