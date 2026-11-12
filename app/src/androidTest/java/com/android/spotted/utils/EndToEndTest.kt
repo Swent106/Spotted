@@ -1,6 +1,9 @@
 package com.android.spotted.utils
 
 import android.Manifest
+import android.app.Notification
+import android.app.NotificationManager
+import android.content.Context
 import android.os.Build
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -13,6 +16,7 @@ import androidx.credentials.CredentialManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.MainActivity
+import com.android.spotted.R
 import com.android.spotted.data.location.LocationRepositoryFused
 import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.model.location.LocationRepository
@@ -94,6 +98,22 @@ abstract class EndToEndTest {
 
   protected fun exists(tag: String): Boolean =
       composeTestRule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
+
+  /**
+   * Waits until the app has posted the "Someone saw [petName]" sighting notification. Android posts
+   * notifications asynchronously, so this polls [NotificationManager.getActiveNotifications] until
+   * one with that title appears. Mirrors the await-posted-notification helper from #346.
+   */
+  protected fun awaitSightingNotification(petName: String) {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val expectedTitle = context.getString(R.string.notification_sighting_title, petName)
+    waitUntil("A \"$expectedTitle\" notification should be posted for the owner") {
+      manager.activeNotifications.any { posted ->
+        posted.notification.extras.getString(Notification.EXTRA_TITLE) == expectedTitle
+      }
+    }
+  }
 
   /**
    * Documents of [collection] whose [field] is [value], read from the Firestore emulator. Each map
