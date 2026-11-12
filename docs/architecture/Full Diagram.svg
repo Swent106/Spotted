@@ -4,7 +4,7 @@
 <marker id="tri" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse"><path d="M1,1 L11,6 L1,11 z" fill="#ffffff" stroke="#374151" stroke-width="1.5"/></marker>
 </defs>
 <rect width="4700" height="1400" fill="#ffffff"/>
-<text x="20" y="52" font-size="32" fill="#111827" font-weight="bold">Spotted: architecture (MVVM)</text>
+<text x="20" y="52" font-size="32" fill="#111827" font-weight="bold">Spotted: architecture (MVVM) · M2</text>
 <text x="20" y="80" font-size="18" fill="#4b5563">View → ViewModel → repository interface (model/) → implementation (data/) → Android platform &amp; Firebase</text>
 <rect x="20" y="100" width="4660" height="150" rx="10" fill="#fafafa" stroke="#9ca3af" stroke-dasharray="8 6"/>
 <text x="34" y="130" font-size="17" fill="#374151" font-weight="bold">View</text>
@@ -162,8 +162,9 @@
 <text x="920" y="605" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">PetRepository</text>
 <text x="920" y="625" font-size="16" text-anchor="middle" fill="#111827">Pet</text>
 <rect x="1056" y="555" width="232" height="110" rx="10" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
-<text x="1172" y="605" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">AlertRepository</text>
-<text x="1172" y="625" font-size="16" text-anchor="middle" fill="#111827">Alert</text>
+<text x="1172" y="595" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">AlertRepository</text>
+<text x="1172" y="615" font-size="16" text-anchor="middle" fill="#111827">Alert</text>
+<text x="1172" y="635" font-size="16" text-anchor="middle" fill="#111827">offline cache (last alerts)</text>
 <rect x="1308" y="555" width="232" height="110" rx="10" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
 <text x="1424" y="595" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">SightingRepository</text>
 <text x="1424" y="615" font-size="16" text-anchor="middle" fill="#111827">Sighting · CompassLabel</text>
@@ -260,25 +261,6 @@
 <text x="2684" y="1290" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Physical NFC tag</text>
 <text x="2684" y="1310" font-size="16" text-anchor="middle" fill="#111827">on the pet's collar</text>
 <text x="2684" y="1330" font-size="16" text-anchor="middle" fill="#111827">https://…/t/{tagId}</text>
-<text x="3848" y="580" font-size="20" font-weight="bold" fill="#111827">Legend</text>
-<rect x="3848" y="600" width="210" height="34" rx="10" fill="#dbeafe" stroke="#1e40af" stroke-width="2"/>
-<text x="3953" y="622" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">View (Compose)</text>
-<rect x="3848" y="644" width="210" height="34" rx="10" fill="#f3e8ff" stroke="#6b21a8" stroke-width="2"/>
-<text x="3953" y="666" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">ViewModel</text>
-<rect x="3848" y="688" width="210" height="34" rx="10" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
-<text x="3953" y="710" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Interface / model</text>
-<rect x="3848" y="732" width="210" height="34" rx="10" fill="#ffedd5" stroke="#9a3412" stroke-width="2"/>
-<text x="3953" y="754" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Implementation</text>
-<rect x="3848" y="776" width="210" height="34" rx="10" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
-<text x="3953" y="798" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Android platform / device</text>
-<rect x="3848" y="820" width="210" height="34" rx="10" fill="#fef9c3" stroke="#a16207" stroke-width="2"/>
-<text x="3953" y="842" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Firebase product</text>
-<line x1="3848" y1="884" x2="3918" y2="884" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
-<text x="3933" y="889" font-size="16" fill="#111827">calls / uses</text>
-<line x1="3848" y1="918" x2="3918" y2="918" stroke="#374151" stroke-width="2" stroke-dasharray="10 6" marker-end="url(#tri)"/>
-<text x="3933" y="923" font-size="16" fill="#111827">implements</text>
-<line x1="3848" y1="952" x2="3918" y2="952" stroke="#374151" stroke-width="2" stroke-dasharray="3 5" marker-end="url(#arrow)"/>
-<text x="3933" y="957" font-size="16" fill="#111827">physical interaction</text>
 <line x1="501.13513513513516" y1="235" x2="467.0810810810811" y2="285" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
 <line x1="582.8648648648649" y1="235" x2="616.918918918919" y2="285" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
 <line x1="920" y1="235" x2="920" y2="285" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -329,4 +311,61 @@
 <line x1="2684" y1="1250" x2="2684" y2="1170" stroke="#374151" stroke-width="1.5" stroke-dasharray="3 5" marker-end="url(#arrow)"/>
 <rect x="2634" y="1198" width="100" height="22" rx="4" fill="#ffffff"/>
 <text x="2684" y="1214" font-size="14" text-anchor="middle" fill="#374151">read / write</text>
+<!-- Legend -->
+<text x="150" y="1282" font-size="20" font-weight="bold" fill="#111827">Legend</text>
+<rect x="260" y="1252" width="210" height="34" rx="10" fill="#dbeafe" stroke="#1e40af" stroke-width="2"/>
+<text x="365" y="1274" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">View (Compose)</text>
+<rect x="480" y="1252" width="210" height="34" rx="10" fill="#f3e8ff" stroke="#6b21a8" stroke-width="2"/>
+<text x="585" y="1274" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">ViewModel</text>
+<rect x="700" y="1252" width="210" height="34" rx="10" fill="#dcfce7" stroke="#166534" stroke-width="2"/>
+<text x="805" y="1274" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Interface / model</text>
+<rect x="920" y="1252" width="210" height="34" rx="10" fill="#ffedd5" stroke="#9a3412" stroke-width="2"/>
+<text x="1025" y="1274" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Implementation</text>
+<rect x="1140" y="1252" width="210" height="34" rx="10" fill="#f3f4f6" stroke="#374151" stroke-width="2"/>
+<text x="1245" y="1274" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Android platform / device</text>
+<rect x="1360" y="1252" width="210" height="34" rx="10" fill="#fef9c3" stroke="#a16207" stroke-width="2"/>
+<text x="1465" y="1274" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Firebase product</text>
+<line x1="260" y1="1326" x2="330" y2="1326" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="345" y="1331" font-size="16" fill="#111827">calls / uses</text>
+<line x1="560" y1="1326" x2="630" y2="1326" stroke="#374151" stroke-width="2" stroke-dasharray="10 6" marker-end="url(#tri)"/>
+<text x="645" y="1331" font-size="16" fill="#111827">implements</text>
+<line x1="860" y1="1326" x2="930" y2="1326" stroke="#374151" stroke-width="2" stroke-dasharray="3 5" marker-end="url(#arrow)"/>
+<text x="945" y="1331" font-size="16" fill="#111827">physical interaction</text>
+<rect x="1200" y="1309" width="260" height="34" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="1330" y="1331" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Planned (upcoming sprints)</text>
+<!-- Planned components -->
+<rect x="3828" y="555" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="3944" y="584" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">TrustScore</text>
+<text x="3944" y="604" font-size="16" text-anchor="middle" fill="#111827">from confirmed and</text>
+<text x="3944" y="624" font-size="16" text-anchor="middle" fill="#111827">false sightings · levels</text>
+<text x="3944" y="655" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<rect x="3828" y="805" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="3944" y="834" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">TrustedScoreWriter</text>
+<text x="3944" y="854" font-size="16" text-anchor="middle" fill="#111827">only path that updates</text>
+<text x="3944" y="874" font-size="16" text-anchor="middle" fill="#111827">trust counters</text>
+<text x="3944" y="905" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<line x1="3944" y1="805" x2="3944" y2="665" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="4080" y="555" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="4196" y="594" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">BlockRepository</text>
+<text x="4196" y="614" font-size="16" text-anchor="middle" fill="#111827">blocked users</text>
+<text x="4196" y="655" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<rect x="4080" y="805" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="4196" y="844" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">BlockRepository</text>
+<text x="4196" y="864" font-size="16" text-anchor="middle" fill="#111827">Firestore</text>
+<text x="4196" y="905" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<line x1="4196" y1="805" x2="4196" y2="665" stroke="#374151" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#tri)"/>
+<rect x="4332" y="555" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="4448" y="594" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">UserReportRepository</text>
+<text x="4448" y="614" font-size="16" text-anchor="middle" fill="#111827">UserReport · reason</text>
+<text x="4448" y="655" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<rect x="4332" y="805" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="4448" y="844" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">UserReportRepository</text>
+<text x="4448" y="864" font-size="16" text-anchor="middle" fill="#111827">Firestore</text>
+<text x="4448" y="905" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<line x1="4448" y1="805" x2="4448" y2="665" stroke="#374151" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#tri)"/>
+<rect x="2860" y="1250" width="232" height="110" rx="10" fill="#fdf2f8" stroke="#be185d" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="2976" y="1289" font-size="16" text-anchor="middle" fill="#111827" font-weight="bold">Tag web page</text>
+<text x="2976" y="1309" font-size="16" text-anchor="middle" fill="#111827">for finders without the app</text>
+<text x="2976" y="1350" font-size="12" text-anchor="middle" fill="#be185d" font-style="italic">Planned · upcoming sprints</text>
+<line x1="2800" y1="1305" x2="2860" y2="1305" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
 </svg>
