@@ -1,7 +1,6 @@
 <resources>
     <string name="app_name">Spotted</string>
     <string name="title_activity_main">@string/app_name</string>
-    <string name="title_activity_second">SecondActivity</string>
     <string name="back">Back</string>
     <string name="share">Share</string>
     <string name="pet_profile_title">Pet profile</string>
@@ -49,6 +48,7 @@
     <string name="pet_profile_subtitle">Your pet</string>
     <string name="pet_profile_view_photo">View photo</string>
     <string name="pet_profile_edit">Edit %1$s</string>
+    <string name="pet_profile_link_tag">Link a tag</string>
     <string name="pet_profile_delete">Delete %1$s</string>
     <string name="pet_profile_delete_title">Delete %1$s?</string>
     <string name="pet_profile_delete_message">%1$s’s profile and photo will be removed for good. This can’t be undone.</string>
@@ -89,6 +89,7 @@
     <string name="sighting_photo_add">Add Photo</string>
     <string name="sighting_photo_retake">Retake</string>
     <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
+    <string name="sighting_no_missing_pet_matches_nearby">No missing pet matches nearby</string>
     <string name="notification_channel_sightings">Sightings</string>
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>

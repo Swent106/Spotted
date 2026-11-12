@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.photo
 
 import android.net.Uri
@@ -29,20 +30,26 @@ class PhotoRepositoryFirebaseStorage(
   }
 
   override suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit> =
-      storageResult {
-        withContext(Dispatchers.IO) {
-          try {
-            Tasks.await(storage.reference.child(petPhotoPath(ownerId, petId)).delete())
-          } catch (exception: Exception) {
-            val isMissingPhoto =
-                generateSequence(exception as Throwable?) { it.cause }
-                    .filterIsInstance<StorageException>()
-                    .any { it.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND }
-            if (!isMissingPhoto) throw exception
-          }
-          Unit
-        }
+      delete(petPhotoPath(ownerId, petId))
+
+  override suspend fun deleteProfilePhoto(userId: String): Result<Unit> =
+      delete(profilePhotoPath(userId))
+
+  /** Deletes the file at [path]; a missing file succeeds. */
+  private suspend fun delete(path: String): Result<Unit> = storageResult {
+    withContext(Dispatchers.IO) {
+      try {
+        Tasks.await(storage.reference.child(path).delete())
+      } catch (exception: Exception) {
+        val isMissingPhoto =
+            generateSequence(exception as Throwable?) { it.cause }
+                .filterIsInstance<StorageException>()
+                .any { it.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND }
+        if (!isMissingPhoto) throw exception
       }
+      Unit
+    }
+  }
 
   override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
       storageResult {

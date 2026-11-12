@@ -206,6 +206,13 @@ class PersonalInfoViewModel(
           return@launch
         }
       }
+      // A removed photo is deleted too, or it would come back the next time the profile opens
+      if (repository != null && photoUri == null && currentState.isEditing) {
+        repository.deleteProfilePhoto(signedInUser.uid).onFailure {
+          _uiState.update { it.copy(isSaving = false, errorMessage = PHOTO_DELETE_FAILED) }
+          return@launch
+        }
+      }
       userRepository
           .saveUser(profile)
           .fold(
@@ -230,6 +237,7 @@ class PersonalInfoViewModel(
     const val SAVE_FAILED = "Couldn't save your profile. Please try again."
     const val PHOTO_UPLOAD_FAILED =
         "Couldn't upload your photo. Try again, or remove it to save without one."
+    const val PHOTO_DELETE_FAILED = "Couldn't remove your photo. Please try again."
     const val LOCATION_UNAVAILABLE =
         "Couldn't find your position. Tap the map to place your home instead."
     const val LOCATION_PERMISSION_DENIED =

@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.Flow
 interface AlertRepository {
   fun getNewId(): String
 
+  /**
+   * Publishes [alert]. Fails with [AlertAlreadyOpenException] if its pet already has an open alert,
+   * also when two publishes for the same pet race (from two taps or two devices).
+   */
   suspend fun publishAlert(alert: Alert): Result<Unit>
 
   /** Returns the alert with [id], or null when no such alert exists. */
@@ -24,6 +28,18 @@ interface AlertRepository {
    * closed keeps its first closing time. Fails with [NoSuchElementException] if it doesn't exist.
    */
   suspend fun closeAlert(alertId: String): Result<Unit>
+
+  /**
+   * Moves the last seen place of the open alert [alertId] to [location], seen at [seenAtMillis],
+   * when that is newer than its current [Alert.lastSeenAt]. Returns true if the alert moved, false
+   * if it was left as it is (older or same time, or alert closed). Fails with
+   * [NoSuchElementException] if it doesn't exist.
+   */
+  suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean>
 
   /**
    * Returns open alerts within the inclusive [radiusKm] of [center], filtered by exact distance and

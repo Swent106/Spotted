@@ -1,6 +1,9 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.linktag
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.provider.Settings
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,19 +29,27 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.spotted.R
 import com.android.spotted.model.tag.NfcAvailability
+import com.android.spotted.model.tag.TagWriter
 import com.android.spotted.ui.addpets.FormCard
 import com.android.spotted.ui.addpets.SectionLabel
+import com.android.spotted.ui.components.rememberNfcAvailability
+import com.android.spotted.ui.components.rememberNfcTagReader
+import com.android.spotted.ui.components.rememberNfcTagWriter
 import com.android.spotted.ui.editpet.PetScreenHeader
 import com.android.spotted.ui.petprofile.TexturedBackground
 import com.android.spotted.ui.theme.SpottedTheme
@@ -59,6 +70,59 @@ object LinkTagScreenTestTags {
   const val RETRY_BUTTON = "link_tag_retry_button"
   const val DONE_BUTTON = "link_tag_done_button"
   const val CANCEL_BUTTON = "link_tag_cancel_button"
+}
+
+/**
+ * Links an NFC tag to a pet (Figma 15c, 15d and 15e), wired to [viewModel]. Calls [onDone] once the
+ * tag is linked and [onCancel] when the owner leaves without linking.
+ *
+ * Only [writer] touches the tag: the screen never collects the tag reader's scans, as only one
+ * reader or writer can be active at a time. The reader only reports [nfcAvailability]. Both default
+ * to the phone's NFC; tests pass their own.
+ */
+@Composable
+fun LinkTagScreen(
+    viewModel: LinkTagViewModel,
+    modifier: Modifier = Modifier,
+    onDone: () -> Unit = {},
+    onCancel: () -> Unit = {},
+    writer: TagWriter = rememberNfcTagWriter(),
+    nfcAvailability: NfcAvailability = rememberNfcAvailability(rememberNfcTagReader()).value,
+) {
+  val state by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
+
+  // Android turns NFC reader mode off when the screen pauses: stop waiting, so the owner starts
+  // again with the writer of the screen that is shown (e.g. after a rotation).
+  LifecycleResumeEffect(viewModel) { onPauseOrDispose { viewModel.cancel() } }
+
+  LinkTagContent(
+      state = state,
+      nfcAvailability = nfcAvailability,
+      modifier = modifier,
+      onShowPhoneChange = viewModel::onShowPhoneChanged,
+      onShowEmailChange = viewModel::onShowEmailChanged,
+      onStart = { viewModel.start(writer) },
+      onRetry = { viewModel.start(writer) },
+      onDone = onDone,
+      onCancel = {
+        viewModel.cancel()
+        onCancel()
+      },
+      onOpenNfcSettings = { openNfcSettings(context::startActivity) },
+  )
+}
+
+/**
+ * Opens the system NFC settings with [startActivity], or the wireless settings on phones that have
+ * no NFC settings screen.
+ */
+internal fun openNfcSettings(startActivity: (Intent) -> Unit) {
+  try {
+    startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+  } catch (_: ActivityNotFoundException) {
+    startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+  }
 }
 
 /**

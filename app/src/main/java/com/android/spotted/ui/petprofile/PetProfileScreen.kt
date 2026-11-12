@@ -74,6 +74,7 @@ object PetProfileScreenTestTags {
   const val BACK_BUTTON = "pet_profile_back_button"
   const val EDIT_BUTTON = "petProfile_editButton"
   const val DELETE_BUTTON = "petProfile_deleteButton"
+  const val LINK_TAG_BUTTON = "pet_profile_link_tag_button"
   const val DELETE_ERROR = "petProfile_deleteError"
   const val DELETE_DIALOG = "petProfile_deleteDialog"
   const val DELETE_CONFIRM = "petProfile_deleteConfirm"
@@ -85,7 +86,8 @@ object PetProfileScreenTestTags {
 /**
  * The profile of one of the user's pets (Figma "21 · Pet profile"), wired to its ViewModels:
  * [viewModel] shows the pet and [deleteViewModel] deletes it. Calls [onEdit] with the pet's id to
- * open the edit form, and [onDeleted] once the pet is deleted.
+ * open the edit form and [onLinkTag] with it to link an NFC tag, and [onDeleted] once the pet is
+ * deleted.
  */
 @Composable
 fun PetProfileScreen(
@@ -95,6 +97,7 @@ fun PetProfileScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     onEdit: (String) -> Unit = {},
+    onLinkTag: (String) -> Unit = {},
     onDeleted: () -> Unit = {},
 ) {
   // Loaded on every resume (e.g. back from the edit form, so the changes are shown) and when
@@ -135,6 +138,7 @@ fun PetProfileScreen(
           },
       onBack = onBack,
       onEdit = { state.pet?.id?.let(onEdit) },
+      onLinkTag = { state.pet?.id?.let(onLinkTag) },
       onDelete = { showDeleteDialog = true },
       onConfirmDelete = {
         showDeleteDialog = false
@@ -161,6 +165,7 @@ fun PetProfileContent(
     @StringRes deleteError: Int? = null,
     onBack: () -> Unit = {},
     onEdit: () -> Unit = {},
+    onLinkTag: () -> Unit = {},
     onDelete: () -> Unit = {},
     onConfirmDelete: () -> Unit = {},
     onCancelDelete: () -> Unit = {},
@@ -208,7 +213,7 @@ fun PetProfileContent(
         }
       }
       state.pet?.let { pet ->
-        PetProfileFooter(pet.name, canDelete, isDeleting, deleteError, onEdit, onDelete)
+        PetProfileFooter(pet.name, canDelete, isDeleting, deleteError, onEdit, onLinkTag, onDelete)
       }
     }
   }
@@ -395,6 +400,7 @@ private fun PetProfileFooter(
     isDeleting: Boolean,
     @StringRes deleteError: Int?,
     onEdit: () -> Unit,
+    onLinkTag: () -> Unit,
     onDelete: () -> Unit,
 ) {
   Spacer(Modifier.height(12.dp))
@@ -408,6 +414,24 @@ private fun PetProfileFooter(
                 .testTag(PetProfileScreenTestTags.DELETE_ERROR),
     )
   }
+  val linkShape = RoundedCornerShape(14.dp)
+  Box(
+      contentAlignment = Alignment.Center,
+      modifier =
+          Modifier.fillMaxWidth()
+              .height(49.dp)
+              .clip(linkShape)
+              .background(SpottedTheme.colors.surface)
+              .border(1.dp, SpottedTheme.colors.blue, linkShape)
+              .clickable(role = Role.Button, onClick = onLinkTag)
+              .testTag(PetProfileScreenTestTags.LINK_TAG_BUTTON),
+  ) {
+    Text(
+        stringResource(R.string.pet_profile_link_tag),
+        style = jakarta(15, 20f, 700, SpottedTheme.colors.blue),
+    )
+  }
+  Spacer(Modifier.height(10.dp))
   Button(
       onClick = onEdit,
       shape = RoundedCornerShape(14.dp),
