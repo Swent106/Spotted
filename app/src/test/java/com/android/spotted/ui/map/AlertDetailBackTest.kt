@@ -7,6 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -22,6 +25,9 @@ import com.android.spotted.homeDestinations
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.ui.alertdetail.AlertDetailContent
+import com.android.spotted.ui.alertdetail.AlertDetailTestTags
+import com.android.spotted.ui.alertdetail.AlertDetailUiState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -137,6 +143,26 @@ class AlertDetailBackTest {
     assertEquals(46.3, map.mapCenter.latitude, 0.001)
     assertEquals(6.2, map.mapCenter.longitude, 0.001)
     assertEquals(16.0, map.zoomLevelDouble, 0.01)
+  }
+
+  @Test
+  fun whileLoading_onError_orNotFound_theBackButtonIsThere() {
+    val states =
+        listOf(
+            AlertDetailUiState(isLoading = true),
+            AlertDetailUiState(errorMessage = "Could not load the alert"),
+            AlertDetailUiState(notFound = true),
+        )
+    var state by mutableStateOf(states.first())
+    var backs = 0
+    composeTestRule.setContent { AlertDetailContent(state = state, onBack = { backs++ }) }
+
+    states.forEachIndexed { index, next ->
+      state = next
+      composeTestRule.waitForIdle()
+      tap(AlertDetailTestTags.BACK)
+      assertEquals("Back in state $index", index + 1, backs)
+    }
   }
 
   /** The map currently on screen. */
