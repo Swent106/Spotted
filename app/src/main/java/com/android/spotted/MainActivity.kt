@@ -346,12 +346,15 @@ fun NavGraphBuilder.homeDestinations(
           },
       )
     },
-    alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
-        { alertId, onReportSighting ->
+    alertDetailContent:
+        @Composable
+        (alertId: String, onReportSighting: () -> Unit, onBack: () -> Unit) -> Unit =
+        { alertId, onReportSighting, onBack ->
           AlertDetailScreen(
               viewModel = viewModel(factory = AlertDetailViewModel.Factory),
               alertId = alertId,
               onReportSighting = onReportSighting,
+              onBack = onBack,
           )
         },
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -483,6 +486,8 @@ fun NavGraphBuilder.homeDestinations(
     alertDetailContent(
         alertId,
         dropUnlessResumed { navController.navigate(Route.reportSighting(alertId)) },
+        // Back to the screen it was opened from: Home, the Map or a notification
+        { navController.popBackStackSafely() },
     )
   }
   composable(Route.REPORT_SIGHTING) { entry ->
