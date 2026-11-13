@@ -12,6 +12,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.android.spotted.MainActivity
 import com.android.spotted.R
 import com.android.spotted.Route
+import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.formatKm
 import com.android.spotted.model.notification.Notifier
 import com.android.spotted.model.notification.SightingNotification
 
@@ -40,6 +42,22 @@ class SystemNotifier(private val context: Context) : Notifier {
         title = context.getString(R.string.notification_sighting_title, notification.petName),
         text = context.getString(R.string.notification_sighting_text),
         route = Route.myAlert(notification.alertId),
+    )
+  }
+
+  override fun notifyNearbyAlert(alert: Alert, distanceKm: Double) {
+    post(
+        channelId = CHANNEL_NEARBY_ALERTS,
+        id = NEARBY_ALERT_NOTIFICATION_ID,
+        tag = alert.id,
+        title =
+            context.getString(
+                R.string.notification_nearby_alert_title,
+                alert.petName,
+                formatKm(distanceKm),
+            ),
+        text = context.getString(R.string.notification_nearby_alert_text),
+        route = Route.alertDetail(alert.id),
     )
   }
 
@@ -89,6 +107,7 @@ class SystemNotifier(private val context: Context) : Notifier {
     const val CHANNEL_SIGHTINGS = "sightings"
     const val CHANNEL_NEARBY_ALERTS = "nearby_alerts"
     const val SIGHTING_NOTIFICATION_ID = 1
+    const val NEARBY_ALERT_NOTIFICATION_ID = 2
 
     /** Intent extra holding the [Route] a tapped notification opens. */
     const val EXTRA_ROUTE = "com.android.spotted.NOTIFICATION_ROUTE"
