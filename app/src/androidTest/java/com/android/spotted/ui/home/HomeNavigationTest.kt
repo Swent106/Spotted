@@ -63,7 +63,7 @@ class HomeNavigationTest {
               Text("Report missing", Modifier.testTag(REPORT_MISSING_SCREEN))
             },
             // Same for Alert detail: its id and its "Report a sighting" action are what matter
-            alertDetailContent = { alertId, onReportSighting ->
+            alertDetailContent = { alertId, onReportSighting, _ ->
               Column {
                 Text("Alert $alertId", Modifier.testTag(ALERT_DETAIL_SCREEN))
                 Button(
@@ -92,7 +92,7 @@ class HomeNavigationTest {
                 }
               }
             },
-            petProfileContent = { petId, _, _, _ ->
+            petProfileContent = { petId, _, _, _, _ ->
               Text("Pet $petId", Modifier.testTag(PET_SCREEN))
             },
             mapContent = { _, _ -> Text("Map", Modifier.testTag(MAP_SCREEN)) },

@@ -53,4 +53,11 @@ class LocationTest {
   fun formatDistance_negative_countsAsZero() {
     assertEquals("0 m away", formatDistance(-1.0))
   }
+
+  @Test
+  fun formatKm_isFormatDistanceWithoutAway() {
+    assertEquals("600 m", formatKm(0.6))
+    assertEquals("2.4 km", formatKm(2.4))
+    assertEquals("12 km", formatKm(12.0))
+  }
 }

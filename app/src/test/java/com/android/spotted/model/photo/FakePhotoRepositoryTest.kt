@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.photo
 
 import kotlinx.coroutines.test.runTest
@@ -59,6 +60,20 @@ class FakePhotoRepositoryTest {
     assertTrue(repository.deletePetPhoto("owner-1", "pet-1").isSuccess)
     assertEquals(mapOf(secondUrl to "content://photos/2"), repository.uploadedPhotos)
     assertTrue(repository.uploadedPhotos.containsKey(firstUrl).not())
+  }
+
+  @Test
+  fun deleteProfilePhoto_removesOnlyThatUsersPhoto_andFailsWhenFailureIsSet() = runTest {
+    repository.uploadProfilePhoto("user-1", "content://photos/1").getOrThrow()
+    val otherUrl = repository.uploadProfilePhoto("user-2", "content://photos/2").getOrThrow()
+
+    assertTrue(repository.deleteProfilePhoto("user-1").isSuccess)
+    assertTrue("a missing photo succeeds", repository.deleteProfilePhoto("user-1").isSuccess)
+    assertEquals(mapOf(otherUrl to "content://photos/2"), repository.uploadedPhotos)
+
+    repository.failure = IllegalStateException("delete failed")
+    assertTrue(repository.deleteProfilePhoto("user-2").isFailure)
+    assertEquals(mapOf(otherUrl to "content://photos/2"), repository.uploadedPhotos)
   }
 
   @Test

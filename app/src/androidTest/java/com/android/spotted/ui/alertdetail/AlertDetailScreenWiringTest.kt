@@ -221,6 +221,9 @@ class AlertDetailScreenWiringTest {
     // Not used in this test
     override suspend fun closeAlert(alertId: String): Result<Unit> = Result.success(Unit)
 
+    override suspend fun updateLastSeen(alertId: String, location: Location, seenAtMillis: Long) =
+        Result.success(false)
+
     override suspend fun getOpenAlertsNear(center: Location, radiusKm: Double) =
         Result.success(listOf(alert))
 

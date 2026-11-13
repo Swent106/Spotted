@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -30,23 +31,30 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
+import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
+import com.android.spotted.ui.NearbyAlertsViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
 import com.android.spotted.ui.alertdetail.AlertDetailViewModel
 import com.android.spotted.ui.authentification.SignInScreen
+import com.android.spotted.ui.components.RequestNotificationPermissionOnce
 import com.android.spotted.ui.components.isResumed
 import com.android.spotted.ui.components.popBackStackSafely
 import com.android.spotted.ui.editpet.EditPetScreen
 import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.ui.home.HomeScreen
+import com.android.spotted.ui.linktag.LinkTagScreen
+import com.android.spotted.ui.linktag.LinkTagViewModel
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
+import com.android.spotted.ui.notifications.NotificationsScreen
+import com.android.spotted.ui.notifications.SightingNotifierViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
 import com.android.spotted.ui.petprofile.PetProfileViewModel
@@ -83,13 +91,20 @@ object Route {
   /** The edit form of one of the user's pets, opened from its profile. */
   private const val EDIT_PET_BASE = "edit_pet"
   const val EDIT_PET = "$EDIT_PET_BASE/{$PET_ID}"
+  /** Links an NFC tag to one of the user's pets, opened from its profile. */
+  private const val LINK_TAG_BASE = "link_tag"
+  const val LINK_TAG = "$LINK_TAG_BASE/{$PET_ID}"
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
+  /** New sightings on all the owner's alerts, opened from the Home bell. */
+  const val NOTIFICATIONS = "notifications"
 
   fun petProfile(petId: String) = "$PET/$petId"
 
   fun editPet(petId: String) = "$EDIT_PET_BASE/$petId"
+
+  fun linkTag(petId: String) = "$LINK_TAG_BASE/$petId"
 
   fun myAlert(alertId: String) = "$MY_ALERT_BASE/$alertId"
 
@@ -102,13 +117,20 @@ class MainActivity : ComponentActivity() {
 
   private val mainViewModel: MainViewModel by viewModels { MainViewModel.Factory }
 
+  private val sightingNotifierViewModel: SightingNotifierViewModel by viewModels {
+    SightingNotifierViewModel.Factory(SystemNotifier(applicationContext))
+  }
+
   /** The route of a notification the user tapped, until it has been opened. */
   private var notificationRoute by mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
-    if (savedInstanceState == null) notificationRoute = intent.getStringExtra(EXTRA_ROUTE)
+    if (savedInstanceState == null) notificationRoute = notificationRouteOf(intent)
+    // Created with the activity, so it watches for nearby alerts while the app runs
+    ViewModelProvider(this, NearbyAlertsViewModel.factory(SystemNotifier(applicationContext)))[
+        NearbyAlertsViewModel::class.java]
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
@@ -122,6 +144,8 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxSize().semantics { testTag = C.Tag.main_screen_container },
             color = MaterialTheme.colorScheme.background,
         ) {
+          val notifierState by sightingNotifierViewModel.uiState.collectAsState()
+          if (notifierState.isSignedIn) RequestNotificationPermissionOnce()
           SpottedApp(
               viewModel = mainViewModel,
               notificationRoute = notificationRoute,
@@ -136,7 +160,7 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
-    intent.getStringExtra(EXTRA_ROUTE)?.let { notificationRoute = it }
+    notificationRouteOf(intent)?.let { notificationRoute = it }
   }
 
   /**
@@ -154,6 +178,17 @@ class MainActivity : ComponentActivity() {
           }
         }
     )
+  }
+}
+
+/**
+ * The route a notification asks [intent] to open, if any. A relaunch from Recents repeats the old
+ * intent, so it opens nothing. MainActivity is exported, so only the alert screens are allowed.
+ */
+internal fun notificationRouteOf(intent: Intent): String? {
+  if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
+  return intent.getStringExtra(EXTRA_ROUTE)?.takeIf {
+    it.startsWith(Route.myAlert("")) || it.startsWith(Route.alertDetail(""))
   }
 }
 
@@ -269,8 +304,9 @@ fun NavGraphBuilder.addPetsDestination(
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
  * profile (Profile tab), [editProfileContent] the profile form it opens, [editPetContent] the edit
- * form of a pet and [myAlertContent] the owner's own alert, opened from a missing pet on Home;
- * tests replace them to use hand-built states instead of the real ViewModels.
+ * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, and [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
+ * instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -286,8 +322,15 @@ fun NavGraphBuilder.homeDestinations(
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
           onScanTagClick = navigation.onScanTagClick,
+          onNotificationsClick = navigation.onNotificationsClick,
       )
     },
+    notificationsContent:
+        @Composable
+        (onBack: () -> Unit, onOpenAlert: (alertId: String) -> Unit) -> Unit =
+        { onBack, onOpenAlert ->
+          NotificationsScreen(onBack = onBack, onOpenAlert = onOpenAlert)
+        },
     myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
       MyAlertScreen(
           viewModel = viewModel(key = alertId, factory = MyAlertViewModel.Factory(alertId)),
@@ -295,14 +338,26 @@ fun NavGraphBuilder.homeDestinations(
       )
     },
     reportMissingContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
-      ReportMissingScreen(onBack = onDone, onPublished = onDone)
+      ReportMissingScreen(
+          onBack = onDone,
+          onPublished = onDone,
+          // My alert replaces Report missing, so Back from it returns to Home
+          onOpenAlert = { alertId ->
+            navController.navigate(Route.myAlert(alertId)) {
+              popUpTo(Route.REPORT_MISSING) { inclusive = true }
+            }
+          },
+      )
     },
-    alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
-        { alertId, onReportSighting ->
+    alertDetailContent:
+        @Composable
+        (alertId: String, onReportSighting: () -> Unit, onBack: () -> Unit) -> Unit =
+        { alertId, onReportSighting, onBack ->
           AlertDetailScreen(
               viewModel = viewModel(factory = AlertDetailViewModel.Factory),
               alertId = alertId,
               onReportSighting = onReportSighting,
+              onBack = onBack,
           )
         },
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -327,18 +382,27 @@ fun NavGraphBuilder.homeDestinations(
             petId: String,
             onBack: () -> Unit,
             onEdit: (String) -> Unit,
+            onLinkTag: (String) -> Unit,
             onDeleted: () -> Unit,
         ) -> Unit =
-        { petId, onBack, onEdit, onDeleted ->
+        { petId, onBack, onEdit, onLinkTag, onDeleted ->
           PetProfileScreen(
               viewModel = viewModel(factory = PetProfileViewModel.Factory),
               petId = petId,
               deleteViewModel = viewModel(key = petId, factory = EditPetViewModel.factory(petId)),
               onBack = onBack,
               onEdit = onEdit,
+              onLinkTag = onLinkTag,
               onDeleted = onDeleted,
           )
         },
+    linkTagContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
+      LinkTagScreen(
+          viewModel = viewModel(key = petId, factory = LinkTagViewModel.factory(petId)),
+          onDone = onDone,
+          onCancel = onDone,
+      )
+    },
     editPetContent: @Composable (petId: String, onDone: () -> Unit) -> Unit = { petId, onDone ->
       EditPetScreen(petId = petId, onBack = onDone, onSaved = onDone)
     },
@@ -377,9 +441,16 @@ fun NavGraphBuilder.homeDestinations(
             onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
             onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
+            onNotificationsClick =
+                dropUnlessResumed { navController.navigate(Route.NOTIFICATIONS) },
             onScanTagClick = dropUnlessResumed { navController.navigate(Route.SCAN_TAG) },
         )
     )
+  }
+  composable(Route.NOTIFICATIONS) { entry ->
+    notificationsContent({ navController.popBackStackSafely() }) { alertId ->
+      if (entry.isResumed()) navController.navigate(Route.myAlert(alertId))
+    }
   }
   composable(Route.SCAN_TAG) { entry ->
     scanTagContent(
@@ -392,7 +463,8 @@ fun NavGraphBuilder.homeDestinations(
           }
         },
     )
-  }
+  }  
+  
   composable(Route.PROFILE) {
     profileContent(
         HelperProfileNavigation(
@@ -416,9 +488,15 @@ fun NavGraphBuilder.homeDestinations(
         entry.arguments?.getString(Route.PET_ID).orEmpty(),
         { navController.popBackStackSafely() },
         { petId -> if (entry.isResumed()) navController.navigate(Route.editPet(petId)) },
+        { petId -> if (entry.isResumed()) navController.navigate(Route.linkTag(petId)) },
         // The pet no longer exists: back to Home, with its profile removed from the back stack
         { navController.popBackStack(Route.HOME, inclusive = false) },
     )
+  }
+  composable(Route.LINK_TAG) { entry ->
+    linkTagContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {
+      navController.popBackStackSafely()
+    }
   }
   composable(Route.EDIT_PET) { entry ->
     editPetContent(entry.arguments?.getString(Route.PET_ID).orEmpty()) {
@@ -431,6 +509,8 @@ fun NavGraphBuilder.homeDestinations(
     alertDetailContent(
         alertId,
         dropUnlessResumed { navController.navigate(Route.reportSighting(alertId)) },
+        // Back to the screen it was opened from: Home, the Map or a notification
+        { navController.popBackStackSafely() },
     )
   }
   composable(Route.REPORT_SIGHTING) { entry ->
@@ -461,4 +541,6 @@ data class HomeNavigation(
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
     val onScanTagClick: () -> Unit = {},
+    /** Opens the Notifications screen (the bell). */
+    val onNotificationsClick: () -> Unit = {},
 )

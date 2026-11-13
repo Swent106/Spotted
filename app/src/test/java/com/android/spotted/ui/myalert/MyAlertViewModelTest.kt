@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.myalert
 
@@ -462,6 +463,99 @@ class MyAlertViewModelTest {
           now = { NOW },
       )
 
+  @Test
+  fun confirm_newerSighting_movesTheAlertLastSeenPlace() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        val moved = alert.copy(lastKnownLocation = sighting.location, lastSeenAtMillis = NOW + HOUR)
+        assertEquals(moved, viewModel.uiState.value.alert)
+        assertEquals(moved, alertRepository.getAlertById(alert.id).getOrThrow())
+      }
+
+  @Test
+  fun confirm_olderSighting_keepsTheAlertLastSeenPlace() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert().copy(lastSeenAtMillis = NOW + 2 * HOUR)
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(SightingStatus.CONFIRMED, viewModel.uiState.value.sightings.single().status)
+        assertEquals(alert, viewModel.uiState.value.alert)
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+      }
+
+  @Test
+  fun dismiss_newerSighting_keepsTheAlertLastSeenPlace() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+      }
+
+  @Test
+  fun confirm_statusFailure_doesNotMoveTheAlert() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        sightingRepository.statusFailure = IllegalStateException("offline")
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+        assertEquals("offline", viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun confirm_lastSeenFailure_showsError() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        alertRepository.failure = IllegalStateException()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(MyAlertViewModel.LAST_SEEN_UPDATE_FAILED, viewModel.uiState.value.errorMessage)
+        assertEquals(alert, viewModel.uiState.value.alert)
+      }
+
   private fun alert(ownerId: String = OWNER_ID) =
       Alert(
           id = "alert-1",
@@ -490,5 +584,6 @@ class MyAlertViewModelTest {
   private companion object {
     const val OWNER_ID = "fake_uid_from_token"
     const val NOW = 1_700_000_000_000L
+    const val HOUR = 60 * 60 * 1000L
   }
 }

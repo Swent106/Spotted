@@ -4,9 +4,15 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
 
 class UserRepositoryFirestore(
@@ -15,20 +21,37 @@ class UserRepositoryFirestore(
   private val users = firestore.collection(USERS_COLLECTION)
 
   override suspend fun getUser(uid: String): Result<UserProfile> = firestoreResult {
-    withContext(Dispatchers.IO) {
-      val snapshot = Tasks.await(users.document(uid).get())
-      if (!snapshot.exists()) {
-        throw NoSuchElementException("User with uid $uid was not found")
-      }
+    withContext(Dispatchers.IO) { Tasks.await(users.document(uid).get()).toUserProfile(uid) }
+  }
 
-      val document =
-          snapshot.toObject(UserProfileDocument::class.java)
-              ?: throw IllegalStateException("User document $uid could not be decoded")
-      if (document.uid != snapshot.id) {
-        throw IllegalStateException("User document ${snapshot.id} has a mismatched uid")
-      }
-      document.toUserProfile()
+  override fun observeUser(uid: String): Flow<Result<UserProfile>> = callbackFlow {
+    // Firestore calls the listener with the current profile, then after every change
+    val registration =
+        users.document(uid).addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error
+          ->
+          if (error != null) {
+            trySend(Result.failure(error))
+            close()
+          } else if (snapshot != null) {
+            trySend(runCatching { snapshot.toUserProfile(uid) })
+          }
+        }
+    // Runs when the collector is cancelled, so the listener does not leak
+    awaitClose { registration.remove() }
+  }
+      .conflate()
+
+  private fun DocumentSnapshot.toUserProfile(uid: String): UserProfile {
+    if (!exists()) {
+      throw NoSuchElementException("User with uid $uid was not found")
     }
+    val document =
+        toObject(UserProfileDocument::class.java)
+            ?: throw IllegalStateException("User document $uid could not be decoded")
+    if (document.uid != id) {
+      throw IllegalStateException("User document $id has a mismatched uid")
+    }
+    return document.toUserProfile()
   }
 
   override suspend fun saveUser(user: UserProfile): Result<Unit> = firestoreResult {
