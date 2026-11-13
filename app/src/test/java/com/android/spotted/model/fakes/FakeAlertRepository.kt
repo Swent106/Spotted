@@ -4,6 +4,7 @@ package com.android.spotted.model.fakes
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
@@ -35,6 +36,12 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     failure?.let {
       return Result.failure(it)
     }
+    // Like the real repository: a pet has at most one open alert
+    val open =
+        alerts.value.values.firstOrNull {
+          it.petId == alert.petId && it.id != alert.id && it.status == AlertStatus.OPEN
+        }
+    if (open != null) return Result.failure(AlertAlreadyOpenException(open.id))
     alerts.update { it + (alert.id to alert) }
     return Result.success(Unit)
   }
@@ -70,6 +77,25 @@ class FakeAlertRepository(private val now: () -> Long = { 0L }) : AlertRepositor
     val closed = alert.copy(status = AlertStatus.CLOSED, closedAtMillis = now())
     alerts.update { it + (alertId to closed) }
     return Result.success(Unit)
+  }
+
+  override suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    val alert =
+        alerts.value[alertId]
+            ?: return Result.failure(NoSuchElementException("No alert with id $alertId"))
+    if (alert.status == AlertStatus.CLOSED || seenAtMillis <= alert.lastSeenAt) {
+      return Result.success(false)
+    }
+    val moved = alert.copy(lastKnownLocation = location, lastSeenAtMillis = seenAtMillis)
+    alerts.update { it + (alertId to moved) }
+    return Result.success(true)
   }
 
   override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> {

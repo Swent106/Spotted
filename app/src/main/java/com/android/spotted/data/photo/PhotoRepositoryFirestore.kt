@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.photo
 
 import android.content.Context
@@ -38,14 +39,24 @@ class PhotoRepositoryFirestore(
   ): Result<String> = upload(photoId = petId, ownerId = ownerId, localUri = localUri)
 
   override suspend fun deletePetPhoto(ownerId: String, petId: String): Result<Unit> =
+      delete(photoId = petId, ownerId = ownerId)
+
+  override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
+      upload(photoId = profilePhotoId(userId), ownerId = userId, localUri = localUri)
+
+  override suspend fun deleteProfilePhoto(userId: String): Result<Unit> =
+      delete(photoId = profilePhotoId(userId), ownerId = userId)
+
+  /** Deletes `photos/{photoId}` if [ownerId] owns it; a missing photo succeeds. */
+  private suspend fun delete(photoId: String, ownerId: String): Result<Unit> =
       try {
         withContext(Dispatchers.IO) {
-          val photo = firestore.collection(PHOTOS_COLLECTION).document(petId)
+          val photo = firestore.collection(PHOTOS_COLLECTION).document(photoId)
           val snapshot = Tasks.await(photo.get())
           when {
             !snapshot.exists() -> Result.success(Unit)
             snapshot.getString("ownerId") != ownerId ->
-                Result.failure(SecurityException("Pet photo $petId belongs to another owner"))
+                Result.failure(SecurityException("Photo $photoId belongs to another owner"))
             else -> {
               Tasks.await(photo.delete())
               Result.success(Unit)
@@ -57,9 +68,6 @@ class PhotoRepositoryFirestore(
       } catch (exception: Exception) {
         Result.failure(exception)
       }
-
-  override suspend fun uploadProfilePhoto(userId: String, localUri: String): Result<String> =
-      upload(photoId = profilePhotoId(userId), ownerId = userId, localUri = localUri)
 
   override fun profilePhotoUrl(userId: String) = photoUrl(profilePhotoId(userId))
 

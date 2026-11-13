@@ -104,7 +104,8 @@ service cloud.firestore {
                 'petName', 'petSpecies', 'petAllergies', 'petBehaviors'])
           && d.keys().hasOnly([
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
-                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors'])
+                'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors',
+                'lastSeenAtMillis'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
@@ -124,7 +125,21 @@ service cloud.firestore {
           && (!('petPhotoUrl' in d) || d.petPhotoUrl == null
               || (d.petPhotoUrl is string && d.petPhotoUrl.size() <= 2048))
           && d.petAllergies is list && d.petAllergies.size() <= 50
-          && d.petBehaviors is list && d.petBehaviors.size() <= 50;
+          && d.petBehaviors is list && d.petBehaviors.size() <= 50
+          // Set when a confirmed sighting moves the last seen place: after the pet was lost, and
+          // at most 5 minutes in the future, like a sighting
+          && (d.get('lastSeenAtMillis', null) == null
+              || (d.lastSeenAtMillis is int
+                  && d.lastSeenAtMillis >= d.lostAtMillis
+                  && d.lastSeenAtMillis <= request.time.toMillis() + 300000));
+      }
+
+      // The last seen time only moves forward: an older sighting can't move the pet back
+      function lastSeenNotMovedBack() {
+        let before = resource.data.get('lastSeenAtMillis', null);
+        let after = request.resource.data.get('lastSeenAtMillis', null);
+        return after == before
+          || (after != null && after > (before == null ? resource.data.lostAtMillis : before));
       }
 
       allow get: if request.auth != null;
@@ -134,9 +149,14 @@ service cloud.firestore {
           && validAlert(request.resource.data)
           && request.resource.data.ownerId == request.auth.uid
           && request.resource.data.status == 'OPEN'
-          && ownsPet(request.resource.data.petId);
+          && ownsPet(request.resource.data.petId)
+          // One open alert per pet: the pet's lock must name this alert once the write is done
+          // (see openPetAlerts below, which refuses to move a lock off an open alert)
+          && getAfter(/databases/$(database)/documents/openPetAlerts/$(request.resource.data.petId))
+               .data.alertId == alertId;
 
-      // The owner may only close an open alert or move it; identity fields are immutable.
+      // The owner may only close an open alert or move it (last seen place and time); identity
+      // fields are immutable.
       // A closed alert is frozen, so nobody can reopen it. Alerts written before the status
       // field existed count as open.
       allow update: if request.auth != null
@@ -144,10 +164,60 @@ service cloud.firestore {
           && resource.data.get('status', 'OPEN') == 'OPEN'
           && validAlert(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis']);
+               .hasOnly(['status', 'lastKnownLocation', 'closedAtMillis', 'lastSeenAtMillis'])
+          && lastSeenNotMovedBack();
 
       allow delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
+    }
+
+    // openPetAlerts/{petId}: alertId of the pet's latest alert and its ownerId. Written by
+    // AlertRepositoryFirestore.publishAlert in the same transaction as the alert, so a pet never
+    // gets two open alerts. Only the pet's owner may read or change it.
+    match /openPetAlerts/{petId} {
+      function ownsLockedPet() {
+        let petPath = /databases/$(database)/documents/pets/$(petId);
+        return exists(petPath) && get(petPath).data.ownerId == request.auth.uid;
+      }
+
+      function validLock(d) {
+        return d.keys().hasAll(['alertId', 'ownerId'])
+          && d.keys().hasOnly(['alertId', 'ownerId'])
+          && d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128
+          && d.ownerId == request.auth.uid;
+      }
+
+      // The lock may only move to another alert once the one it names is closed or gone
+      // True if the alert the lock names is closed or gone, so the pet is free
+      function namedAlertNotOpen() {
+        let alertPath = /databases/$(database)/documents/alerts/$(resource.data.alertId);
+        return !exists(alertPath) || get(alertPath).data.get('status', 'OPEN') != 'OPEN';
+      }
+
+      // The lock may only move to another alert once the one it names is closed or gone
+      function lockedAlertFree() {
+        return request.resource.data.alertId == resource.data.alertId || namedAlertNotOpen();
+      }
+
+      // A pet without a lock yet reads as missing, which the transaction needs to see
+      allow get: if isAuthenticated()
+          && (resource == null || resource.data.ownerId == request.auth.uid);
+      allow list: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && request.query.limit <= 100;
+      allow create: if isAuthenticated()
+          && validLock(request.resource.data)
+          && ownsLockedPet();
+      allow update: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && validLock(request.resource.data)
+          && ownsLockedPet()
+          && lockedAlertFree();
+      // Same check, or deleting the lock would let a second open alert in
+      // (deleteAlertsByOwner deletes the alerts first)
+      allow delete: if isAuthenticated()
+          && resource.data.ownerId == request.auth.uid
+          && namedAlertNotOpen();
     }
 
     match /sightings/{sightingId} {

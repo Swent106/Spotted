@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +56,11 @@ object ReportMissingScreenTestTags {
   const val PUBLISH_BUTTON = "reportMissingPublishButton"
   const val PUBLISH_LOADER = "reportMissingPublishLoader"
   const val ERROR_MESSAGE = "reportMissingErrorMessage"
+  const val ALREADY_MISSING_PREFIX = "reportMissingAlreadyMissing_"
+  const val ALL_PETS_MISSING = "reportMissingAllPetsMissing"
+  const val ALREADY_MISSING_DIALOG = "reportMissingAlreadyMissingDialog"
+  const val OPEN_ALERT_BUTTON = "reportMissingOpenAlertButton"
+  const val DISMISS_ALREADY_MISSING_BUTTON = "reportMissingDismissAlreadyMissingButton"
 }
 
 /** Radius of the circle on the map, matching "Everyone within 3 km" in the wireframe. */
@@ -72,7 +78,13 @@ fun ReportMissingContent(
     onLocationChange: (Location) -> Unit = {},
     onPublish: () -> Unit = {},
     onDismissError: () -> Unit = {},
+    onOpenExistingAlert: () -> Unit = {},
+    onDismissAlreadyMissing: () -> Unit = {},
 ) {
+  state.alreadyMissingPet?.let { pet ->
+    AlreadyMissingDialog(pet.name, onOpenExistingAlert, onDismissAlreadyMissing)
+  }
+
   Column(
       modifier =
           Modifier.fillMaxSize()
@@ -102,11 +114,18 @@ fun ReportMissingContent(
             style = jakarta(13, 18f, 500, SpottedTheme.colors.textSecondary),
             modifier = Modifier.testTag(ReportMissingScreenTestTags.NO_PETS),
         )
+      } else if (state.allPetsMissing) {
+        Text(
+            "All your pets are already reported missing.",
+            style = jakarta(13, 18f, 500, SpottedTheme.colors.textSecondary),
+            modifier = Modifier.testTag(ReportMissingScreenTestTags.ALL_PETS_MISSING),
+        )
       }
       state.pets.forEach { pet ->
         PetOption(
             pet = pet,
-            selected = pet.id == state.selectedPetId,
+            selected = pet.id == state.selectedPet?.id,
+            alreadyMissing = state.isAlreadyMissing(pet),
             onClick = { onPetSelected(pet.id) },
         )
       }
@@ -174,7 +193,34 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 }
 
 @Composable
-private fun PetOption(pet: Pet, selected: Boolean, onClick: () -> Unit) {
+private fun AlreadyMissingDialog(petName: String, onOpenAlert: () -> Unit, onDismiss: () -> Unit) {
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("$petName is already reported missing") },
+      text = { Text("Open its alert to follow the sightings.") },
+      confirmButton = {
+        TextButton(
+            onClick = onOpenAlert,
+            modifier = Modifier.testTag(ReportMissingScreenTestTags.OPEN_ALERT_BUTTON),
+        ) {
+          Text("Open alert")
+        }
+      },
+      dismissButton = {
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.testTag(ReportMissingScreenTestTags.DISMISS_ALREADY_MISSING_BUTTON),
+        ) {
+          Text("Cancel")
+        }
+      },
+      modifier = Modifier.testTag(ReportMissingScreenTestTags.ALREADY_MISSING_DIALOG),
+  )
+}
+
+/** A pet to choose. A pet [alreadyMissing] can't be chosen; tapping it offers its alert. */
+@Composable
+private fun PetOption(pet: Pet, selected: Boolean, alreadyMissing: Boolean, onClick: () -> Unit) {
   Row(
       verticalAlignment = Alignment.CenterVertically,
       modifier =
@@ -209,28 +255,40 @@ private fun PetOption(pet: Pet, selected: Boolean, onClick: () -> Unit) {
     Spacer(Modifier.width(12.dp))
     Column(Modifier.weight(1f)) {
       Text(pet.name, style = jakarta(16, 20f, 700, SpottedTheme.colors.ink))
-      Text(
-          pet.breed.ifBlank { pet.species.name.lowercase().replaceFirstChar { it.uppercase() } },
-          style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
-      )
+      if (alreadyMissing) {
+        Text(
+            "Already reported missing",
+            style = jakarta(12, 16f, 600, SpottedTheme.colors.error),
+            modifier =
+                Modifier.testTag("${ReportMissingScreenTestTags.ALREADY_MISSING_PREFIX}${pet.id}"),
+        )
+      } else {
+        Text(
+            pet.breed.ifBlank { pet.species.name.lowercase().replaceFirstChar { it.uppercase() } },
+            style = jakarta(12, 16f, 500, SpottedTheme.colors.textSecondary),
+        )
+      }
     }
-    RadioButton(selected = selected, onClick = onClick)
+    RadioButton(selected = selected, onClick = onClick, enabled = !alreadyMissing)
   }
 }
 
 /**
  * Connects [ReportMissingContent] to [ReportMissingViewModel]: passes the state down and the taps
- * up, and calls [onPublished] once the alert is out.
+ * up, and calls [onPublished] once the alert is out, or [onOpenAlert] with the alert of a pet
+ * already missing that the owner chose to open.
  */
 @Composable
 fun ReportMissingScreen(
     onBack: () -> Unit,
     onPublished: () -> Unit,
+    onOpenAlert: (alertId: String) -> Unit = {},
     viewModel: ReportMissingViewModel = viewModel(factory = ReportMissingViewModel.Factory),
 ) {
   val state by viewModel.uiState.collectAsState()
 
   LaunchedEffect(state.published) { if (state.published) onPublished() }
+  LaunchedEffect(state.openAlertId) { state.openAlertId?.let(onOpenAlert) }
 
   ReportMissingContent(
       state = state,
@@ -239,5 +297,7 @@ fun ReportMissingScreen(
       onLocationChange = viewModel::setLocation,
       onPublish = viewModel::publish,
       onDismissError = viewModel::clearErrorMsg,
+      onOpenExistingAlert = viewModel::openExistingAlert,
+      onDismissAlreadyMissing = viewModel::dismissAlreadyMissing,
   )
 }
