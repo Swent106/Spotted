@@ -2,6 +2,7 @@
 package com.android.spotted.ui.scantag
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
@@ -107,30 +108,36 @@ fun ScanTagScreen(
   ScanTagContent(
       state = scanState,
       nfcAvailability = nfcAvailability,
-      onCall = { phone ->
-        try {
-          context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)))
-        } catch (_: ActivityNotFoundException) {}
-      },
-      onEmail = { email ->
-        try {
-          context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", email, null)))
-        } catch (_: ActivityNotFoundException) {}
-      },
+      onCall = { phone -> launchPhoneIntent(context, phone) },
+      onEmail = { email -> launchEmailIntent(context, email) },
       onReportSighting = onReportSighting,
       onRetry = viewModel::resetForRetry,
       onCancel = onBack,
-      onOpenNfcSettings = {
-        try {
-          context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
-        } catch (_: ActivityNotFoundException) {
-          try {
-            context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
-          } catch (_: ActivityNotFoundException) {}
-        }
-      },
+      onOpenNfcSettings = { openNfcSettings(context) },
   )
 }
+
+internal fun launchPhoneIntent(context: Context, phone: String) {
+  startActivitySafely(context, Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)))
+}
+
+internal fun launchEmailIntent(context: Context, email: String) {
+  startActivitySafely(context, Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", email, null)))
+}
+
+internal fun openNfcSettings(context: Context) {
+  if (!startActivitySafely(context, Intent(Settings.ACTION_NFC_SETTINGS))) {
+    startActivitySafely(context, Intent(Settings.ACTION_WIRELESS_SETTINGS))
+  }
+}
+
+private fun startActivitySafely(context: Context, intent: Intent): Boolean =
+    try {
+      context.startActivity(intent)
+      true
+    } catch (_: ActivityNotFoundException) {
+      false
+    }
 
 /** Stateless tag-scan content, suitable for previews and Compose tests. */
 @Composable
