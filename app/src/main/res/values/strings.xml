@@ -90,10 +90,13 @@
     <string name="sighting_photo_retake">Retake</string>
     <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
     <string name="sighting_photo_required">Add a photo: with no matching alert, it\'s how the owner will recognise their pet.</string>
+    <string name="sighting_no_missing_pet_matches_nearby">No missing pet matches nearby</string>
     <string name="notification_channel_sightings">Sightings</string>
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
     <string name="notification_sighting_text">Tap to review this sighting</string>
+    <string name="notification_nearby_alert_title">%1$s is lost %2$s from your home</string>
+    <string name="notification_nearby_alert_text">Tap to see the alert</string>
     <string name="delete_account_confirm_title">Delete your account?</string>
     <string name="delete_account_confirm_text">Your profile, pets and alerts will be deleted. This can\'t be undone.</string>
     <string name="delete_account_confirm_delete">Delete</string>

@@ -30,6 +30,18 @@ interface AlertRepository {
   suspend fun closeAlert(alertId: String): Result<Unit>
 
   /**
+   * Moves the last seen place of the open alert [alertId] to [location], seen at [seenAtMillis],
+   * when that is newer than its current [Alert.lastSeenAt]. Returns true if the alert moved, false
+   * if it was left as it is (older or same time, or alert closed). Fails with
+   * [NoSuchElementException] if it doesn't exist.
+   */
+  suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean>
+
+  /**
    * Returns open alerts within the inclusive [radiusKm] of [center], filtered by exact distance and
    * ordered newest first. Alerts with the same [Alert.lostAtMillis] are ordered by ascending
    * [Alert.id].
@@ -41,7 +53,8 @@ interface AlertRepository {
 
   /**
    * Emits the open alerts near [center] right away, then again after every change. Same filtering
-   * and order as [getOpenAlertsNear]. An error is emitted as a failure and ends the flow.
+   * and order as [getOpenAlertsNear]. Only lists confirmed by the server are emitted, never ones
+   * from the local cache. An error is emitted as a failure and ends the flow.
    */
   fun observeOpenAlertsNear(center: Location, radiusKm: Double): Flow<Result<List<Alert>>>
 

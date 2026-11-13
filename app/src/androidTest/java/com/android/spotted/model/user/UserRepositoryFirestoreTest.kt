@@ -6,8 +6,10 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -88,6 +90,41 @@ class UserRepositoryFirestoreTest {
     assertTrue(repository.getUser(otherUid).isFailure)
   }
 
+  @Test
+  fun observeUser_emitsTheProfile_thenEachChange() = runTest {
+    val profile = UserProfile(uid = currentUserId(), name = "Jamie", email = "jamie@example.com")
+    repository.saveUser(profile).getOrThrow()
+
+    // Real time: the listener answers from the emulator, which virtual time doesn't wait for
+    withContext(Dispatchers.IO) {
+      withTimeout(TIMEOUT_MILLIS) {
+        repository.observeUser(profile.uid).first { it.getOrNull() == profile }
+      }
+      val moved = profile.copy(alertRadiusKm = 10)
+      withTimeout(TIMEOUT_MILLIS) {
+        repository.observeUser(profile.uid).first {
+          // The first emission can still be the old profile; the change follows it
+          if (it.getOrNull() == profile) repository.saveUser(moved).getOrThrow()
+          it.getOrNull() == moved
+        }
+      }
+    }
+  }
+
+  @Test
+  fun observeUser_forAnotherUid_emitsAFailure() = runTest {
+    val result =
+        withContext(Dispatchers.IO) {
+          withTimeout(TIMEOUT_MILLIS) { repository.observeUser("another-user").first() }
+        }
+
+    assertTrue(result.isFailure)
+  }
+
   private fun currentUserId(): String =
       requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
+
+  private companion object {
+    const val TIMEOUT_MILLIS = 10_000L
+  }
 }

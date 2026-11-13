@@ -32,6 +32,7 @@ data class ReportSightingUiState(
     val photoUri: String? = null,
     val detectedSpecies: Species? = null,
     val nearbyAlerts: List<NearbyAlertOption> = emptyList(),
+    val isNearbyAlertsLoaded: Boolean = false,
     val isOffline: Boolean = false,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,

@@ -18,6 +18,7 @@ import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.distanceKm
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.PhotoRepository
@@ -49,6 +50,12 @@ class ReportSightingViewModel(
   /** Detection of the current photo, cancelled when another photo is chosen. */
   private var photoCheckJob: Job? = null
 
+  private var nearbyAlertsJob: Job? = null
+  private var nearbyAlertsRequestId = 0L
+  private var nearbyAlertCandidates: List<Alert> = emptyList()
+  private var preselectedAlert: Alert? = null
+  private var speciesChosenByUser: Species? = null
+
   fun loadCurrentLocation() {
     val repo = locationRepository ?: return
     viewModelScope.launch {
@@ -68,7 +75,9 @@ class ReportSightingViewModel(
   }
 
   fun setSpecies(species: Species) {
+    speciesChosenByUser = species
     _uiState.update { it.copy(selectedSpecies = species) }
+    refreshNearbyAlertOptions()
   }
 
   fun setLocation(location: Location, address: String = "Location on map") {
@@ -97,7 +106,8 @@ class ReportSightingViewModel(
           .getOrNull()
           ?.takeIf { it.status == AlertStatus.OPEN }
           ?.let { alert ->
-            addAlertOptions(listOf(alert))
+            preselectedAlert = alert
+            refreshNearbyAlertOptions()
             selectAlert(alertId)
           }
     }
@@ -105,36 +115,82 @@ class ReportSightingViewModel(
 
   /** Lists the open alerts around [location], so the user can say which pet they saw. */
   private fun loadNearbyAlerts(location: Location) {
-    val repository = alertRepository ?: return
-    viewModelScope.launch {
-      repository.getOpenAlertsNear(location, NEARBY_RADIUS_KM).onSuccess(::addAlertOptions)
+    nearbyAlertsJob?.cancel()
+    val requestId = ++nearbyAlertsRequestId
+    nearbyAlertCandidates = emptyList()
+    _uiState.update { it.copy(isNearbyAlertsLoaded = false) }
+    refreshNearbyAlertOptions()
+
+    val repository = alertRepository
+    if (repository == null) {
+      _uiState.update { it.copy(isNearbyAlertsLoaded = true) }
+      refreshNearbyAlertOptions()
+      return
+    }
+
+    nearbyAlertsJob = viewModelScope.launch {
+      repository.getOpenAlertsNear(location, NEARBY_RADIUS_KM).onSuccess { alerts ->
+        if (requestId != nearbyAlertsRequestId) return@onSuccess
+        nearbyAlertCandidates = alerts
+        _uiState.update { it.copy(isNearbyAlertsLoaded = true) }
+        refreshNearbyAlertOptions()
+      }
     }
   }
 
-  /** Adds [alerts] to the options, after the ones already listed, without duplicates. */
-  private fun addAlertOptions(alerts: List<Alert>) {
+  /** Refilters the last nearby-alert result whenever position or species changes. */
+  private fun refreshNearbyAlertOptions() {
     _uiState.update { state ->
-      val known = state.nearbyAlerts.map { it.alertId }.toSet()
-      val added =
-          alerts
-              .filter { it.status == AlertStatus.OPEN && it.id !in known }
-              .map { alert ->
-                NearbyAlertOption(
-                    alertId = alert.id,
-                    petName = alert.petName,
-                    description =
-                        alert.petSpecies.name.lowercase().replaceFirstChar(Char::titlecase),
-                    photoUrl = alert.petPhotoUrl,
-                    species = alert.petSpecies,
-                )
+      val species = speciesChosenByUser ?: state.detectedSpecies
+      val ownerId = authRepository.currentUser.value?.uid
+      val nearby =
+          state.location
+              ?.let { location ->
+                nearbyAlertCandidates
+                    .asSequence()
+                    .filter { it.status == AlertStatus.OPEN }
+                    .filter { it.ownerId != ownerId }
+                    .filter { species == null || it.petSpecies == species }
+                    .map { alert -> alert to location.distanceKm(alert.lastKnownLocation) }
+                    .filter { (_, distance) -> distance <= NEARBY_RADIUS_KM }
+                    .sortedWith(compareBy<Pair<Alert, Double>> { it.second }.thenBy { it.first.id })
+                    .map { it.first }
+                    .toList()
               }
-      // The selected alert now has its species, which the sighting needs
-      val selectedSpecies =
-          state.selectedSpecies
-              ?: added.firstOrNull { it.alertId == state.selectedAlertId }?.species
-      state.copy(nearbyAlerts = state.nearbyAlerts + added, selectedSpecies = selectedSpecies)
+              .orEmpty()
+      val pinned = preselectedAlert
+      val ordinary =
+          nearby
+              .filter { it.id != pinned?.id }
+              .take(MAX_NEARBY_ALERTS - if (pinned == null) 0 else 1)
+      val options = (listOfNotNull(pinned) + ordinary).map(::toNearbyAlertOption)
+      val selectedAlertId = state.selectedAlertId
+      val selectionWasRemoved =
+          selectedAlertId != null && options.none { it.alertId == selectedAlertId }
+      val shouldSelectNoMatch =
+          selectionWasRemoved || (state.isNearbyAlertsLoaded && options.isEmpty())
+
+      state.copy(
+          nearbyAlerts = options,
+          selectedAlertId = if (selectionWasRemoved) null else selectedAlertId,
+          isNoMatchingAlertSelected =
+              when {
+                shouldSelectNoMatch -> true
+                selectedAlertId != null -> false
+                else -> state.isNoMatchingAlertSelected
+              },
+      )
     }
   }
+
+  private fun toNearbyAlertOption(alert: Alert) =
+      NearbyAlertOption(
+          alertId = alert.id,
+          petName = alert.petName,
+          description = alert.petSpecies.name.lowercase().replaceFirstChar(Char::titlecase),
+          photoUrl = alert.petPhotoUrl,
+          species = alert.petSpecies,
+      )
 
   /**
    * Shows [uri] as the sighting photo and checks that it shows an animal. Removing the photo (null)
@@ -146,11 +202,13 @@ class ReportSightingViewModel(
     if (uri == null || detector == null) {
       val check = if (uri == null) PhotoCheck.NONE else PhotoCheck.ANIMAL
       _uiState.update { it.copy(photoUri = uri, photoCheck = check, detectedSpecies = null) }
+      refreshNearbyAlertOptions()
       return
     }
     _uiState.update {
       it.copy(photoUri = uri, photoCheck = PhotoCheck.CHECKING, detectedSpecies = null)
     }
+    refreshNearbyAlertOptions()
     photoCheckJob = viewModelScope.launch {
       detector
           .detect(uri)
@@ -161,6 +219,7 @@ class ReportSightingViewModel(
                       it.copy(photoCheck = PhotoCheck.ANIMAL, detectedSpecies = detection.species)
                   else it.copy(photoCheck = PhotoCheck.NO_ANIMAL)
                 }
+                refreshNearbyAlertOptions()
               },
               // Offline or failed: accept the photo, without a species
               onFailure = { _uiState.update { it.copy(photoCheck = PhotoCheck.ANIMAL) } },
@@ -179,6 +238,9 @@ class ReportSightingViewModel(
           selectedSpecies = autoSpecies,
       )
     }
+    if (uiState.value.nearbyAlerts.any { it.alertId == alertId }) {
+      refreshNearbyAlertOptions()
+    }
   }
 
   fun selectNoMatchingAlert() {
@@ -190,6 +252,7 @@ class ReportSightingViewModel(
           selectedSpecies = autoSpecies,
       )
     }
+    refreshNearbyAlertOptions()
   }
 
   fun clearErrorMessage() {
@@ -318,6 +381,7 @@ class ReportSightingViewModel(
 
     /** Radius of the alerts offered as "Which pet did you see?", in kilometres. */
     const val NEARBY_RADIUS_KM = 5.0
+    private const val MAX_NEARBY_ALERTS = 5
 
     val Factory: ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
