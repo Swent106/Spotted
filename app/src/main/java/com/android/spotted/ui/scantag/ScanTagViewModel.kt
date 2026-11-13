@@ -100,6 +100,11 @@ class ScanTagViewModel(
     }
   }
 
+  fun resetForRetry() {
+    scanJob?.cancel()
+    _uiState.value = ScanTagUiState()
+  }
+
   companion object {
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
