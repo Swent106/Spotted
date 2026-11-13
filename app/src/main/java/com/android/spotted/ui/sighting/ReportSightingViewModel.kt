@@ -312,8 +312,15 @@ class ReportSightingViewModel(
                   localUri = photoUri,
               )
 
-          // The photo is optional: if it can't be uploaded, the sighting is still sent without it
+          // With an alert, the photo is optional: if it can't be uploaded, the sighting is still
+          // sent without it
           uploadedPhotoUrl = uploadResult.getOrNull()
+        }
+
+        // Without an alert, the photo is required: don't send the sighting without it
+        if (alertId == null && uploadedPhotoUrl == null) {
+          _uiState.update { it.copy(isSubmitting = false, errorMessage = PHOTO_UPLOAD_FAILED) }
+          return@launch
         }
 
         val sighting = plausibilitySighting.copy(photoUrl = uploadedPhotoUrl)
@@ -366,6 +373,7 @@ class ReportSightingViewModel(
 
   companion object {
     const val ALERT_NOT_LOADED = "Couldn't check this alert. Try again."
+    const val PHOTO_UPLOAD_FAILED = "Couldn't upload your photo. Try again."
     const val SEEN_IN_THE_FUTURE_MESSAGE = "The time of this sighting is in the future."
     const val SEEN_BEFORE_LOST_MESSAGE = "This pet was seen before it was lost."
     const val TOO_FAR_MESSAGE = "This is too far from where the pet was lost for the time elapsed."

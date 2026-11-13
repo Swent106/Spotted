@@ -89,6 +89,7 @@
     <string name="sighting_photo_add">Add Photo</string>
     <string name="sighting_photo_retake">Retake</string>
     <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
+    <string name="sighting_photo_required">Add a photo: with no matching alert, it\'s how the owner will recognise their pet.</string>
     <string name="sighting_no_missing_pet_matches_nearby">No missing pet matches nearby</string>
     <string name="notification_channel_sightings">Sightings</string>
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>

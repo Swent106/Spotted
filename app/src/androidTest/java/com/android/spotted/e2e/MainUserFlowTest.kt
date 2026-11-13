@@ -1,5 +1,9 @@
 package com.android.spotted.e2e
 
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
@@ -9,8 +13,12 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.test.espresso.intent.Intents
+import androidx.test.espresso.intent.Intents.intending
+import androidx.test.espresso.intent.matcher.IntentMatchers.anyIntent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.android.spotted.R
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.ui.addpets.AddPetsScreenTestTags
 import com.android.spotted.ui.authentification.SignInScreenTestTags
@@ -23,6 +31,7 @@ import com.android.spotted.ui.sighting.ReportSightingScreenTestTags
 import com.android.spotted.utils.EndToEndTest
 import com.android.spotted.utils.TestAccount
 import com.google.firebase.auth.FirebaseAuth
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -157,6 +166,7 @@ class MainUserFlowTest : EndToEndTest() {
       composeTestRule.onAllNodes(hasText("Taken from your GPS")).fetchSemanticsNodes().isNotEmpty()
     }
     node(ReportSightingScreenTestTags.NO_MATCH_OPTION).performScrollTo().performClick()
+    pickCatPhoto()
     node(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
@@ -168,6 +178,41 @@ class MainUserFlowTest : EndToEndTest() {
     val location = sightings.single()["location"] as Map<*, *>
     assertEquals("The sighting should be at the GPS position", GPS.latitude, location["latitude"])
     assertEquals("The sighting should be at the GPS position", GPS.longitude, location["longitude"])
+  }
+
+  /**
+   * "No matching alert" needs a photo of an animal, but the test can't drive the system Photo
+   * Picker: its result is stubbed with a real photo of a cat, copied from the app's resources, so
+   * the animal check accepts it and the upload succeeds.
+   */
+  private fun pickCatPhoto() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val photo = File(context.cacheDir, "e2e_cat.png")
+    context.resources.openRawResource(R.drawable.hero_pet_lost).use { input ->
+      photo.outputStream().use { input.copyTo(it) }
+    }
+    Intents.init()
+    try {
+      intending(anyIntent())
+          .respondWith(
+              Instrumentation.ActivityResult(
+                  Activity.RESULT_OK,
+                  Intent().setData(Uri.fromFile(photo)),
+              )
+          )
+      node(ReportSightingScreenTestTags.PHOTO_BUTTON).performScrollTo().performClick()
+      waitUntil("The cat photo should be accepted") {
+        listOf(
+                ReportSightingScreenTestTags.PHOTO_REQUIRED,
+                ReportSightingScreenTestTags.PHOTO_CHECKING,
+            )
+            .all { tag ->
+              composeTestRule.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isEmpty()
+            }
+      }
+    } finally {
+      Intents.release()
+    }
   }
 
   private fun signOut() {
