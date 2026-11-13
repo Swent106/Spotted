@@ -140,7 +140,8 @@ class ScanTagContentTest {
     var cancelled = false
     composeTestRule.setContent {
       ScanTagContent(
-          state = ScanTagUiState(nfcAvailability = NfcAvailability.DISABLED),
+          state = ScanTagUiState(),
+          nfcAvailability = NfcAvailability.DISABLED,
           onOpenNfcSettings = { openedSettings = true },
           onCancel = { cancelled = true },
       )
@@ -160,7 +161,8 @@ class ScanTagContentTest {
     var cancelled = false
     composeTestRule.setContent {
       ScanTagContent(
-          state = ScanTagUiState(nfcAvailability = NfcAvailability.UNSUPPORTED),
+          state = ScanTagUiState(),
+          nfcAvailability = NfcAvailability.UNSUPPORTED,
           onCancel = { cancelled = true },
       )
     }

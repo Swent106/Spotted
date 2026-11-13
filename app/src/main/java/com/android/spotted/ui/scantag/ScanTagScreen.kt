@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.scantag
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
@@ -104,17 +105,30 @@ fun ScanTagScreen(
 
   val context = LocalContext.current
   ScanTagContent(
-      state = scanState.copy(nfcAvailability = nfcAvailability),
+      state = scanState,
+      nfcAvailability = nfcAvailability,
       onCall = { phone ->
-        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)))
+        try {
+          context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null)))
+        } catch (_: ActivityNotFoundException) {}
       },
       onEmail = { email ->
-        context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", email, null)))
+        try {
+          context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", email, null)))
+        } catch (_: ActivityNotFoundException) {}
       },
       onReportSighting = onReportSighting,
       onRetry = viewModel::resetForRetry,
       onCancel = onBack,
-      onOpenNfcSettings = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) },
+      onOpenNfcSettings = {
+        try {
+          context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+        } catch (_: ActivityNotFoundException) {
+          try {
+            context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+          } catch (_: ActivityNotFoundException) {}
+        }
+      },
   )
 }
 
@@ -122,6 +136,7 @@ fun ScanTagScreen(
 @Composable
 fun ScanTagContent(
     state: ScanTagUiState,
+    nfcAvailability: NfcAvailability = NfcAvailability.AVAILABLE,
     onCall: (String) -> Unit = {},
     onEmail: (String) -> Unit = {},
     onReportSighting: (alertId: String?) -> Unit = {},
@@ -202,7 +217,7 @@ fun ScanTagContent(
           )
           SecondaryAction("Cancel", ScanTagScreenTestTags.CANCEL, onCancel)
         }
-        nfcUnavailable && state.nfcAvailability == NfcAvailability.DISABLED -> {
+        nfcUnavailable && nfcAvailability == NfcAvailability.DISABLED -> {
           NfcOffContent()
           Spacer(Modifier.weight(1f))
           PrimaryAction(
@@ -212,7 +227,7 @@ fun ScanTagContent(
           )
           SecondaryAction("Cancel", ScanTagScreenTestTags.CANCEL, onCancel)
         }
-        nfcUnavailable && state.nfcAvailability == NfcAvailability.UNSUPPORTED -> {
+        nfcUnavailable && nfcAvailability == NfcAvailability.UNSUPPORTED -> {
           UnsupportedNfcContent()
           Spacer(Modifier.weight(1f))
           SecondaryAction("Cancel", ScanTagScreenTestTags.CANCEL, onCancel)
@@ -611,12 +626,19 @@ private fun ScanTagUnknownDarkPreview() {
 @Composable
 private fun ScanTagNfcOffDarkPreview() {
   ScanTagPreview(
-      state = ScanTagUiState(nfcAvailability = NfcAvailability.DISABLED),
+      state = ScanTagUiState(),
+      nfcAvailability = NfcAvailability.DISABLED,
       darkTheme = true,
   )
 }
 
 @Composable
-private fun ScanTagPreview(state: ScanTagUiState, darkTheme: Boolean) {
-  SpottedTheme(darkTheme = darkTheme) { ScanTagContent(state = state) }
+private fun ScanTagPreview(
+    state: ScanTagUiState,
+    nfcAvailability: NfcAvailability = NfcAvailability.AVAILABLE,
+    darkTheme: Boolean,
+) {
+  SpottedTheme(darkTheme = darkTheme) {
+    ScanTagContent(state = state, nfcAvailability = nfcAvailability)
+  }
 }
