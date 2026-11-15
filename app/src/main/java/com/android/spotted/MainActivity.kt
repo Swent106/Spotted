@@ -463,8 +463,8 @@ fun NavGraphBuilder.homeDestinations(
           }
         },
     )
-  }  
-  
+  }
+
   composable(Route.PROFILE) {
     profileContent(
         HelperProfileNavigation(
