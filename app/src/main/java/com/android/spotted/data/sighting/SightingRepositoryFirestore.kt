@@ -4,11 +4,12 @@ package com.android.spotted.data.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.sighting.AnimalActivity
 import com.android.spotted.model.sighting.AnimalCondition
 import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
-import com.android.spotted.model.sighting.SightingActivity
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.google.android.gms.tasks.Tasks
@@ -124,16 +125,19 @@ class SightingRepositoryFirestore(
     var alertId: String? = null
     var status: String? = null
     var headingDegrees: Int? = null
-    var activity: String? = null
-    var condition: String? = null
-    var reaction: String? = null
+    var activities: List<String>? = null
+    var conditions: List<String>? = null
+    var reactions: List<String>? = null
     var placeType: String? = null
+    var collar: String? = null
 
     /**
      * Returns null when required data or an enum value is invalid. Sightings saved before status or
      * heading were introduced have neither: they count as pending and have no known direction.
-     * Sightings saved before the optional details (activity, condition, reaction, place type) have
-     * none of them: each one counts as unknown.
+     *
+     * The animal details are optional, so they never make a sighting invalid. Missing ones count as
+     * not reported (empty set or UNKNOWN), and unknown values are dropped (e.g. a value added by a
+     * newer version of the app): losing a detail is better than hiding the sighting from the owner.
      */
     fun toSighting(documentId: String): Sighting? {
       val savedLocation = location ?: return null
@@ -142,22 +146,6 @@ class SightingRepositoryFirestore(
           status?.let { name ->
             SightingStatus.entries.firstOrNull { it.name == name } ?: return null
           } ?: SightingStatus.PENDING
-      val savedActivity =
-          activity?.let { name ->
-            SightingActivity.entries.firstOrNull { it.name == name } ?: return null
-          } ?: SightingActivity.UNKNOWN
-      val savedCondition =
-          condition?.let { name ->
-            AnimalCondition.entries.firstOrNull { it.name == name } ?: return null
-          } ?: AnimalCondition.UNKNOWN
-      val savedReaction =
-          reaction?.let { name ->
-            AnimalReaction.entries.firstOrNull { it.name == name } ?: return null
-          } ?: AnimalReaction.UNKNOWN
-      val savedPlaceType =
-          placeType?.let { name ->
-            PlaceType.entries.firstOrNull { it.name == name } ?: return null
-          } ?: PlaceType.UNKNOWN
       if (reporterId.isBlank()) return null
       return Sighting(
           id = documentId,
@@ -169,10 +157,11 @@ class SightingRepositoryFirestore(
           alertId = alertId,
           status = savedStatus,
           headingDegrees = headingDegrees,
-          activity = savedActivity,
-          condition = savedCondition,
-          reaction = savedReaction,
-          placeType = savedPlaceType,
+          activities = activities.toEnumSet(AnimalActivity.entries),
+          conditions = conditions.toEnumSet(AnimalCondition.entries),
+          reactions = reactions.toEnumSet(AnimalReaction.entries),
+          placeType = placeType.toEnumOr(PlaceType.entries, PlaceType.UNKNOWN),
+          collar = collar.toEnumOr(CollarStatus.entries, CollarStatus.UNKNOWN),
       )
     }
 
@@ -192,11 +181,21 @@ class SightingRepositoryFirestore(
             alertId = sighting.alertId
             status = sighting.status.name
             headingDegrees = sighting.headingDegrees
-            activity = sighting.activity.name
-            condition = sighting.condition.name
-            reaction = sighting.reaction.name
+            // Sorted by declaration order, so the stored array does not depend on the set's order
+            activities = sighting.activities.sorted().map { it.name }
+            conditions = sighting.conditions.sorted().map { it.name }
+            reactions = sighting.reactions.sorted().map { it.name }
             placeType = sighting.placeType.name
+            collar = sighting.collar.name
           }
+
+      /** The values named in this list; unknown names are dropped. */
+      private fun <E : Enum<E>> List<String>?.toEnumSet(entries: List<E>): Set<E> =
+          orEmpty().mapNotNullTo(mutableSetOf()) { name -> entries.firstOrNull { it.name == name } }
+
+      /** The value with this name, or [default] if the name is missing or unknown. */
+      private fun <E : Enum<E>> String?.toEnumOr(entries: List<E>, default: E): E =
+          entries.firstOrNull { it.name == this } ?: default
     }
   }
 
