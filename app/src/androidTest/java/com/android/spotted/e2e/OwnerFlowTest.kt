@@ -48,7 +48,10 @@ class OwnerFlowTest : EndToEndTest() {
     signInAsNewUser(OWNER, firstName = "Owner")
     addPet()
     val ownerId = currentUid()
+    val petId = documents("pets", "ownerId", ownerId).single()[DOCUMENT_ID] as String
     val alertId = reportPetMissing(ownerId)
+    // #376: the pet now has an open alert, so it can't be reported missing again.
+    assertAlreadyReportedMissing(petId)
     signOut()
 
     signInAsNewUser(PASSERBY, firstName = "Passerby")
@@ -58,7 +61,15 @@ class OwnerFlowTest : EndToEndTest() {
     signOut()
 
     signInAgain(OWNER)
+    // #373: the owner's sighting notification isn't asserted here. The notifier only fires for
+    // sightings that arrive while the owner is watching, but this turn-based flow creates the
+    // sighting before the owner signs back in. It's covered by SightingNotifierViewModelTest and
+    // SystemNotifierInstrumentedTest.
+    // TODO(#356): once the notifications screen and bell badge land, assert the bell shows a badge
+    // of 1 here, open Notifications from the bell, and open My alert from the notification.
     confirmSightingAndCloseAlert(alertId, sightingId, ownerId)
+    // #376: with the pet home and its alert closed, it can be reported missing again.
+    assertReportableAgain(petId)
     signOut()
 
     signInAgain(PASSERBY)
@@ -151,6 +162,8 @@ class OwnerFlowTest : EndToEndTest() {
     waitUntil("The GPS position should fill the sighting's location") {
       composeTestRule.onAllNodes(hasText("Taken from your GPS")).fetchSemanticsNodes().isNotEmpty()
     }
+    // The passerby says the pet went north-east: NE is 45 degrees clockwise from north
+    node(DIRECTION_NE_TAG).performScrollTo().performClick()
     node(ReportSightingScreenTestTags.SUBMIT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
@@ -159,6 +172,7 @@ class OwnerFlowTest : EndToEndTest() {
 
     val sighting = documents("sightings", "reporterId", reporterId).single()
     assertEquals("The sighting should be for the alert", alertId, sighting["alertId"])
+    assertEquals("The sighting should record the NE heading", 45L, sighting["headingDegrees"])
     return sighting[DOCUMENT_ID] as String
   }
 
@@ -177,6 +191,10 @@ class OwnerFlowTest : EndToEndTest() {
 
     val status = MyAlertScreenTestTags.status(sightingId)
     waitFor(MyAlertScreenTestTags.sighting(sightingId), "My alert should list the sighting")
+    // The "Went NE" label is a child of the sighting row; the merged tree exposes its text
+    waitUntil("My alert should show the sighting went NE") {
+      composeTestRule.onAllNodes(hasText("Went NE")).fetchSemanticsNodes().isNotEmpty()
+    }
     assertStatus(status, "To review")
     node(MyAlertScreenTestTags.confirm(sightingId)).scrollToAndClick()
     waitUntil("The sighting should show as confirmed") { hasStatus(status, "Confirmed") }
@@ -189,6 +207,55 @@ class OwnerFlowTest : EndToEndTest() {
 
     val alert = documents("alerts", "ownerId", ownerId).single()
     assertEquals("The alert should be closed", "CLOSED", alert["status"])
+  }
+
+  /**
+   * #376: a pet with an open alert can't be reported missing again. Reopens Report missing, checks
+   * the pet is marked "Already reported missing", and that tapping it offers the existing alert
+   * (the dialog) instead of selecting it. Leaves Report missing without changing anything.
+   */
+  private fun assertAlreadyReportedMissing(petId: String) {
+    openReportMissing()
+    // "Already reported missing" is a child Text of the clickable pet row: match it on the row's
+    // merged node, since a descendant test tag is not exposed in the merged tree.
+    waitUntil("The missing pet should be marked as already reported") {
+      petOptionShows(petId, "Already reported missing")
+    }
+    node("${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId").scrollToAndClick()
+    waitFor(
+        ReportMissingScreenTestTags.ALREADY_MISSING_DIALOG,
+        "Tapping an already-missing pet should offer its existing alert",
+    )
+    node(ReportMissingScreenTestTags.DISMISS_ALREADY_MISSING_BUTTON).scrollToAndClick()
+    node(ReportMissingScreenTestTags.BACK_BUTTON).scrollToAndClick()
+    waitFor(HomeScreenTestTags.SCREEN, "Home should show again after leaving Report missing")
+  }
+
+  /**
+   * #376: once the pet is home and its alert is closed, it can be reported missing again. Reopens
+   * Report missing and checks the pet is no longer marked as already reported. Leaves without
+   * publishing.
+   */
+  private fun assertReportableAgain(petId: String) {
+    openReportMissing()
+    waitFor(
+        "${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId",
+        "The pet should be offered again once it is home",
+    )
+    assertFalse(
+        "The pet should no longer be marked as already reported",
+        petOptionShows(petId, "Already reported missing"),
+    )
+    node(ReportMissingScreenTestTags.BACK_BUTTON).scrollToAndClick()
+    waitFor(HomeScreenTestTags.SCREEN, "Home should show again after leaving Report missing")
+  }
+
+  /** Opens Report missing from Home. */
+  private fun openReportMissing() {
+    node(HomeScreenTestTags.BODY)
+        .performScrollToNode(hasTestTag(HomeScreenTestTags.REPORT_MISSING_BUTTON))
+    node(HomeScreenTestTags.REPORT_MISSING_BUTTON).scrollToAndClick()
+    waitFor(ReportMissingScreenTestTags.SCREEN, "Report missing should open")
   }
 
   private fun signOut() {
@@ -214,6 +281,15 @@ class OwnerFlowTest : EndToEndTest() {
           .fetchSemanticsNodes()
           .isNotEmpty()
 
+  /** Whether the pet row [petId] in Report missing shows [text] (read from its merged node). */
+  private fun petOptionShows(petId: String, text: String): Boolean =
+      composeTestRule
+          .onAllNodes(
+              hasTestTag("${ReportMissingScreenTestTags.PET_OPTION_PREFIX}$petId") and hasText(text)
+          )
+          .fetchSemanticsNodes()
+          .isNotEmpty()
+
   private fun assertStatus(tag: String, label: String) =
       assertEquals("The sighting's status should be \"$label\"", true, hasStatus(tag, label))
 
@@ -221,5 +297,8 @@ class OwnerFlowTest : EndToEndTest() {
     val OWNER = TestAccount(name = "Owner Tester", email = "owner@spotted.test", sub = "e2e-owner")
     val PASSERBY =
         TestAccount(name = "Passerby Tester", email = "passerby@spotted.test", sub = "e2e-passerby")
+
+    /** The north-east tile of the sighting form's DirectionPicker (see DirectionPicker). */
+    const val DIRECTION_NE_TAG = "sighting_direction_ne"
   }
 }
