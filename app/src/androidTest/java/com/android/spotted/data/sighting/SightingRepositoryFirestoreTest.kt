@@ -5,7 +5,11 @@ package com.android.spotted.data.sighting
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
+import com.android.spotted.model.sighting.SightingActivity
 import com.android.spotted.model.sighting.SightingStatus
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
@@ -80,11 +84,17 @@ class SightingRepositoryFirestoreTest {
     val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val sighting =
         sighting(
-            id = repository.getNewId(),
-            alertId = alertId,
-            photoUrl = "https://example.test/milo.jpg",
-            headingDegrees = 45,
-        )
+                id = repository.getNewId(),
+                alertId = alertId,
+                photoUrl = "https://example.test/milo.jpg",
+                headingDegrees = 45,
+            )
+            .copy(
+                activity = SightingActivity.HIDING,
+                condition = AnimalCondition.INJURED,
+                reaction = AnimalReaction.RAN_AWAY,
+                placeType = PlaceType.INSIDE_BUILDING,
+            )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
 
@@ -181,6 +191,29 @@ class SightingRepositoryFirestoreTest {
         repository.getSightingsForAlert(alertId).getOrThrow().map { it.id to it.status },
     )
     assertNull(repository.getSightingsForAlert(alertId).getOrThrow().single().headingDegrees)
+  }
+
+  @Test
+  fun getSightingsForAlert_treatsMissingDetailsAsUnknown_andSkipsUnknownValues() = runTest {
+    val alertId = repository.getNewId()
+    val legacyId = repository.getNewId()
+    val unknownConditionId = repository.getNewId()
+    insertedSightingIds += listOf(legacyId, unknownConditionId)
+    // Sightings saved before the details existed have none; unknown values are skipped
+    seedSightingBypassingRules(legacyId, alertId, species = "DOG")
+    seedSightingBypassingRules(
+        unknownConditionId,
+        alertId,
+        species = "DOG",
+        details = mapOf("condition" to "DEAD"),
+    )
+
+    val legacy = repository.getSightingsForAlert(alertId).getOrThrow().single()
+    assertEquals(legacyId, legacy.id)
+    assertEquals(SightingActivity.UNKNOWN, legacy.activity)
+    assertEquals(AnimalCondition.UNKNOWN, legacy.condition)
+    assertEquals(AnimalReaction.UNKNOWN, legacy.reaction)
+    assertEquals(PlaceType.UNKNOWN, legacy.placeType)
   }
 
   @Test
@@ -373,6 +406,7 @@ class SightingRepositoryFirestoreTest {
       alertId: String,
       species: String,
       status: String? = null,
+      details: Map<String, String> = emptyMap(),
   ) {
     val fields =
         JSONObject()
@@ -397,6 +431,7 @@ class SightingRepositoryFirestoreTest {
             .put("photoUrl", JSONObject().put("nullValue", JSONObject.NULL))
             .put("alertId", JSONObject().put("stringValue", alertId))
     status?.let { fields.put("status", JSONObject().put("stringValue", it)) }
+    details.forEach { (field, value) -> fields.put(field, JSONObject().put("stringValue", value)) }
     seedBypassingRules(collection = "sightings", id = id, fields = fields)
   }
 

@@ -1154,6 +1154,70 @@ describe("Firestore sighting access rules", () => {
     }
   });
 
+  const sightingDetails = {
+    activity: "HIDING",
+    condition: "INJURED",
+    reaction: "RAN_AWAY",
+    placeType: "INSIDE_BUILDING",
+  };
+
+  it("sighting details: every allowed value is accepted, including UNKNOWN", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+    const allowedValues = {
+      activity: ["MOVING", "RESTING", "EATING", "HIDING", "UNKNOWN"],
+      condition: ["LOOKS_FINE", "INJURED", "THIN", "UNKNOWN"],
+      reaction: ["CAME_CLOSER", "KEPT_AWAY", "RAN_AWAY", "DIDNT_APPROACH", "UNKNOWN"],
+      placeType: ["STREET", "PARK", "GARDEN", "FIELD", "FOREST", "INSIDE_BUILDING", "UNKNOWN"],
+    };
+
+    for (const [field, values] of Object.entries(allowedValues)) {
+      for (const value of values) {
+        await assertSucceeds(setDoc(ref, sighting("sighting-1", "user-1", { [field]: value })));
+      }
+    }
+    await assertSucceeds(setDoc(ref, sighting("sighting-1", "user-1", sightingDetails)));
+  });
+
+  it("sighting details: unknown values, wrong types and null are denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+    const invalidDetails = [
+      { activity: "SLEEPING" },
+      { activity: "moving" },
+      { condition: "DEAD" },
+      { condition: 1 },
+      { reaction: "" },
+      { reaction: null },
+      { placeType: "BEACH" },
+      { placeType: ["STREET"] },
+    ];
+
+    for (const details of invalidDetails) {
+      await assertFails(setDoc(ref, sighting("sighting-1", "user-1", details)));
+    }
+  });
+
+  it("sighting details: the reporter can change them while the sighting is pending", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, sightingDetails));
+    await assertFails(updateDoc(ref, { condition: "DEAD" }));
+  });
+
+  it("sighting details: the alert owner can review, but cannot change them", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1", sightingDetails);
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+    await assertFails(updateDoc(ref, { condition: "LOOKS_FINE" }));
+    await assertFails(updateDoc(ref, { status: "DISMISSED", reaction: "CAME_CLOSER" }));
+    await assertFails(updateDoc(ref, { activity: deleteField() }));
+  });
+
   it("sighting update: reporter cannot make the sighting invalid", async () => {
     await seedSighting("sighting-1", "user-1");
     const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");

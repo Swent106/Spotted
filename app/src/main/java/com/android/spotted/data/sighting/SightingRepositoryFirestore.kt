@@ -4,7 +4,11 @@ package com.android.spotted.data.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
+import com.android.spotted.model.sighting.SightingActivity
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.google.android.gms.tasks.Tasks
@@ -120,10 +124,16 @@ class SightingRepositoryFirestore(
     var alertId: String? = null
     var status: String? = null
     var headingDegrees: Int? = null
+    var activity: String? = null
+    var condition: String? = null
+    var reaction: String? = null
+    var placeType: String? = null
 
     /**
      * Returns null when required data or an enum value is invalid. Sightings saved before status or
      * heading were introduced have neither: they count as pending and have no known direction.
+     * Sightings saved before the optional details (activity, condition, reaction, place type) have
+     * none of them: each one counts as unknown.
      */
     fun toSighting(documentId: String): Sighting? {
       val savedLocation = location ?: return null
@@ -132,6 +142,22 @@ class SightingRepositoryFirestore(
           status?.let { name ->
             SightingStatus.entries.firstOrNull { it.name == name } ?: return null
           } ?: SightingStatus.PENDING
+      val savedActivity =
+          activity?.let { name ->
+            SightingActivity.entries.firstOrNull { it.name == name } ?: return null
+          } ?: SightingActivity.UNKNOWN
+      val savedCondition =
+          condition?.let { name ->
+            AnimalCondition.entries.firstOrNull { it.name == name } ?: return null
+          } ?: AnimalCondition.UNKNOWN
+      val savedReaction =
+          reaction?.let { name ->
+            AnimalReaction.entries.firstOrNull { it.name == name } ?: return null
+          } ?: AnimalReaction.UNKNOWN
+      val savedPlaceType =
+          placeType?.let { name ->
+            PlaceType.entries.firstOrNull { it.name == name } ?: return null
+          } ?: PlaceType.UNKNOWN
       if (reporterId.isBlank()) return null
       return Sighting(
           id = documentId,
@@ -143,6 +169,10 @@ class SightingRepositoryFirestore(
           alertId = alertId,
           status = savedStatus,
           headingDegrees = headingDegrees,
+          activity = savedActivity,
+          condition = savedCondition,
+          reaction = savedReaction,
+          placeType = savedPlaceType,
       )
     }
 
@@ -162,6 +192,10 @@ class SightingRepositoryFirestore(
             alertId = sighting.alertId
             status = sighting.status.name
             headingDegrees = sighting.headingDegrees
+            activity = sighting.activity.name
+            condition = sighting.condition.name
+            reaction = sighting.reaction.name
+            placeType = sighting.placeType.name
           }
     }
   }

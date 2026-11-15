@@ -20,6 +20,10 @@ import com.android.spotted.model.Pet.Species
  * @property alertId Id of the lost-pet alert this sighting is linked to, if any.
  * @property status What the owner of the linked alert decided about this sighting.
  * @property headingDegrees Direction the pet went in degrees clockwise from north, if known.
+ * @property activity What the animal was doing, if the passerby said.
+ * @property condition How the animal looked, if the passerby said.
+ * @property reaction How the animal reacted to the passerby, if the passerby said.
+ * @property placeType Type of place where the animal was seen, if the passerby said.
  */
 data class Sighting(
     val id: String,
@@ -31,6 +35,10 @@ data class Sighting(
     val alertId: String? = null,
     val status: SightingStatus = SightingStatus.PENDING,
     val headingDegrees: Int? = null,
+    val activity: SightingActivity = SightingActivity.UNKNOWN,
+    val condition: AnimalCondition = AnimalCondition.UNKNOWN,
+    val reaction: AnimalReaction = AnimalReaction.UNKNOWN,
+    val placeType: PlaceType = PlaceType.UNKNOWN,
 )
 
 /**
@@ -47,4 +55,51 @@ enum class SightingStatus {
 
   /** The owner says it is not their pet: the sighting is ignored. */
   DISMISSED,
+}
+
+/**
+ * What the animal was doing when it was seen. Optional detail: [UNKNOWN] when the passerby did not
+ * say.
+ */
+enum class SightingActivity {
+  MOVING,
+  RESTING,
+  EATING,
+  HIDING,
+  UNKNOWN,
+}
+
+/**
+ * How the animal looked when it was seen. Optional detail: [UNKNOWN] when the passerby did not say.
+ */
+enum class AnimalCondition {
+  LOOKS_FINE,
+  INJURED,
+  THIN,
+  UNKNOWN,
+}
+
+/**
+ * How the animal reacted to the passerby. Optional detail: [UNKNOWN] when the passerby did not say.
+ */
+enum class AnimalReaction {
+  CAME_CLOSER,
+  KEPT_AWAY,
+  RAN_AWAY,
+  DIDNT_APPROACH,
+  UNKNOWN,
+}
+
+/**
+ * Type of place where the animal was seen. Optional detail: [UNKNOWN] when the passerby did not
+ * say.
+ */
+enum class PlaceType {
+  STREET,
+  PARK,
+  GARDEN,
+  FIELD,
+  FOREST,
+  INSIDE_BUILDING,
+  UNKNOWN,
 }
