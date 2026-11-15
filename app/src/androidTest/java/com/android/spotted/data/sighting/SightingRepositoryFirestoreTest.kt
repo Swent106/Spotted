@@ -5,6 +5,11 @@ package com.android.spotted.data.sighting
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import com.google.android.gms.tasks.Tasks
@@ -24,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -80,11 +86,19 @@ class SightingRepositoryFirestoreTest {
     val alertId = seedAlertBypassingRules(ownerId = ALERT_OWNER)
     val sighting =
         sighting(
-            id = repository.getNewId(),
-            alertId = alertId,
-            photoUrl = "https://example.test/milo.jpg",
-            headingDegrees = 45,
-        )
+                id = repository.getNewId(),
+                alertId = alertId,
+                photoUrl = "https://example.test/milo.jpg",
+                headingDegrees = 45,
+            )
+            .copy(
+                activities = setOf(AnimalActivity.HIDING, AnimalActivity.EATING),
+                conditions = setOf(AnimalCondition.LIMPING, AnimalCondition.THIN),
+                reactions =
+                    setOf(AnimalReaction.KEPT_ITS_DISTANCE, AnimalReaction.GROWLED_OR_HISSED),
+                placeType = PlaceType.PARK,
+                collar = CollarStatus.NO_COLLAR,
+            )
 
     assertTrue(repository.reportSighting(sighting).isSuccess)
 
@@ -181,6 +195,53 @@ class SightingRepositoryFirestoreTest {
         repository.getSightingsForAlert(alertId).getOrThrow().map { it.id to it.status },
     )
     assertNull(repository.getSightingsForAlert(alertId).getOrThrow().single().headingDegrees)
+  }
+
+  @Test
+  fun getSightingsForAlert_withoutDetails_loadsEmptySetsAndUnknown() = runTest {
+    // Sightings saved before the details existed have none of their fields
+    val legacy = seedAndLoadDetails()
+
+    assertEquals(emptySet<AnimalActivity>(), legacy.activities)
+    assertEquals(emptySet<AnimalCondition>(), legacy.conditions)
+    assertEquals(emptySet<AnimalReaction>(), legacy.reactions)
+    assertEquals(PlaceType.UNKNOWN, legacy.placeType)
+    assertEquals(CollarStatus.UNKNOWN, legacy.collar)
+  }
+
+  @Test
+  fun getSightingsForAlert_dropsUnknownActivity() = runTest {
+    val loaded = seedAndLoadDetails(activities = listOf("EATING", "TELEPORTING"))
+
+    assertEquals(setOf(AnimalActivity.EATING), loaded.activities)
+  }
+
+  @Test
+  fun getSightingsForAlert_dropsUnknownCondition() = runTest {
+    val loaded = seedAndLoadDetails(conditions = listOf("THIN", "DEAD"))
+
+    assertEquals(setOf(AnimalCondition.THIN), loaded.conditions)
+  }
+
+  @Test
+  fun getSightingsForAlert_dropsUnknownReaction() = runTest {
+    val loaded = seedAndLoadDetails(reactions = listOf("HID", "DANCED"))
+
+    assertEquals(setOf(AnimalReaction.HID), loaded.reactions)
+  }
+
+  @Test
+  fun getSightingsForAlert_loadsUnknownPlaceTypeAsUnknown() = runTest {
+    val loaded = seedAndLoadDetails(placeType = "BEACH")
+
+    assertEquals(PlaceType.UNKNOWN, loaded.placeType)
+  }
+
+  @Test
+  fun getSightingsForAlert_loadsUnknownCollarAsUnknown() = runTest {
+    val loaded = seedAndLoadDetails(collar = "MAYBE")
+
+    assertEquals(CollarStatus.UNKNOWN, loaded.collar)
   }
 
   @Test
@@ -368,11 +429,55 @@ class SightingRepositoryFirestoreTest {
       if (value == null) JSONObject().put("nullValue", JSONObject.NULL)
       else JSONObject().put("stringValue", value)
 
+  /** A Firestore REST array of strings: {"arrayValue": {"values": [{"stringValue": ...}]}}. */
+  private fun stringArray(values: List<String>): JSONObject =
+      JSONObject()
+          .put(
+              "arrayValue",
+              JSONObject()
+                  .put("values", JSONArray(values.map { JSONObject().put("stringValue", it) })),
+          )
+
+  /**
+   * Seeds one sighting with these raw detail values as the admin (the rules would reject unknown
+   * ones), then loads it back. Fails if the sighting is not loaded: details never make it invalid.
+   */
+  private suspend fun seedAndLoadDetails(
+      activities: List<String>? = null,
+      conditions: List<String>? = null,
+      reactions: List<String>? = null,
+      placeType: String? = null,
+      collar: String? = null,
+  ): Sighting {
+    val alertId = repository.getNewId()
+    val id = repository.getNewId()
+    insertedSightingIds += id
+    seedSightingBypassingRules(
+        id,
+        alertId,
+        species = "DOG",
+        activities = activities,
+        conditions = conditions,
+        reactions = reactions,
+        placeType = placeType,
+        collar = collar,
+    )
+
+    val loaded = repository.getSightingsForAlert(alertId).getOrThrow()
+    assertEquals(listOf(id), loaded.map { it.id })
+    return loaded.first()
+  }
+
   private suspend fun seedSightingBypassingRules(
       id: String,
       alertId: String,
       species: String,
       status: String? = null,
+      activities: List<String>? = null,
+      conditions: List<String>? = null,
+      reactions: List<String>? = null,
+      placeType: String? = null,
+      collar: String? = null,
   ) {
     val fields =
         JSONObject()
@@ -397,6 +502,11 @@ class SightingRepositoryFirestoreTest {
             .put("photoUrl", JSONObject().put("nullValue", JSONObject.NULL))
             .put("alertId", JSONObject().put("stringValue", alertId))
     status?.let { fields.put("status", JSONObject().put("stringValue", it)) }
+    activities?.let { fields.put("activities", stringArray(it)) }
+    conditions?.let { fields.put("conditions", stringArray(it)) }
+    reactions?.let { fields.put("reactions", stringArray(it)) }
+    placeType?.let { fields.put("placeType", JSONObject().put("stringValue", it)) }
+    collar?.let { fields.put("collar", JSONObject().put("stringValue", it)) }
     seedBypassingRules(collection = "sightings", id = id, fields = fields)
   }
 
