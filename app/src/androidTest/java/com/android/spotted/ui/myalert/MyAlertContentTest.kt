@@ -3,6 +3,7 @@
 package com.android.spotted.ui.myalert
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -40,6 +41,7 @@ class MyAlertContentTest {
 
   private var drawnMarkers: List<SightingMarker> = emptyList()
   private var drawnArea: LikelyArea? = null
+  private var drawnCenter: Location? = null
 
   private fun setContent(
       state: MyAlertUiState,
@@ -55,9 +57,10 @@ class MyAlertContentTest {
           onConfirm = onConfirm,
           onDismiss = onDismiss,
           onMarkFound = onMarkFound,
-          map = { markers, likelyArea, _, modifier ->
+          map = { markers, likelyArea, center, modifier ->
             drawnMarkers = markers
             drawnArea = likelyArea
+            drawnCenter = center
             Box(modifier)
           },
       )
@@ -105,6 +108,15 @@ class MyAlertContentTest {
   }
 
   @Test
+  fun noAlertWithoutAnError_showsNoAlertContent() {
+    setContent(MyAlertUiState(isLoading = false))
+
+    node(MyAlertScreenTestTags.LOADING).assertDoesNotExist()
+    node(MyAlertScreenTestTags.ERROR).assertDoesNotExist()
+    node(MyAlertScreenTestTags.MAP).assertDoesNotExist()
+  }
+
+  @Test
   fun errorWithAnAlert_keepsTheAlertBelowTheError() {
     // A failed action (here confirming a sighting) must not wipe what the owner was looking at
     setContent(
@@ -132,6 +144,15 @@ class MyAlertContentTest {
     node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
     node(MyAlertScreenTestTags.NO_SIGHTINGS).assertIsDisplayed()
     assertTrue(drawnMarkers.isEmpty())
+  }
+
+  @Test
+  fun noLikelyArea_centersTheMapOnTheNewestSighting() {
+    setContent(
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING))
+    )
+
+    assertEquals(PENDING.location, drawnCenter)
   }
 
   @Test
@@ -223,6 +244,32 @@ class MyAlertContentTest {
               )
       )
     }
+
+    node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
+  }
+
+  @Test
+  fun realMap_updatesItsMarkersAndAreaWhenSightingsChange() {
+    val state = mutableStateOf(MyAlertUiState(isLoading = false, alert = MILO_ALERT))
+    composeTestRule.setContent { MyAlertContent(state = state.value) }
+    node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
+
+    state.value =
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(PENDING),
+            likelyArea = AREA,
+        )
+    composeTestRule.waitForIdle()
+
+    state.value =
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(PENDING, CONFIRMED),
+        )
+    composeTestRule.waitForIdle()
 
     node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
   }
