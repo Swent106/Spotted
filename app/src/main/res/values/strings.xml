@@ -140,4 +140,13 @@
     <string name="link_tag_nfc_disabled">NFC is turned off. Turn it on to link the tag.</string>
     <string name="link_tag_nfc_unsupported">This phone can\'t write NFC tags.</string>
     <string name="link_tag_open_nfc_settings">Open NFC settings</string>
+
+    <!-- Breed picker -->
+    <string name="breed_mixed">Mixed</string>
+    <string name="breed_unknown">Unknown</string>
+    <string name="breed_picker_label">Breed</string>
+    <string name="breed_picker_placeholder">Select a breed</string>
+    <string name="breed_picker_title">Choose a breed</string>
+    <string name="breed_picker_search_placeholder">Labrador</string>
+    <string name="breed_picker_no_match">No breed matches \"%1$s\"</string>
 </resources>
