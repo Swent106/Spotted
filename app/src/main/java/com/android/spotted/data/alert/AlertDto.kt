@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.alert
 
 import com.android.spotted.model.Location
@@ -23,6 +24,7 @@ internal data class AlertDto(
     val petPhotoUrl: String? = null,
     val petAllergies: List<String> = emptyList(),
     val petBehaviors: List<String> = emptyList(),
+    val lastSeenAtMillis: Long? = null,
 ) {
   fun toDomain(): Alert? {
     val alertStatus = runCatching { AlertStatus.valueOf(status) }.getOrNull() ?: return null
@@ -43,6 +45,7 @@ internal data class AlertDto(
             petBehaviors
                 .mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() }
                 .toSet(),
+        lastSeenAtMillis = lastSeenAtMillis,
     )
   }
 }
@@ -63,4 +66,5 @@ internal fun Alert.toDto() =
         petPhotoUrl = petPhotoUrl,
         petAllergies = petAllergies,
         petBehaviors = petBehaviors.map { it.name },
+        lastSeenAtMillis = lastSeenAtMillis,
     )

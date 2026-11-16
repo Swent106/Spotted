@@ -11,6 +11,7 @@ import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.distanceKm
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Source
@@ -147,6 +148,52 @@ class AlertRepositoryFirestore(
     }
   }
 
+  override suspend fun updateLastSeen(
+      alertId: String,
+      location: Location,
+      seenAtMillis: Long,
+  ): Result<Boolean> {
+    return try {
+      val ref = db.collection(collectionPath).document(alertId)
+      // Read and write in one transaction, so an older sighting confirmed at the same time can't
+      // overwrite a newer one
+      val moved =
+          db.runTransaction { transaction ->
+                val snapshot = transaction.get(ref)
+                if (!snapshot.exists()) throw NoSuchElementException("No alert with id $alertId")
+                val lastSeenAt =
+                    snapshot.getLong("lastSeenAtMillis") ?: snapshot.getLong("lostAtMillis") ?: 0L
+                val isOpen = snapshot.getString("status") != AlertStatus.CLOSED.name
+                if (isOpen && seenAtMillis > lastSeenAt) {
+                  transaction.update(
+                      ref,
+                      mapOf(
+                          "lastKnownLocation" to
+                              mapOf(
+                                  "latitude" to location.latitude,
+                                  "longitude" to location.longitude,
+                              ),
+                          "lastSeenAtMillis" to seenAtMillis,
+                      ),
+                  )
+                  true
+                } else {
+                  false
+                }
+              }
+              .await()
+      Result.success(moved)
+    } catch (e: Exception) {
+      if (e is kotlinx.coroutines.CancellationException) {
+        throw e
+      }
+      // Firestore may wrap what the transaction throws: give back the missing alert as it is
+      val missing =
+          generateSequence<Throwable>(e) { it.cause }.firstOrNull { it is NoSuchElementException }
+      Result.failure(missing ?: e)
+    }
+  }
+
   override suspend fun getOpenAlertsByOwner(ownerId: String): Result<List<Alert>> {
     return try {
       // Two equality filters: served by Firestore's single-field indexes, no composite index
@@ -236,12 +283,17 @@ class AlertRepositoryFirestore(
     val openAlerts = db.collection(collectionPath).whereEqualTo("status", "OPEN").limit(100)
     // Firestore calls the listener with the current alerts, then after every change.
     // It runs on a background thread, so parsing the documents never blocks the UI.
+    // Lists from the local cache can miss alerts published while the app was closed,
+    // so they are skipped. Metadata changes are included so that a cached list the
+    // server confirms unchanged is still emitted once it comes from the server.
     val registration =
-        openAlerts.addSnapshotListener(Dispatchers.Default.asExecutor()) { snapshot, error ->
+        openAlerts.addSnapshotListener(Dispatchers.Default.asExecutor(), MetadataChanges.INCLUDE) {
+            snapshot,
+            error ->
           if (error != null) {
             trySend(Result.failure(error))
             close()
-          } else if (snapshot != null) {
+          } else if (snapshot != null && !snapshot.metadata.isFromCache) {
             trySend(Result.success(snapshot.toAlerts().nearNewestFirst(center, radiusKm)))
           }
         }

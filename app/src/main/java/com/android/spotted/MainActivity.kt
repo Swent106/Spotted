@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -35,6 +36,7 @@ import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUT
 import com.android.spotted.data.photo.FirestorePhotoFetcher
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
+import com.android.spotted.ui.NearbyAlertsViewModel
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.addpets.AddPetsScreen
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
@@ -51,6 +53,7 @@ import com.android.spotted.ui.linktag.LinkTagViewModel
 import com.android.spotted.ui.map.AlertsMapScreen
 import com.android.spotted.ui.myalert.MyAlertScreen
 import com.android.spotted.ui.myalert.MyAlertViewModel
+import com.android.spotted.ui.notifications.NotificationsScreen
 import com.android.spotted.ui.notifications.SightingNotifierViewModel
 import com.android.spotted.ui.personalinfo.PersonalInfoScreen
 import com.android.spotted.ui.petprofile.PetProfileScreen
@@ -58,6 +61,7 @@ import com.android.spotted.ui.petprofile.PetProfileViewModel
 import com.android.spotted.ui.profile.HelperProfileNavigation
 import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
+import com.android.spotted.ui.scantag.ScanTagScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
 import com.android.spotted.ui.theme.SpottedTheme
@@ -67,6 +71,7 @@ object Route {
   const val PERSONAL_INFO = "personal_info"
   const val ADD_PETS = "add_pets"
   const val HOME = "home"
+  const val SCAN_TAG = "scan_tag"
   const val REPORT_MISSING = "report_missing"
   const val ALERT_ID = "alertId"
   private const val ALERT = "alert"
@@ -92,6 +97,8 @@ object Route {
   /** The owner's view of their own alert: sightings, likely area, "My pet is home". */
   private const val MY_ALERT_BASE = "my_alert"
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
+  /** New sightings on all the owner's alerts, opened from the Home bell. */
+  const val NOTIFICATIONS = "notifications"
 
   fun petProfile(petId: String) = "$PET/$petId"
 
@@ -121,6 +128,9 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     // After a rotation the intent is still the old one, already handled
     if (savedInstanceState == null) notificationRoute = notificationRouteOf(intent)
+    // Created with the activity, so it watches for nearby alerts while the app runs
+    ViewModelProvider(this, NearbyAlertsViewModel.factory(SystemNotifier(applicationContext)))[
+        NearbyAlertsViewModel::class.java]
     // Photos are kept in Firestore: teach Coil to load their firestore:// references
     Coil.setImageLoader(
         ImageLoader.Builder(applicationContext)
@@ -311,8 +321,16 @@ fun NavGraphBuilder.homeDestinations(
           onMapClick = navigation.onMapClick,
           onCameraClick = navigation.onCameraClick,
           onProfileClick = navigation.onProfileClick,
+          onScanTagClick = navigation.onScanTagClick,
+          onNotificationsClick = navigation.onNotificationsClick,
       )
     },
+    notificationsContent:
+        @Composable
+        (onBack: () -> Unit, onOpenAlert: (alertId: String) -> Unit) -> Unit =
+        { onBack, onOpenAlert ->
+          NotificationsScreen(onBack = onBack, onOpenAlert = onOpenAlert)
+        },
     myAlertContent: @Composable (alertId: String, onBack: () -> Unit) -> Unit = { alertId, onBack ->
       MyAlertScreen(
           viewModel = viewModel(key = alertId, factory = MyAlertViewModel.Factory(alertId)),
@@ -331,12 +349,15 @@ fun NavGraphBuilder.homeDestinations(
           },
       )
     },
-    alertDetailContent: @Composable (alertId: String, onReportSighting: () -> Unit) -> Unit =
-        { alertId, onReportSighting ->
+    alertDetailContent:
+        @Composable
+        (alertId: String, onReportSighting: () -> Unit, onBack: () -> Unit) -> Unit =
+        { alertId, onReportSighting, onBack ->
           AlertDetailScreen(
               viewModel = viewModel(factory = AlertDetailViewModel.Factory),
               alertId = alertId,
               onReportSighting = onReportSighting,
+              onBack = onBack,
           )
         },
     addPetContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
@@ -348,6 +369,12 @@ fun NavGraphBuilder.homeDestinations(
               viewModel(factory = ReportSightingViewModel.Factory)
           LaunchedEffect(alertId) { alertId?.let(viewModel::preselectAlert) }
           ReportSightingScreen(viewModel = viewModel, onSubmitted = onDone, onBack = onDone)
+        },
+    scanTagContent:
+        @Composable
+        (onBack: () -> Unit, onReportSighting: (alertId: String?) -> Unit) -> Unit =
+        { onBack, onReportSighting ->
+          ScanTagScreen(onBack = onBack, onReportSighting = onReportSighting)
         },
     petProfileContent:
         @Composable
@@ -414,9 +441,30 @@ fun NavGraphBuilder.homeDestinations(
             onMapClick = dropUnlessResumed { navController.navigate(Route.MAP) },
             onCameraClick = dropUnlessResumed { navController.navigate(Route.NEW_SIGHTING) },
             onProfileClick = dropUnlessResumed { navController.navigate(Route.PROFILE) },
+            onNotificationsClick =
+                dropUnlessResumed { navController.navigate(Route.NOTIFICATIONS) },
+            onScanTagClick = dropUnlessResumed { navController.navigate(Route.SCAN_TAG) },
         )
     )
   }
+  composable(Route.NOTIFICATIONS) { entry ->
+    notificationsContent({ navController.popBackStackSafely() }) { alertId ->
+      if (entry.isResumed()) navController.navigate(Route.myAlert(alertId))
+    }
+  }
+  composable(Route.SCAN_TAG) { entry ->
+    scanTagContent(
+        dropUnlessResumed { navController.popBackStackSafely() },
+        { alertId ->
+          if (entry.isResumed()) {
+            navController.navigate(
+                if (alertId == null) Route.NEW_SIGHTING else Route.reportSighting(alertId)
+            )
+          }
+        },
+    )
+  }
+
   composable(Route.PROFILE) {
     profileContent(
         HelperProfileNavigation(
@@ -461,6 +509,8 @@ fun NavGraphBuilder.homeDestinations(
     alertDetailContent(
         alertId,
         dropUnlessResumed { navController.navigate(Route.reportSighting(alertId)) },
+        // Back to the screen it was opened from: Home, the Map or a notification
+        { navController.popBackStackSafely() },
     )
   }
   composable(Route.REPORT_SIGHTING) { entry ->
@@ -490,4 +540,7 @@ data class HomeNavigation(
     val onMapClick: () -> Unit = {},
     val onCameraClick: () -> Unit = {},
     val onProfileClick: () -> Unit = {},
+    val onScanTagClick: () -> Unit = {},
+    /** Opens the Notifications screen (the bell). */
+    val onNotificationsClick: () -> Unit = {},
 )

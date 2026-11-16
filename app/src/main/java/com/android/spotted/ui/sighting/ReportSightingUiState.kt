@@ -32,6 +32,7 @@ data class ReportSightingUiState(
     val photoUri: String? = null,
     val detectedSpecies: Species? = null,
     val nearbyAlerts: List<NearbyAlertOption> = emptyList(),
+    val isNearbyAlertsLoaded: Boolean = false,
     val isOffline: Boolean = false,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
@@ -46,5 +47,13 @@ data class ReportSightingUiState(
             photoCheck != PhotoCheck.CHECKING &&
             photoCheck != PhotoCheck.NO_ANIMAL &&
             !isSubmitting &&
-            !submitted
+            !submitted &&
+            (!isNoMatchingAlertSelected || photoCheck == PhotoCheck.ANIMAL)
+
+  /**
+   * Without an alert to match, the photo is the only way an owner can recognise their pet, so it is
+   * required; with an alert it stays optional.
+   */
+  val isPhotoMissing: Boolean
+    get() = isNoMatchingAlertSelected && photoUri == null
 }

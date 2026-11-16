@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
@@ -22,4 +23,13 @@ data class Alert(
     val petPhotoUrl: String? = null,
     val petAllergies: List<String> = emptyList(),
     val petBehaviors: Set<Behavior> = emptySet(),
-)
+    /**
+     * When the pet was seen at [lastKnownLocation] by a confirmed sighting, or null while it is
+     * still the place where it was lost.
+     */
+    val lastSeenAtMillis: Long? = null,
+) {
+  /** When the pet was last seen at [lastKnownLocation]: confirmed sighting, else when lost. */
+  val lastSeenAt: Long
+    get() = lastSeenAtMillis ?: lostAtMillis
+}

@@ -815,6 +815,69 @@ describe("Firestore alert access rules", () => {
     await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { petName: "Max" }));
   });
 
+  const seenThere = (lastSeenAtMillis) => ({
+    lastKnownLocation: { latitude: 46.52, longitude: 6.63 },
+    lastSeenAtMillis,
+  });
+
+  it("last seen: owner is allowed to move their open alert to a newer sighting", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1500000)));
+  });
+
+  it("last seen: another user is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-2");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1500000)));
+  });
+
+  it("last seen: anonymous user is denied", async () => {
+    await seedAlert();
+    const db = testEnvironment.unauthenticatedContext().firestore();
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1500000)));
+  });
+
+  it("last seen: a time older than the current last seen is denied", async () => {
+    await seedAlert({ lastSeenAtMillis: 1500000 });
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(1200000)));
+  });
+
+  it("last seen: a time before the pet was lost is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(999999)));
+  });
+
+  it("last seen: a time far in the future is denied", async () => {
+    await seedAlert();
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), seenThere(Date.now() + 60 * 60 * 1000))
+    );
+  });
+
+  it("last seen: removing the last seen time is denied", async () => {
+    await seedAlert({ lastSeenAtMillis: 1500000 });
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), { lastSeenAtMillis: null }));
+  });
+
+  it("last seen: a closed alert can't be moved", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(2500000)));
+  });
+
   // openPetAlerts/{petId}: the lock publishAlert writes with each alert (one open alert per pet)
   it("lock: the pet's owner can read a missing lock and create one", async () => {
     await seedPet("pet-1", "owner-1");
@@ -1096,6 +1159,118 @@ describe("Firestore sighting access rules", () => {
     for (const invalidSighting of invalidSightings) {
       await assertFails(setDoc(ref, invalidSighting));
     }
+  });
+
+  const sightingDetails = {
+    activities: ["EATING", "HIDING"],
+    conditions: ["LIMPING", "THIN"],
+    reactions: ["KEPT_ITS_DISTANCE", "GROWLED_OR_HISSED"],
+    placeType: "INSIDE_BUILDING",
+    collar: "NO_COLLAR",
+  };
+
+  const allowedDetailLists = {
+    activities: [
+      "WALKING", "RUNNING", "CROSSING_ROAD", "RESTING", "SLEEPING", "HIDING", "EATING",
+      "DRINKING", "SCAVENGING", "HUNTING", "SNIFFING_EXPLORING", "FOLLOWING_PEOPLE",
+      "PLAYING_WITH_PEOPLE", "WITH_OTHER_ANIMALS", "FIGHTING", "VOCALIZING",
+    ],
+    conditions: [
+      "LOOKS_FINE", "INJURED", "LIMPING", "BLEEDING", "THIN", "LOOKS_SICK", "EXHAUSTED", "DIRTY",
+      "WET",
+    ],
+    reactions: [
+      "CAME_CLOSER", "FOLLOWED_ME", "LET_ITSELF_BE_TOUCHED", "ACCEPTED_FOOD", "IGNORED_ME",
+      "KEPT_ITS_DISTANCE", "RAN_AWAY", "HID", "GROWLED_OR_HISSED", "SNAPPED_OR_ATTACKED",
+    ],
+  };
+
+  const allowedDetailValues = {
+    placeType: ["STREET", "PARK", "GARDEN", "FIELD", "FOREST", "INSIDE_BUILDING", "UNKNOWN"],
+    collar: ["WORE_COLLAR", "NO_COLLAR", "UNKNOWN"],
+  };
+
+  it("sighting details: every allowed value is accepted on create", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+
+    // One id per value, so each write is a create (writing the same id again is an update)
+    async function assertCreated(id, details) {
+      await assertSucceeds(setDoc(doc(db, "sightings", id), sighting(id, "user-1", details)));
+    }
+
+    for (const [field, values] of Object.entries(allowedDetailLists)) {
+      for (const value of values) {
+        await assertCreated(`sighting-${field}-${value}`, { [field]: [value] });
+      }
+    }
+    for (const [field, values] of Object.entries(allowedDetailValues)) {
+      for (const value of values) {
+        await assertCreated(`sighting-${field}-${value}`, { [field]: value });
+      }
+    }
+    await assertCreated("sighting-all-details", sightingDetails);
+  });
+
+  it("sighting details: empty lists are accepted", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, "sightings", "sighting-1"),
+        sighting("sighting-1", "user-1", { activities: [], conditions: [], reactions: [] }),
+      ),
+    );
+  });
+
+  it("sighting details: invalid values are denied", async () => {
+    await seedAlert("alert-1", "owner-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+    const invalidDetails = [
+      { activities: ["TELEPORTING"] },
+      { activities: ["eating"] },
+      { activities: "EATING" },
+      { activities: null },
+      { activities: ["EATING", "EATING"] },
+      { conditions: ["DEAD"] },
+      { conditions: ["LOOKS_FINE", "LIMPING"] },
+      { conditions: [1] },
+      { reactions: ["DANCED"] },
+      { reactions: ["HID", "HID"] },
+      { placeType: "BEACH" },
+      { placeType: null },
+      { collar: "MAYBE" },
+      { collar: true },
+      // The single-value keys of the first version are not part of the schema
+      { activity: "MOVING" },
+    ];
+
+    for (const details of invalidDetails) {
+      await assertFails(setDoc(ref, sighting("sighting-1", "user-1", details)));
+    }
+  });
+
+  it("sighting details: the reporter can change them while the sighting is pending", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1");
+    const ref = doc(firestoreForUser("user-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, sightingDetails));
+    await assertSucceeds(updateDoc(ref, { conditions: ["LOOKS_FINE"] }));
+    await assertFails(updateDoc(ref, { conditions: ["DEAD"] }));
+  });
+
+  it("sighting details: the alert owner can review, but cannot change them", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "user-1", sightingDetails);
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+    await assertFails(updateDoc(ref, { conditions: ["LOOKS_FINE"] }));
+    await assertFails(updateDoc(ref, { status: "DISMISSED", reactions: ["CAME_CLOSER"] }));
+    await assertFails(updateDoc(ref, { collar: "WORE_COLLAR" }));
+    await assertFails(updateDoc(ref, { activities: deleteField() }));
   });
 
   it("sighting update: reporter cannot make the sighting invalid", async () => {

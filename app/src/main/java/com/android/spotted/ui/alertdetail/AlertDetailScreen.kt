@@ -127,17 +127,11 @@ fun AlertDetailContent(
 ) {
   when {
     state.isLoading || (state.alert == null && !state.notFound && state.errorMessage == null) ->
-        Box(
-            modifier = modifier.fillMaxSize().testTag(AlertDetailTestTags.SCREEN),
-            contentAlignment = Alignment.Center,
-        ) {
+        StatusMessage(onBack, modifier) {
           CircularProgressIndicator(modifier = Modifier.testTag(AlertDetailTestTags.LOADING))
         }
     state.errorMessage != null ->
-        Box(
-            modifier = modifier.fillMaxSize().testTag(AlertDetailTestTags.SCREEN),
-            contentAlignment = Alignment.Center,
-        ) {
+        StatusMessage(onBack, modifier) {
           Text(
               text = state.errorMessage,
               color = MaterialTheme.colorScheme.error,
@@ -145,10 +139,7 @@ fun AlertDetailContent(
           )
         }
     state.notFound ->
-        Box(
-            modifier = modifier.fillMaxSize().testTag(AlertDetailTestTags.SCREEN),
-            contentAlignment = Alignment.Center,
-        ) {
+        StatusMessage(onBack, modifier) {
           Text(
               text = "This alert is no longer available.",
               modifier = Modifier.padding(24.dp).testTag(AlertDetailTestTags.NOT_FOUND),
@@ -163,6 +154,29 @@ fun AlertDetailContent(
             onShare = { onShare(state.alert) },
             modifier = modifier,
         )
+  }
+}
+
+/**
+ * A loading, error or "not found" message, centred, with the back button where the photo header
+ * puts it, so the user can always leave the screen.
+ */
+@Composable
+private fun StatusMessage(
+    onBack: () -> Unit,
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
+  Box(
+      modifier = modifier.fillMaxSize().testTag(AlertDetailTestTags.SCREEN),
+      contentAlignment = Alignment.Center,
+  ) {
+    content()
+    SpottedBackButton(
+        onClick = onBack,
+        testTag = AlertDetailTestTags.BACK,
+        modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 20.dp, vertical = 48.dp),
+    )
   }
 }
 

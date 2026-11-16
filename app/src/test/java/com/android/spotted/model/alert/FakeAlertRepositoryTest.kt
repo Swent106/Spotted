@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -278,6 +279,52 @@ class FakeAlertRepositoryTest {
     val stored = repository.getAlertById(alert.id).getOrThrow()
     assertEquals(AlertStatus.OPEN, stored?.status)
     assertNull(stored?.closedAtMillis)
+  }
+
+  @Test
+  fun updateLastSeen_withNewerTime_movesTheAlert() = runTest {
+    repository.publishAlert(
+        alert(id = "alert-1", lostAtMillis = 10L, latitude = 0.0, longitude = 0.0)
+    )
+    val seenAt = Location(latitude = 0.01, longitude = 0.02)
+
+    assertTrue(repository.updateLastSeen("alert-1", seenAt, seenAtMillis = 20L).getOrThrow())
+
+    val moved = repository.getAlertById("alert-1").getOrThrow()!!
+    assertEquals(seenAt, moved.lastKnownLocation)
+    assertEquals(20L, moved.lastSeenAt)
+  }
+
+  @Test
+  fun updateLastSeen_withOlderTime_leavesTheAlert() = runTest {
+    val alert = alert(id = "alert-1", lostAtMillis = 10L, latitude = 0.0, longitude = 0.0)
+    repository.publishAlert(alert.copy(lastSeenAtMillis = 30L))
+
+    val moved =
+        repository.updateLastSeen("alert-1", Location(0.01, 0.02), seenAtMillis = 20L).getOrThrow()
+
+    assertFalse(moved)
+    assertEquals(
+        alert.copy(lastSeenAtMillis = 30L),
+        repository.getAlertById("alert-1").getOrThrow(),
+    )
+  }
+
+  @Test
+  fun updateLastSeen_onClosedAlert_leavesTheAlert() = runTest {
+    repository.publishAlert(
+        alert(id = "alert-1", lostAtMillis = 10L, latitude = 0.0, longitude = 0.0)
+    )
+    repository.closeAlert("alert-1")
+
+    assertFalse(repository.updateLastSeen("alert-1", Location(0.01, 0.02), 20L).getOrThrow())
+  }
+
+  @Test
+  fun updateLastSeen_onMissingAlert_failsWithNoSuchElement() = runTest {
+    val result = repository.updateLastSeen("missing", Location(0.01, 0.02), 20L)
+
+    assertTrue(result.exceptionOrNull() is NoSuchElementException)
   }
 
   private fun alert(

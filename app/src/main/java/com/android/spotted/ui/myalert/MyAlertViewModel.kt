@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 package com.android.spotted.ui.myalert
 
@@ -100,20 +101,62 @@ class MyAlertViewModel(
     }
   }
 
-  /** Confirms the sighting [id], allowing it to inform the likely area. */
-  fun confirm(id: String) = setSightingStatus(id, SightingStatus.CONFIRMED)
+  /**
+   * Confirms the sighting [id], allowing it to inform the likely area. If it is newer than the
+   * alert's last seen time, the alert's last seen place moves to it.
+   */
+  fun confirm(id: String) =
+      setSightingStatus(id, SightingStatus.CONFIRMED, onUpdated = { moveLastSeenTo(id) })
 
   /** Dismisses the sighting [id], removing it from the likely-area estimate. */
   fun dismiss(id: String) = setSightingStatus(id, SightingStatus.DISMISSED)
 
-  private fun setSightingStatus(id: String, status: SightingStatus) {
+  private fun setSightingStatus(
+      id: String,
+      status: SightingStatus,
+      onUpdated: suspend () -> Unit = {},
+  ) {
     if (!canManageAlert()) return
     _uiState.update { it.copy(errorMessage = null) }
     viewModelScope.launch {
-      sightingRepository.setSightingStatus(id, status).onFailure { failure ->
-        _uiState.update { it.copy(errorMessage = failure.localizedMessage ?: STATUS_UPDATE_FAILED) }
-      }
+      sightingRepository
+          .setSightingStatus(id, status)
+          .fold(
+              onSuccess = { onUpdated() },
+              onFailure = { failure ->
+                _uiState.update {
+                  it.copy(errorMessage = failure.localizedMessage ?: STATUS_UPDATE_FAILED)
+                }
+              },
+          )
     }
+  }
+
+  /** Moves the alert's last seen place to the sighting [sightingId], if it is newer. */
+  private suspend fun moveLastSeenTo(sightingId: String) {
+    val sighting = _uiState.value.sightings.firstOrNull { it.id == sightingId } ?: return
+    alertRepository
+        .updateLastSeen(alertId, sighting.location, sighting.seenAtMillis)
+        .fold(
+            onSuccess = { moved ->
+              if (moved) {
+                _uiState.update { state ->
+                  state.copy(
+                      alert =
+                          state.alert?.copy(
+                              lastKnownLocation = sighting.location,
+                              lastSeenAtMillis = sighting.seenAtMillis,
+                          )
+                  )
+                }
+              }
+            },
+            onFailure = { failure ->
+              _uiState.update {
+                it.copy(errorMessage = failure.localizedMessage ?: LAST_SEEN_UPDATE_FAILED)
+              }
+            },
+        )
   }
 
   /** Closes the alert after the owner has found their pet. */
@@ -154,6 +197,7 @@ class MyAlertViewModel(
     const val LOAD_FAILED = "Couldn't load the alert. Please try again."
     const val SIGHTINGS_LOAD_FAILED = "Couldn't load sightings. Please try again."
     const val STATUS_UPDATE_FAILED = "Couldn't update the sighting. Please try again."
+    const val LAST_SEEN_UPDATE_FAILED = "Couldn't update the last seen place. Please try again."
     const val CLOSE_FAILED = "Couldn't mark the alert as found. Please try again."
 
     val Factory: (String) -> ViewModelProvider.Factory = { alertId ->

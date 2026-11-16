@@ -33,13 +33,16 @@ fun Location.distanceKm(other: Location): Double {
  * "600 m away" under 1 km (rounded to 10 m), "2.4 km away" under 10 km, "12 km away" beyond. A
  * negative distance counts as 0.
  */
-fun formatDistance(km: Double): String {
+fun formatDistance(km: Double): String = "${formatKm(km)} away"
+
+/** [formatDistance] without "away": "600 m", "2.4 km", "12 km". */
+fun formatKm(km: Double): String {
   val meters = (km.coerceAtLeast(0.0) * 100).roundToInt() * 10
   return when {
-    meters < 1000 -> "$meters m away"
+    meters < 1000 -> "$meters m"
     // 9.95 km and above would print "10.0 km"
-    km < 9.95 -> "%.1f km away".format(Locale.US, km)
-    else -> "${km.roundToInt()} km away"
+    km < 9.95 -> "%.1f km".format(Locale.US, km)
+    else -> "${km.roundToInt()} km"
   }
 }
 

@@ -182,6 +182,7 @@ dependencies {
   globalTestImplementation(libs.androidx.junit)
   globalTestImplementation(libs.androidx.espresso.core)
   androidTestImplementation(libs.androidx.test.core)
+  androidTestImplementation(libs.androidx.espresso.intents) // stubs the Photo Picker in the E2E
   androidTestImplementation(libs.androidx.test.runner)
   // androidTestImplementation(libs.androidx.tracing)
   implementation(libs.kotlinx.coroutines.play.services)

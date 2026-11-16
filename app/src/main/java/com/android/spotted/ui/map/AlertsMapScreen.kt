@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,9 +141,14 @@ private fun AlertsMap(
   val context = LocalContext.current
   val currentOnAlertClick by rememberUpdatedState(onAlertClick)
   val mapView = remember { createMapView(context) }
+  // Where the user left the map (latitude, longitude, zoom), saved when an alert is opened above
+  // it, so Back returns to the same view instead of the first alert
+  var savedCamera by rememberSaveable { mutableStateOf<DoubleArray?>(null) }
   DisposableEffect(mapView) {
     mapView.onResume()
     onDispose {
+      val mapCenter = mapView.mapCenter
+      savedCamera = doubleArrayOf(mapCenter.latitude, mapCenter.longitude, mapView.zoomLevelDouble)
       mapView.onPause()
       mapView.onDetach()
     }
@@ -150,8 +156,14 @@ private fun AlertsMap(
   // Centre on the first alert once the alerts are loaded, not on every recomposition
   val center = alerts.firstOrNull()?.lastKnownLocation ?: DefaultMapCenter
   LaunchedEffect(center) {
-    mapView.controller.setZoom(MAP_ZOOM)
-    mapView.controller.setCenter(GeoPoint(center.latitude, center.longitude))
+    val camera = savedCamera
+    if (camera != null) {
+      mapView.controller.setZoom(camera[2])
+      mapView.controller.setCenter(GeoPoint(camera[0], camera[1]))
+    } else {
+      mapView.controller.setZoom(MAP_ZOOM)
+      mapView.controller.setCenter(GeoPoint(center.latitude, center.longitude))
+    }
   }
   // Each lost pet's photo, as a round pin; loaded after the alerts, so pins start as red ones
   var photoPins by remember { mutableStateOf<Map<String, Drawable>>(emptyMap()) }
