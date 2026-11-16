@@ -52,11 +52,11 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.sighting.AnimalActivity
-import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.PlaceType
-import com.android.spotted.model.sighting.AnimalReaction
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.compassLabel
@@ -363,7 +363,13 @@ private fun SightingDetails(sighting: Sighting) {
   val placeType = sighting.placeType.takeIf { it != PlaceType.UNKNOWN }
   val collar = sighting.collar.takeIf { it != CollarStatus.UNKNOWN }
 
-  if (activities == null && conditions == null && reactions == null && placeType == null && collar == null) {
+  if (
+      activities == null &&
+          conditions == null &&
+          reactions == null &&
+          placeType == null &&
+          collar == null
+  ) {
     return
   }
 
@@ -393,12 +399,8 @@ private fun SightingDetails(sighting: Sighting) {
           it.displayNames(),
       )
     }
-    placeType?.let {
-      SightingDetail(sighting.id, "place", "Place", it.displayName())
-    }
-    collar?.let {
-      SightingDetail(sighting.id, "collar", "Collar", it.displayName())
-    }
+    placeType?.let { SightingDetail(sighting.id, "place", "Place", it.displayName()) }
+    collar?.let { SightingDetail(sighting.id, "collar", "Collar", it.displayName()) }
   }
 }
 
@@ -427,13 +429,15 @@ private fun SightingDetail(
   )
 }
 
-private fun <T : Enum<T>> T.displayName(): String =
+internal fun <T : Enum<T>> T.displayName(): String =
     name.lowercase(Locale.ROOT).split('_').joinToString(" ") { word ->
       word.replaceFirstChar { it.uppercase(Locale.ROOT) }
     }
 
-private fun <T : Enum<T>> Iterable<T>.displayNames(): String =
-    sortedBy { it.ordinal }.joinToString(", ") { it.displayName() }
+private fun <T : Enum<T>> Iterable<T>.displayNames(): String = sortedBy {
+  it.ordinal
+}
+    .joinToString(", ") { it.displayName() }
 
 @Composable
 private fun StatusChip(sighting: Sighting) {

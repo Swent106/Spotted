@@ -148,9 +148,7 @@ class MyAlertContentTest {
 
   @Test
   fun noLikelyArea_centersTheMapOnTheNewestSighting() {
-    setContent(
-        MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING))
-    )
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING)))
 
     assertEquals(PENDING.location, drawnCenter)
   }
@@ -303,7 +301,9 @@ class MyAlertContentTest {
             placeType = PlaceType.PARK,
             collar = CollarStatus.WORE_COLLAR,
         )
-    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withDetails)))
+    setContent(
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withDetails))
+    )
 
     node(MyAlertScreenTestTags.detail(withDetails.id, "activity"))
         .performScrollTo()
@@ -328,7 +328,6 @@ class MyAlertContentTest {
     setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(injured)))
 
     node(MyAlertScreenTestTags.detail(injured.id, "conditions"))
-        .performScrollTo()
         .assertTextEquals("Condition: Injured")
   }
 
@@ -370,6 +369,11 @@ class MyAlertContentTest {
     composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
   }
 
+  @Test
+  fun displayName_preservesEmptyWordsBetweenSeparators() {
+    assertEquals("Running  Fast", SyntheticDetail.RUNNING__FAST.displayName())
+  }
+
   private companion object {
     val PARC = Location(latitude = 46.1925, longitude = 6.1580)
     val MILO_ALERT =
@@ -398,5 +402,9 @@ class MyAlertContentTest {
     val DISMISSED = sighting("s-dismissed", SightingStatus.DISMISSED, 1_700_000_200_000L, 46.1940)
     val CONFIRMED = sighting("s-confirmed", SightingStatus.CONFIRMED, 1_700_000_100_000L, 46.1950)
     val AREA = LikelyArea(center = Location(46.1945, 6.1580), radiusMeters = 400.0)
+  }
+
+  private enum class SyntheticDetail {
+    RUNNING__FAST
   }
 }
