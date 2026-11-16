@@ -99,7 +99,13 @@ class UserRepositoryFirestoreTest {
 
   @Test
   fun observeUser_emitsTheProfile_thenEachChange() = runTest {
-    val profile = UserProfile(uid = currentUserId(), name = "Jamie", email = "jamie@example.com")
+    val profile =
+        UserProfile(
+            uid = currentUserId(),
+            name = "Jamie",
+            username = "jamie",
+            email = "jamie@example.com",
+        )
     repository.saveUser(profile).getOrThrow()
 
     // Real time: the listener answers from the emulator, which virtual time doesn't wait for

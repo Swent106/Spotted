@@ -85,6 +85,9 @@ class OwnerFlowTest : EndToEndTest() {
     waitFor(PersonalInfoScreenTestTags.SCREEN, "Personal info should open for a new account")
     node(PersonalInfoScreenTestTags.FIRST_NAME_INPUT).performScrollTo().performTextInput(firstName)
     node(PersonalInfoScreenTestTags.LAST_NAME_INPUT).performScrollTo().performTextInput("Tester")
+    node(PersonalInfoScreenTestTags.USERNAME_INPUT)
+        .performScrollTo()
+        .performTextInput(firstName.lowercase())
     node(PersonalInfoScreenTestTags.HOME_AREA_INPUT).performScrollTo().performTextInput("Lausanne")
     // Home searches alerts around the home pin. Without one it geocodes the home area, which
     // fails on emulators. A tap in the middle of the map pins the home where the alert will be
