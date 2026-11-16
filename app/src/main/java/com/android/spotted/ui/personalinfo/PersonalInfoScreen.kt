@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -67,6 +68,7 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import com.android.spotted.R
 import com.android.spotted.model.Location
+import com.android.spotted.model.location.AddressSuggestion
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.MapPicker
 import com.android.spotted.ui.components.SpottedBackButton
@@ -94,7 +96,12 @@ object PersonalInfoScreenTestTags {
   const val CREATE_PROFILE_BUTTON = "personalInfo_createProfileButton"
   const val LOADER = "personalInfo_loader"
 
+  const val ADDRESS_SUGGESTIONS = "personalInfo_addressSuggestions"
+  const val NO_PLACE_FOUND = "personalInfo_noPlaceFound"
+
   fun radiusChip(radiusKm: Int) = "personalInfo_radiusChip_$radiusKm"
+
+  fun addressSuggestion(index: Int) = "personalInfo_addressSuggestion_$index"
 }
 
 // Figma's Bold (700) is not bundled: SemiBold is the closest available weight.
@@ -148,6 +155,7 @@ fun PersonalInfoContent(
     onAlertRadiusSelect: (Int) -> Unit,
     onCreateProfileClick: () -> Unit,
     isPickingPhoto: Boolean = false,
+    onSuggestionPick: (AddressSuggestion) -> Unit = {},
 ) {
   Box(
       Modifier.fillMaxSize()
@@ -175,6 +183,7 @@ fun PersonalInfoContent(
         HomeLocationCard(
             state,
             onHomeAreaChange,
+            onSuggestionPick,
             onUseMyLocationClick,
             onHomeLocationChange,
             onAlertRadiusSelect,
@@ -329,6 +338,7 @@ private fun IdentityCard(
 private fun HomeLocationCard(
     state: PersonalInfoUiState,
     onHomeAreaChange: (String) -> Unit,
+    onSuggestionPick: (AddressSuggestion) -> Unit,
     onUseMyLocationClick: () -> Unit,
     onHomeLocationChange: (Location) -> Unit,
     onAlertRadiusSelect: (Int) -> Unit,
@@ -352,6 +362,9 @@ private fun HomeLocationCard(
                   .testTag(PersonalInfoScreenTestTags.USE_MY_LOCATION),
       )
     }
+    if (state.addressSuggestions.isNotEmpty() || state.isNoPlaceFound) {
+      AddressSuggestions(state.addressSuggestions, onSuggestionPick)
+    }
     Text(
         stringResource(R.string.personal_info_home_explanation),
         style = jakarta(12, 16, FontWeight.Medium, SpottedTheme.colors.textSecondary),
@@ -373,6 +386,46 @@ private fun HomeLocationCard(
       PersonalInfoUiState.ALERT_RADIUS_OPTIONS_KM.forEach { radiusKm ->
         RadiusChip(radiusKm, selected = radiusKm == state.alertRadiusKm, onAlertRadiusSelect)
       }
+    }
+  }
+}
+
+/**
+ * Places matching the home area being typed, shown right under the field; "No place found" when
+ * [suggestions] is empty.
+ */
+@Composable
+private fun AddressSuggestions(
+    suggestions: List<AddressSuggestion>,
+    onSuggestionPick: (AddressSuggestion) -> Unit,
+) {
+  Column(
+      Modifier.fillMaxWidth()
+          .clip(RoundedCornerShape(14.dp))
+          .background(SpottedTheme.colors.inputBackground)
+          .testTag(PersonalInfoScreenTestTags.ADDRESS_SUGGESTIONS)
+  ) {
+    if (suggestions.isEmpty()) {
+      Text(
+          stringResource(R.string.personal_info_no_place_found),
+          style = placeholderStyle,
+          modifier =
+              Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                  .testTag(PersonalInfoScreenTestTags.NO_PLACE_FOUND),
+      )
+    }
+    suggestions.forEachIndexed { index, suggestion ->
+      Text(
+          suggestion.label,
+          style = inputStyle,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
+          modifier =
+              Modifier.fillMaxWidth()
+                  .clickable(role = Role.Button) { onSuggestionPick(suggestion) }
+                  .padding(horizontal = 14.dp, vertical = 10.dp)
+                  .testTag(PersonalInfoScreenTestTags.addressSuggestion(index)),
+      )
     }
   }
 }
@@ -551,6 +604,7 @@ fun PersonalInfoScreen(
       onFirstNameChange = viewModel::onFirstNameChanged,
       onLastNameChange = viewModel::onLastNameChanged,
       onHomeAreaChange = viewModel::onHomeAreaChanged,
+      onSuggestionPick = viewModel::onSuggestionPicked,
       onUseMyLocationClick = {
         locationPermissionLauncher.launch(
             arrayOf(
