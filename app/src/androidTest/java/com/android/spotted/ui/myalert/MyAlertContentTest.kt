@@ -14,7 +14,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.LikelyArea
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import org.junit.Assert.assertEquals
@@ -239,6 +244,57 @@ class MyAlertContentTest {
 
     node("alertDetail_sightingDirection_${withDirection.id}").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithText("Went NE").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun sightingWithDetails_displaysAllKnownAnimalDetails() {
+    val withDetails =
+        PENDING.copy(
+            activities = setOf(AnimalActivity.WALKING, AnimalActivity.EATING),
+            conditions = setOf(AnimalCondition.LOOKS_FINE),
+            reactions = setOf(AnimalReaction.CAME_CLOSER),
+            placeType = PlaceType.PARK,
+            collar = CollarStatus.WORE_COLLAR,
+        )
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withDetails)))
+
+    node(MyAlertScreenTestTags.detail(withDetails.id, "activity"))
+        .performScrollTo()
+        .assertTextEquals("Activity: Walking, Eating")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "conditions"))
+        .performScrollTo()
+        .assertTextEquals("Condition: Looks Fine")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "reactions"))
+        .performScrollTo()
+        .assertTextEquals("Reaction: Came Closer")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "place"))
+        .performScrollTo()
+        .assertTextEquals("Place: Park")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "collar"))
+        .performScrollTo()
+        .assertTextEquals("Collar: Wore Collar")
+  }
+
+  @Test
+  fun sightingWithInjury_displaysInjuredCondition() {
+    val injured = PENDING.copy(conditions = setOf(AnimalCondition.INJURED))
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(injured)))
+
+    node(MyAlertScreenTestTags.detail(injured.id, "conditions"))
+        .performScrollTo()
+        .assertTextEquals("Condition: Injured")
+  }
+
+  @Test
+  fun sightingWithoutDetails_displaysNoUnknownValues() {
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING)))
+
+    node(MyAlertScreenTestTags.detail(PENDING.id, "activity")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "conditions")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "reactions")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "place")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "collar")).assertDoesNotExist()
+    composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
   }
 
   private companion object {
