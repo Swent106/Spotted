@@ -297,6 +297,32 @@ class MyAlertContentTest {
     composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
   }
 
+  @Test
+  fun sightingWithSingleDetails_displaysEachValueWithoutUnknowns() {
+    val withReaction =
+        PENDING.copy(id = "s-reaction", reactions = setOf(AnimalReaction.CAME_CLOSER))
+    val withPlace = PENDING.copy(id = "s-place", placeType = PlaceType.PARK)
+    val withCollar = PENDING.copy(id = "s-collar", collar = CollarStatus.WORE_COLLAR)
+    setContent(
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(withReaction, withPlace, withCollar),
+        )
+    )
+
+    node(MyAlertScreenTestTags.detail(withReaction.id, "reactions"))
+        .performScrollTo()
+        .assertTextEquals("Reaction: Came Closer")
+    node(MyAlertScreenTestTags.detail(withPlace.id, "place"))
+        .performScrollTo()
+        .assertTextEquals("Place: Park")
+    node(MyAlertScreenTestTags.detail(withCollar.id, "collar"))
+        .performScrollTo()
+        .assertTextEquals("Collar: Wore Collar")
+    composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
+  }
+
   private companion object {
     val PARC = Location(latitude = 46.1925, longitude = 6.1580)
     val MILO_ALERT =
