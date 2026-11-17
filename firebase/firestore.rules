@@ -112,7 +112,7 @@ service cloud.firestore {
           && d.keys().hasOnly([
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
                 'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors',
-                'lastSeenAtMillis'])
+                'lastSeenAtMillis', 'lossCause', 'lossEnvironment'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
@@ -138,7 +138,14 @@ service cloud.firestore {
           && (d.get('lastSeenAtMillis', null) == null
               || (d.lastSeenAtMillis is int
                   && d.lastSeenAtMillis >= d.lostAtMillis
-                  && d.lastSeenAtMillis <= request.time.toMillis() + 300000));
+                  && d.lastSeenAtMillis <= request.time.toMillis() + 300000))
+          // Optional circumstances of the loss (older alerts don't have them). Set when the
+          // alert is published: they are not in the fields an update may change.
+          && (!('lossCause' in d) || d.lossCause in [
+                'ESCAPED_FROM_HOME', 'DURING_A_WALK', 'SCARED_BY_NOISE', 'DURING_MOVE_OR_TRIP',
+                'STOLEN', 'UNKNOWN'])
+          && (!('lossEnvironment' in d) || d.lossEnvironment in [
+                'CITY_CENTRE', 'SUBURB', 'VILLAGE_OR_RURAL', 'FOREST_OR_MOUNTAIN', 'UNKNOWN']);
       }
 
       // The last seen time only moves forward: an older sighting can't move the pet back

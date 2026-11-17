@@ -9,6 +9,8 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.net.HttpURLConnection
@@ -176,6 +178,80 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     assertTrue("Lookup should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
     assertEquals(alert, result.getOrNull())
+  }
+
+  @Test
+  fun publishAlert_withLossCauseAndEnvironment_loadsThemBack() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+            lossCause = LossCause.DURING_A_WALK,
+            lossEnvironment = LossEnvironment.SUBURB,
+        )
+
+    val published = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue("publish failed: ${published.exceptionOrNull()?.message}", published.isSuccess)
+
+    val stored = firestore.collection("alerts").document(alert.id).get().await()
+    assertEquals("DURING_A_WALK", stored.getString("lossCause"))
+    assertEquals("SUBURB", stored.getString("lossEnvironment"))
+    assertEquals(alert, repository.getAlertById(alert.id).getOrNull())
+  }
+
+  @Test
+  fun getAlertById_alertSavedBeforeLossDetails_loadsWithUnknown() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+        )
+    // Written as an older app version did: without the two fields
+    val legacy =
+        mapOf(
+            "id" to alert.id,
+            "petId" to petId,
+            "ownerId" to ownerId,
+            "lastKnownLocation" to mapOf("latitude" to 46.5196, "longitude" to 6.6322),
+            "lostAtMillis" to alert.lostAtMillis,
+            "closedAtMillis" to null,
+            "status" to "OPEN",
+            "petName" to "Rex",
+            "petSpecies" to "DOG",
+            "petAllergies" to emptyList<String>(),
+            "petBehaviors" to emptyList<String>(),
+        )
+    val batch = firestore.batch()
+    batch.set(firestore.collection("alerts").document(alert.id), legacy)
+    batch.set(
+        firestore.collection("openPetAlerts").document(petId),
+        mapOf("alertId" to alert.id, "ownerId" to ownerId),
+    )
+    batch.commit().await()
+    createdAlertIds.add(alert.id)
+
+    val loaded = repository.getAlertById(alert.id).getOrNull()
+
+    assertEquals(alert, loaded)
+    assertEquals(LossCause.UNKNOWN, loaded?.lossCause)
+    assertEquals(LossEnvironment.UNKNOWN, loaded?.lossEnvironment)
   }
 
   @Test
