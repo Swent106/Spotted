@@ -22,7 +22,13 @@ enum class Verdict {
   FALSE,
 }
 
-/** Constants of the trust score: how it moves, and the boundaries between [TrustLevel]s. */
+/**
+ * Constants of the trust score: how it moves, and the boundaries between [TrustLevel]s.
+ *
+ * [INITIAL_SCORE], [GAIN_RATE] and [LOSS_FACTOR] are copied in `firebase/firestore.rules`
+ * (`scoreAfter` in `trust/{uid}`), which recomputes the score and accepts only an exactly equal
+ * one. Change them in both places, or every verdict will be refused.
+ */
 object TrustRules {
   /** Score of a user with no judged sighting. */
   const val INITIAL_SCORE = 0.3

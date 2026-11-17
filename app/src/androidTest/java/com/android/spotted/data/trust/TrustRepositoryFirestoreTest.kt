@@ -2,7 +2,10 @@
 package com.android.spotted.data.trust
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustScore
+import com.android.spotted.model.trust.Verdict
+import com.android.spotted.model.trust.VerdictAlreadyAppliedException
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -11,6 +14,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -27,6 +33,7 @@ class TrustRepositoryFirestoreTest {
   private lateinit var firestore: FirebaseFirestore
   private lateinit var repository: TrustRepositoryFirestore
   private val seededUids = mutableListOf<String>()
+  private val seededDocuments = mutableListOf<String>()
 
   @Before
   fun setUp() = runTest {
@@ -42,6 +49,7 @@ class TrustRepositoryFirestoreTest {
   fun cleanUp() = runTest {
     withContext(Dispatchers.IO) {
       seededUids.forEach { uid -> emulatorRequest("DELETE", "trust/$uid") }
+      seededDocuments.forEach { path -> emulatorRequest("DELETE", path) }
       auth.signOut()
     }
   }
@@ -89,6 +97,155 @@ class TrustRepositoryFirestoreTest {
         (error as FirebaseFirestoreException).code,
     )
   }
+
+  @Test
+  fun applyVerdict_confirmedOnAReporterWithNoTrust_startsFromInitial() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    val next = repository.applyVerdict(sightingId, Verdict.CONFIRMED).getOrThrow()
+
+    assertEquals(TrustScore.INITIAL.after(Verdict.CONFIRMED), next)
+    assertEquals(next, repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun applyVerdict_false_halvesTheStoredScore() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.6), judged = 5)
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    repository.applyVerdict(sightingId, Verdict.FALSE).getOrThrow()
+
+    assertEquals(TrustScore(0.3, 6), repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun applyVerdict_twiceOnTheSameSighting_failsAndKeepsTheFirst() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+    val afterFirst = repository.applyVerdict(sightingId, Verdict.CONFIRMED).getOrThrow()
+
+    val error = repository.applyVerdict(sightingId, Verdict.FALSE).exceptionOrNull()
+
+    assertTrue(error is VerdictAlreadyAppliedException)
+    assertEquals(afterFirst, repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun applyVerdict_twoAtTheSameTime_areBothApplied() = runTest {
+    val helperId = newHelperId()
+    val alertId = seedAlert(ownerId = currentUid())
+    val sightingIds = listOf(seedSighting(helperId, alertId), seedSighting(helperId, alertId))
+
+    // Both transactions read the same trust: Firestore must retry one of them, not lose it.
+    // Two confirmed verdicts give the same score in either order.
+    val results = coroutineScope {
+      sightingIds
+          .map { sightingId -> async { repository.applyVerdict(sightingId, Verdict.CONFIRMED) } }
+          .awaitAll()
+    }
+
+    results.forEach { it.getOrThrow() }
+    assertEquals(
+        TrustScore.INITIAL.after(Verdict.CONFIRMED).after(Verdict.CONFIRMED),
+        repository.getTrust(helperId).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun applyVerdict_byAUserWhoDoesNotOwnTheAlert_isDeniedAndChangesNothing() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = "owner-${UUID.randomUUID()}"))
+
+    val error = repository.applyVerdict(sightingId, Verdict.FALSE).exceptionOrNull()
+
+    assertEquals(
+        FirebaseFirestoreException.Code.PERMISSION_DENIED,
+        (error as FirebaseFirestoreException).code,
+    )
+    assertEquals(TrustScore.INITIAL, repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun applyVerdict_ofAMissingSighting_failsWithSightingNotFound() = runTest {
+    val error =
+        repository
+            .applyVerdict("sighting-${UUID.randomUUID()}", Verdict.CONFIRMED)
+            .exceptionOrNull()
+
+    assertTrue(error is SightingNotFoundException)
+  }
+
+  @Test
+  fun trust_cannotBeWrittenOutsideApplyVerdict() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 0)
+
+    val write = firestore.collection("trust").document(helperId).set(mapOf("score" to 1.0))
+    // Tasks.await wraps the failure in an ExecutionException
+    val error = runCatching { withContext(Dispatchers.IO) { Tasks.await(write) } }.exceptionOrNull()
+
+    assertEquals(
+        FirebaseFirestoreException.Code.PERMISSION_DENIED,
+        (error?.cause as FirebaseFirestoreException).code,
+    )
+    assertEquals(TrustScore(0.3, 0), repository.getTrust(helperId).getOrThrow())
+  }
+
+  private fun currentUid(): String = checkNotNull(auth.currentUser).uid
+
+  /** A new reporter uid; its trust document, if a test creates one, is deleted after the test. */
+  private fun newHelperId(): String = "helper-${UUID.randomUUID()}".also { seededUids += it }
+
+  /** Writes an open alert of [ownerId], bypassing the rules, and returns its id. */
+  private suspend fun seedAlert(ownerId: String): String {
+    val alertId = "alert-${UUID.randomUUID()}"
+    val fields =
+        mapOf(
+            "id" to stringValue(alertId),
+            "ownerId" to stringValue(ownerId),
+            "status" to stringValue("OPEN"),
+        )
+    seedDocument("alerts", alertId, fields)
+    return alertId
+  }
+
+  /** Writes a pending sighting of [reporterId] linked to [alertId], bypassing the rules. */
+  private suspend fun seedSighting(reporterId: String, alertId: String): String {
+    val sightingId = "sighting-${UUID.randomUUID()}"
+    val location =
+        mapOf(
+            "mapValue" to
+                mapOf(
+                    "fields" to
+                        mapOf("latitude" to doubleValue(46.5), "longitude" to doubleValue(6.6))
+                )
+        )
+    val fields =
+        mapOf(
+            "id" to stringValue(sightingId),
+            "reporterId" to stringValue(reporterId),
+            "location" to location,
+            "seenAtMillis" to mapOf("integerValue" to "1000000"),
+            "species" to stringValue("DOG"),
+            "alertId" to stringValue(alertId),
+            "status" to stringValue("PENDING"),
+        )
+    seedDocument("sightings", sightingId, fields)
+    return sightingId
+  }
+
+  private suspend fun seedDocument(collection: String, id: String, fields: Map<String, Any>) {
+    val response =
+        emulatorRequest(
+            "POST",
+            "$collection?documentId=$id",
+            JSONObject(mapOf("fields" to fields)),
+        )
+    assertEquals(HttpURLConnection.HTTP_OK, response)
+    seededDocuments += "$collection/$id"
+  }
+
+  private fun stringValue(value: String): Map<String, Any> = mapOf("stringValue" to value)
 
   private fun doubleValue(value: Double): Map<String, Any> = mapOf("doubleValue" to value)
 

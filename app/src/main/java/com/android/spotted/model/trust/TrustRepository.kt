@@ -2,8 +2,8 @@
 package com.android.spotted.model.trust
 
 /**
- * Reads the [TrustScore] of users. The score is stored rather than derived from totals, because
- * [TrustScore.after] depends on the order of the verdicts.
+ * Reads the [TrustScore] of users, and is the only way to change it. The score is stored rather
+ * than derived from totals, because [TrustScore.after] depends on the order of the verdicts.
  *
  * Any signed-in user can read anyone's trust, so owners can see how reliable a helper is.
  */
@@ -13,4 +13,24 @@ interface TrustRepository {
    * their sightings has been judged). Never throws; a failed read is a [Result.failure].
    */
   suspend fun getTrust(uid: String): Result<TrustScore>
+
+  /**
+   * Judges the sighting [sightingId]: applies [verdict] to the trust of its reporter, and returns
+   * their new trust.
+   *
+   * A sighting counts once: its first verdict is final for the trust score, so a second one fails
+   * with [VerdictAlreadyAppliedException] and changes nothing. A sighting that does not exist fails
+   * with [SightingNotFoundException]. Only the owner of the alert the sighting is linked to may
+   * judge it. Two verdicts given at the same time are both applied. Never throws; a refused or
+   * failed write is a [Result.failure].
+   */
+  suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore>
 }
+
+/** The sighting [sightingId] was already judged: its verdict counts once and cannot be changed. */
+class VerdictAlreadyAppliedException(val sightingId: String) :
+    IllegalStateException("The sighting $sightingId was already judged")
+
+/** There is no sighting [sightingId] to judge. */
+class SightingNotFoundException(val sightingId: String) :
+    NoSuchElementException("No sighting $sightingId")
