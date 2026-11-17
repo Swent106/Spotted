@@ -3,6 +3,7 @@
 package com.android.spotted.ui.myalert
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -14,7 +15,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.LikelyArea
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import org.junit.Assert.assertEquals
@@ -35,6 +41,7 @@ class MyAlertContentTest {
 
   private var drawnMarkers: List<SightingMarker> = emptyList()
   private var drawnArea: LikelyArea? = null
+  private var drawnCenter: Location? = null
 
   private fun setContent(
       state: MyAlertUiState,
@@ -50,9 +57,10 @@ class MyAlertContentTest {
           onConfirm = onConfirm,
           onDismiss = onDismiss,
           onMarkFound = onMarkFound,
-          map = { markers, likelyArea, _, modifier ->
+          map = { markers, likelyArea, center, modifier ->
             drawnMarkers = markers
             drawnArea = likelyArea
+            drawnCenter = center
             Box(modifier)
           },
       )
@@ -100,6 +108,15 @@ class MyAlertContentTest {
   }
 
   @Test
+  fun noAlertWithoutAnError_showsNoAlertContent() {
+    setContent(MyAlertUiState(isLoading = false))
+
+    node(MyAlertScreenTestTags.LOADING).assertDoesNotExist()
+    node(MyAlertScreenTestTags.ERROR).assertDoesNotExist()
+    node(MyAlertScreenTestTags.MAP).assertDoesNotExist()
+  }
+
+  @Test
   fun errorWithAnAlert_keepsTheAlertBelowTheError() {
     // A failed action (here confirming a sighting) must not wipe what the owner was looking at
     setContent(
@@ -127,6 +144,13 @@ class MyAlertContentTest {
     node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
     node(MyAlertScreenTestTags.NO_SIGHTINGS).assertIsDisplayed()
     assertTrue(drawnMarkers.isEmpty())
+  }
+
+  @Test
+  fun noLikelyArea_centersTheMapOnTheNewestSighting() {
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING)))
+
+    assertEquals(PENDING.location, drawnCenter)
   }
 
   @Test
@@ -223,6 +247,32 @@ class MyAlertContentTest {
   }
 
   @Test
+  fun realMap_updatesItsMarkersAndAreaWhenSightingsChange() {
+    val state = mutableStateOf(MyAlertUiState(isLoading = false, alert = MILO_ALERT))
+    composeTestRule.setContent { MyAlertContent(state = state.value) }
+    node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
+
+    state.value =
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(PENDING),
+            likelyArea = AREA,
+        )
+    composeTestRule.waitForIdle()
+
+    state.value =
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(PENDING, CONFIRMED),
+        )
+    composeTestRule.waitForIdle()
+
+    node(MyAlertScreenTestTags.MAP).assertIsDisplayed()
+  }
+
+  @Test
   fun sightingWithAPhoto_showsItsRow() {
     val withPhoto = PENDING.copy(photoUrl = "https://example.com/milo.jpg")
     setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withPhoto)))
@@ -239,6 +289,89 @@ class MyAlertContentTest {
 
     node("alertDetail_sightingDirection_${withDirection.id}").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithText("Went NE").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun sightingWithDetails_displaysAllKnownAnimalDetails() {
+    val withDetails =
+        PENDING.copy(
+            activities = setOf(AnimalActivity.WALKING, AnimalActivity.EATING),
+            conditions = setOf(AnimalCondition.LOOKS_FINE),
+            reactions = setOf(AnimalReaction.CAME_CLOSER),
+            placeType = PlaceType.PARK,
+            collar = CollarStatus.WORE_COLLAR,
+        )
+    setContent(
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(withDetails))
+    )
+
+    node(MyAlertScreenTestTags.detail(withDetails.id, "activity"))
+        .performScrollTo()
+        .assertTextEquals("Activity: Walking, Eating")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "conditions"))
+        .performScrollTo()
+        .assertTextEquals("Condition: Looks Fine")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "reactions"))
+        .performScrollTo()
+        .assertTextEquals("Reaction: Came Closer")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "place"))
+        .performScrollTo()
+        .assertTextEquals("Place: Park")
+    node(MyAlertScreenTestTags.detail(withDetails.id, "collar"))
+        .performScrollTo()
+        .assertTextEquals("Collar: Wore Collar")
+  }
+
+  @Test
+  fun sightingWithInjury_displaysInjuredCondition() {
+    val injured = PENDING.copy(conditions = setOf(AnimalCondition.INJURED))
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(injured)))
+
+    node(MyAlertScreenTestTags.detail(injured.id, "conditions"))
+        .assertTextEquals("Condition: Injured")
+  }
+
+  @Test
+  fun sightingWithoutDetails_displaysNoUnknownValues() {
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING)))
+
+    node(MyAlertScreenTestTags.detail(PENDING.id, "activity")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "conditions")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "reactions")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "place")).assertDoesNotExist()
+    node(MyAlertScreenTestTags.detail(PENDING.id, "collar")).assertDoesNotExist()
+    composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
+  }
+
+  @Test
+  fun sightingWithSingleDetails_displaysEachValueWithoutUnknowns() {
+    val withReaction =
+        PENDING.copy(id = "s-reaction", reactions = setOf(AnimalReaction.CAME_CLOSER))
+    val withPlace = PENDING.copy(id = "s-place", placeType = PlaceType.PARK)
+    val withCollar = PENDING.copy(id = "s-collar", collar = CollarStatus.WORE_COLLAR)
+    setContent(
+        MyAlertUiState(
+            isLoading = false,
+            alert = MILO_ALERT,
+            sightings = listOf(withReaction, withPlace, withCollar),
+        )
+    )
+
+    node(MyAlertScreenTestTags.detail(withReaction.id, "reactions"))
+        .performScrollTo()
+        .assertTextEquals("Reaction: Came Closer")
+    node(MyAlertScreenTestTags.detail(withPlace.id, "place"))
+        .performScrollTo()
+        .assertTextEquals("Place: Park")
+    node(MyAlertScreenTestTags.detail(withCollar.id, "collar"))
+        .performScrollTo()
+        .assertTextEquals("Collar: Wore Collar")
+    composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
+  }
+
+  @Test
+  fun displayName_preservesEmptyWordsBetweenSeparators() {
+    assertEquals("Running  Fast", SyntheticDetail.RUNNING__FAST.displayName())
   }
 
   private companion object {
@@ -269,5 +402,9 @@ class MyAlertContentTest {
     val DISMISSED = sighting("s-dismissed", SightingStatus.DISMISSED, 1_700_000_200_000L, 46.1940)
     val CONFIRMED = sighting("s-confirmed", SightingStatus.CONFIRMED, 1_700_000_100_000L, 46.1950)
     val AREA = LikelyArea(center = Location(46.1945, 6.1580), radiusMeters = 400.0)
+  }
+
+  private enum class SyntheticDetail {
+    RUNNING__FAST
   }
 }
