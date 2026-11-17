@@ -27,10 +27,15 @@ data class PersonalInfoUiState(
     val isSignedOut: Boolean = false,
     val errorMessage: String? = null,
 ) {
+  /** [username] as it is saved: without spaces around it or the "@" typed in front of it. */
+  val cleanUsername: String
+    get() = username.trim().removePrefix("@").trim()
+
   /** Whether the button can be tapped: to save the form, or to read the profile again. */
   val canSave: Boolean
     get() =
-        (isProfileLoadFailed || (name.isNotBlank() && homeArea.isNotBlank())) &&
+        (isProfileLoadFailed ||
+            (cleanUsername.isNotEmpty() && name.isNotBlank() && homeArea.isNotBlank())) &&
             !isSaving &&
             !isSignedOut
 

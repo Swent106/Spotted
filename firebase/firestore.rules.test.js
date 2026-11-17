@@ -68,6 +68,7 @@ describe("Firestore security rules", () => {
     return {
       uid,
       name: "Jamie",
+      username: "jamie",
       phone: "+41 79 123 45 67",
       email: "jamie@example.com",
       homeArea: "Lausanne",
@@ -323,6 +324,21 @@ describe("Firestore security rules", () => {
         doc(db, "users", "user-1"),
         userProfile("user-1", { name: "x".repeat(101) }),
       ),
+    );
+    for (const username of ["", "x".repeat(31), 42]) {
+      await assertFails(
+        setDoc(doc(db, "users", "user-1"), userProfile("user-1", { username })),
+      );
+    }
+  });
+
+  it("allows a profile without a username (apps older than the username)", async () => {
+    const db = firestoreForUser("user-1");
+    const { username, ...withoutUsername } = userProfile("user-1");
+
+    await assertSucceeds(setDoc(doc(db, "users", "user-1"), withoutUsername));
+    await assertSucceeds(
+      updateDoc(doc(db, "users", "user-1"), { username: deleteField() }),
     );
   });
 
