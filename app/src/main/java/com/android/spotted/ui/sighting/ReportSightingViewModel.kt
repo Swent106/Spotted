@@ -22,6 +22,11 @@ import com.android.spotted.model.distanceKm
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.PhotoRepository
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.PlausibilityIssue
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
@@ -255,6 +260,50 @@ class ReportSightingViewModel(
     refreshNearbyAlertOptions()
   }
 
+  /** Adds [activity] to the sighting's activities, or removes it if it was already chosen. */
+  fun toggleActivity(activity: AnimalActivity) {
+    _uiState.update { it.copy(activities = it.activities.toggled(activity)) }
+  }
+
+  /**
+   * Adds [condition] to the sighting's conditions, or removes it if it was already chosen.
+   * [AnimalCondition.LOOKS_FINE] excludes every other condition: choosing it clears the others, and
+   * choosing another one removes it.
+   */
+  fun toggleCondition(condition: AnimalCondition) {
+    _uiState.update { state ->
+      val toggled = state.conditions.toggled(condition)
+      val conditions =
+          when {
+            condition !in toggled -> toggled
+            condition == AnimalCondition.LOOKS_FINE -> setOf(AnimalCondition.LOOKS_FINE)
+            else -> toggled - AnimalCondition.LOOKS_FINE
+          }
+      state.copy(conditions = conditions)
+    }
+  }
+
+  /** Adds [reaction] to the sighting's reactions, or removes it if it was already chosen. */
+  fun toggleReaction(reaction: AnimalReaction) {
+    _uiState.update { it.copy(reactions = it.reactions.toggled(reaction)) }
+  }
+
+  /** Chooses [placeType]; choosing the one already chosen clears it back to unknown. */
+  fun selectPlaceType(placeType: PlaceType) {
+    _uiState.update {
+      it.copy(placeType = if (it.placeType == placeType) PlaceType.UNKNOWN else placeType)
+    }
+  }
+
+  /** Chooses [collar]; choosing the one already chosen clears it back to unknown. */
+  fun selectCollar(collar: CollarStatus) {
+    _uiState.update { it.copy(collar = if (it.collar == collar) CollarStatus.UNKNOWN else collar) }
+  }
+
+  /** This set with [value] added, or without it if it was already in it. */
+  private fun <T> Set<T>.toggled(value: T): Set<T> =
+      if (value in this) this - value else this + value
+
   fun clearErrorMessage() {
     _uiState.update { it.copy(errorMessage = null) }
   }
@@ -293,6 +342,11 @@ class ReportSightingViewModel(
                 species = species,
                 alertId = alertId,
                 headingDegrees = currentState.direction,
+                activities = currentState.activities,
+                conditions = currentState.conditions,
+                reactions = currentState.reactions,
+                placeType = currentState.placeType,
+                collar = currentState.collar,
             )
 
         // Checked before the photo is uploaded, so nothing is uploaded for a refused sighting
