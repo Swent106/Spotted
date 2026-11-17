@@ -10,6 +10,30 @@ enum class AlertStatus {
   CLOSED,
 }
 
+/** How the pet got lost, as told by the owner. [UNKNOWN] when the owner did not say. */
+enum class LossCause {
+  /** Got out of the home, garden or yard on its own. */
+  ESCAPED_FROM_HOME,
+  /** Ran off or got separated from the owner during a walk. */
+  DURING_A_WALK,
+  /** Ran off because a noise frightened it (fireworks, storm, traffic...). */
+  SCARED_BY_NOISE,
+  /** Got lost while moving house or travelling. */
+  DURING_MOVE_OR_TRIP,
+  /** Taken by someone. */
+  STOLEN,
+  UNKNOWN,
+}
+
+/** The kind of place where the pet got lost. [UNKNOWN] when the owner did not say. */
+enum class LossEnvironment {
+  CITY_CENTRE,
+  SUBURB,
+  VILLAGE_OR_RURAL,
+  FOREST_OR_MOUNTAIN,
+  UNKNOWN,
+}
+
 data class Alert(
     val id: String,
     val petId: String,
@@ -28,6 +52,10 @@ data class Alert(
      * still the place where it was lost.
      */
     val lastSeenAtMillis: Long? = null,
+    /** Optional, set when the alert is published. */
+    val lossCause: LossCause = LossCause.UNKNOWN,
+    /** Optional, set when the alert is published. */
+    val lossEnvironment: LossEnvironment = LossEnvironment.UNKNOWN,
 ) {
   /** When the pet was last seen at [lastKnownLocation]: confirmed sighting, else when lost. */
   val lastSeenAt: Long

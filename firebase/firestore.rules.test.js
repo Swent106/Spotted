@@ -887,6 +887,84 @@ describe("Firestore alert access rules", () => {
     await assertFails(updateDoc(doc(db, "alerts", "alert-1"), seenThere(2500000)));
   });
 
+  // Circumstances of the loss (#409): optional, only the enum values, set at publication
+  const LOSS_CAUSES = [
+    "ESCAPED_FROM_HOME", "DURING_A_WALK", "SCARED_BY_NOISE", "DURING_MOVE_OR_TRIP", "STOLEN",
+    "UNKNOWN",
+  ];
+  const LOSS_ENVIRONMENTS = [
+    "CITY_CENTRE", "SUBURB", "VILLAGE_OR_RURAL", "FOREST_OR_MOUNTAIN", "UNKNOWN",
+  ];
+
+  /** Publishes a new alert of owner-1 with its pet's lock, as publishAlert does. */
+  async function publish(alertId, petId, overrides) {
+    await seedPet(petId, "owner-1");
+    const db = firestoreForUser("owner-1");
+    const batch = writeBatch(db);
+    batch.set(doc(db, "alerts", alertId), alertData({ id: alertId, petId, ...overrides }));
+    batch.set(doc(db, "openPetAlerts", petId), { alertId, ownerId: "owner-1" });
+    return batch.commit();
+  }
+
+  it("loss: every allowed cause is accepted when publishing", async () => {
+    // One alert and pet per value, so each write is a create
+    for (const lossCause of LOSS_CAUSES) {
+      await assertSucceeds(publish(`alert-cause-${lossCause}`, `pet-cause-${lossCause}`, { lossCause }));
+    }
+  });
+
+  it("loss: every allowed environment is accepted when publishing", async () => {
+    for (const lossEnvironment of LOSS_ENVIRONMENTS) {
+      await assertSucceeds(
+        publish(`alert-env-${lossEnvironment}`, `pet-env-${lossEnvironment}`, { lossEnvironment }),
+      );
+    }
+  });
+
+  it("loss: an alert without cause or environment (older app) is accepted", async () => {
+    const legacy = alertData({ id: "alert-legacy", petId: "pet-legacy" });
+    assert.ok(!("lossCause" in legacy) && !("lossEnvironment" in legacy));
+
+    await assertSucceeds(publish("alert-legacy", "pet-legacy", {}));
+  });
+
+  it("loss: an unknown cause is denied", async () => {
+    for (const [i, lossCause] of ["LOST_IN_SPACE", "stolen", "", 42, null].entries()) {
+      await assertFails(publish(`alert-bad-cause-${i}`, `pet-bad-cause-${i}`, { lossCause }));
+    }
+  });
+
+  it("loss: an unknown environment is denied", async () => {
+    for (const [i, lossEnvironment] of ["BEACH", "suburb", "", 42, null].entries()) {
+      await assertFails(
+        publish(`alert-bad-env-${i}`, `pet-bad-env-${i}`, { lossEnvironment }),
+      );
+    }
+  });
+
+  it("loss: the owner can't change the cause or environment after publishing", async () => {
+    await seedAlert({ lossCause: "DURING_A_WALK", lossEnvironment: "SUBURB" });
+    const alert = doc(firestoreForUser("owner-1"), "alerts", "alert-1");
+
+    await assertFails(updateDoc(alert, { lossCause: "STOLEN" }));
+    await assertFails(updateDoc(alert, { lossEnvironment: "CITY_CENTRE" }));
+  });
+
+  it("loss: the owner can't add a cause or environment after publishing", async () => {
+    await seedAlert();
+    const alert = doc(firestoreForUser("owner-1"), "alerts", "alert-1");
+
+    await assertFails(updateDoc(alert, { lossCause: "STOLEN" }));
+    await assertFails(updateDoc(alert, { lossEnvironment: "SUBURB" }));
+  });
+
+  it("loss: closing an alert keeps its cause and environment", async () => {
+    await seedAlert({ lossCause: "DURING_A_WALK", lossEnvironment: "SUBURB" });
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(updateDoc(doc(db, "alerts", "alert-1"), closing));
+  });
+
   // openPetAlerts/{petId}: the lock publishAlert writes with each alert (one open alert per pet)
   it("lock: the pet's owner can read a missing lock and create one", async () => {
     await seedPet("pet-1", "owner-1");
