@@ -710,6 +710,38 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
+  fun placingThePinDuringAPendingSearch_keepsTheSuggestionsClosed() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = emptyList())
+        val typing = viewModelWithAddresses(addresses)
+        advanceUntilIdle()
+
+        typing.onHomeAreaChanged("Lausanne")
+        typing.onHomeLocationChanged(Location(46.52, 6.63))
+        advanceUntilIdle()
+
+        val state = typing.uiState.value
+        assertTrue("the pending search is cancelled", addresses.suggestQueries.isEmpty())
+        assertFalse(state.isNoPlaceFound)
+        assertTrue(state.addressSuggestions.isEmpty())
+        assertEquals("Lausanne", state.homeArea)
+      }
+
+  @Test
+  fun placingThePin_closesOpenSuggestions() =
+      runTest(testDispatcher) {
+        val typing = viewModelWithAddresses(FakeAddressRepository(suggestions = listOf(ouchy)))
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+        assertEquals(listOf(ouchy), typing.uiState.value.addressSuggestions)
+
+        typing.onHomeLocationChanged(Location(46.52, 6.63))
+
+        assertTrue(typing.uiState.value.addressSuggestions.isEmpty())
+        assertEquals(Location(46.52, 6.63), typing.uiState.value.homeLocation)
+      }
+
+  @Test
   fun useCurrentLocation_writesTheAreaWithoutProposingPlaces() =
       runTest(testDispatcher) {
         val addresses = FakeAddressRepository("Ouchy, Lausanne", suggestions = listOf(flon))

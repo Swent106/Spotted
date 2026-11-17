@@ -187,10 +187,19 @@ class PersonalInfoViewModel(
 
   /**
    * Places the home pin at [location], as tapped on the map picker. Saved with the profile: lost
-   * pets are searched around it.
+   * pets are searched around it. Placing the pin by hand also closes the address suggestions and
+   * cancels a pending search, so the map does not move under the user's finger.
    */
   fun onHomeLocationChanged(location: Location) {
-    _uiState.update { it.copy(homeLocation = location, isSaved = false) }
+    suggestionSearch?.cancel()
+    _uiState.update {
+      it.copy(
+          homeLocation = location,
+          addressSuggestions = emptyList(),
+          isNoPlaceFound = false,
+          isSaved = false,
+      )
+    }
   }
 
   /** Shows the photo the user picked or took ([uri]), or removes it when null. */
