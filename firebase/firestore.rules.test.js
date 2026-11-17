@@ -1849,3 +1849,72 @@ describe("Firestore photo access rules", () => {
     }
   });
 });
+
+describe("Firestore trust access rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  const seedTrust = (uid, score, judged) =>
+    testEnvironment.withSecurityRulesDisabled((context) =>
+      setDoc(doc(context.firestore(), "trust", uid), { score, judged }),
+    );
+
+  it("trust read: any signed-in user is allowed, signed-out users are denied", async () => {
+    await seedTrust("helper-1", 0.6, 5);
+
+    const ownRead = await assertSucceeds(getDoc(doc(firestoreForUser("helper-1"), "trust", "helper-1")));
+    const ownerRead = await assertSucceeds(getDoc(doc(firestoreForUser("owner-1"), "trust", "helper-1")));
+    assert.equal(ownRead.data().score, 0.6);
+    assert.equal(ownerRead.data().judged, 5);
+    await assertFails(getDoc(doc(firestoreForUser(null), "trust", "helper-1")));
+  });
+
+  it("trust read: a user without a document can be read as missing", async () => {
+    const missing = await assertSucceeds(getDoc(doc(firestoreForUser("owner-1"), "trust", "helper-2")));
+    assert.equal(missing.exists(), false);
+  });
+
+  it("trust list: queries on the collection are denied", async () => {
+    await seedTrust("helper-1", 0.6, 5);
+
+    await assertFails(getDocs(collection(firestoreForUser("owner-1"), "trust")));
+  });
+
+  it("trust write: no client may create, update or delete a trust document", async () => {
+    await seedTrust("helper-1", 0.3, 0);
+
+    for (const userId of ["helper-1", "owner-1"]) {
+      const db = firestoreForUser(userId);
+      await assertFails(setDoc(doc(db, "trust", "helper-1"), { score: 1, judged: 10 }));
+      await assertFails(updateDoc(doc(db, "trust", "helper-1"), { score: 1 }));
+      await assertFails(deleteDoc(doc(db, "trust", "helper-1")));
+      await assertFails(setDoc(doc(db, "trust", userId + "-new"), { score: 1, judged: 10 }));
+    }
+  });
+});

@@ -433,6 +433,15 @@ service cloud.firestore {
           && resource.data.ownerId == request.auth.uid;
     }
 
+    // trust/{uid}: score (0..1) and judged (count of judged sightings) of a user, read by
+    // TrustRepositoryFirestore. Kept apart from users/{uid}, which holds private contact details,
+    // so any signed-in user can see how reliable a helper is. No client writes it yet: the
+    // trusted writer is decided in #396.
+    match /trust/{uid} {
+      allow get: if isAuthenticated();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
