@@ -16,56 +16,63 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** The user's missing pets on Home: one banner per open alert, and a "Missing" badge on the pet. */
+/**
+ * The user's missing pets on Home: the missing pet's own card in "Your pets" is red, has a
+ * "Missing" chip and opens its alert; the other pets are "Safe" and open their profile.
+ */
 @RunWith(AndroidJUnit4::class)
 class HomeMissingPetsTest {
 
   @get:Rule val composeTestRule = createComposeRule()
 
-  private val clicked = mutableListOf<String>()
+  private val alertsOpened = mutableListOf<String>()
+  private val profilesOpened = mutableListOf<String>()
 
   private fun show(state: HomeUiState) {
     composeTestRule.setContent {
-      HomeScreenContent(state = state, onMissingPetClick = { clicked += it })
+      HomeScreenContent(
+          state = state,
+          onMissingPetClick = { alertsOpened += it },
+          onPetClick = { profilesOpened += it },
+      )
     }
   }
 
   @Test
-  fun noOpenAlert_showsNoBanner() {
+  fun noOpenAlert_noPetIsMissing() {
     show(HomeUiState(pets = HomeSection(items = listOf(LUNA, MILO))))
 
-    composeTestRule
-        .onNodeWithTag(HomeScreenTestTags.missingBanner(MILO_ALERT.id))
-        .assertDoesNotExist()
+    // The chips are inside the clickable pet cards, whose semantics merge their children
     composeTestRule
         .onNodeWithTag(HomeScreenTestTags.missingBadge(MILO.id), useUnmergedTree = true)
         .assertDoesNotExist()
+    composeTestRule
+        .onNodeWithTag(HomeScreenTestTags.missingBadge(LUNA.id), useUnmergedTree = true)
+        .assertDoesNotExist()
   }
 
   @Test
-  fun oneBannerPerMissingPet() {
-    show(HomeUiState(ownLostPets = listOf(MILO_ALERT, NALA_ALERT)))
+  fun onlyTheMissingPet_isMarkedMissing() {
+    show(
+        HomeUiState(
+            pets = HomeSection(items = listOf(MILO, LUNA)),
+            ownLostPets = listOf(MILO_ALERT),
+            nowMillis = NOW + 2 * HOUR,
+        )
+    )
 
     composeTestRule
-        .onNodeWithTag(HomeScreenTestTags.missingBanner(MILO_ALERT.id))
-        .assertIsDisplayed()
+        .onNodeWithTag(HomeScreenTestTags.missingBadge(MILO.id), useUnmergedTree = true)
+        .assertExists()
     composeTestRule
-        .onNodeWithTag(HomeScreenTestTags.missingBanner(NALA_ALERT.id))
-        .assertIsDisplayed()
-    composeTestRule.onNodeWithText("Milo is missing").assertIsDisplayed()
+        .onNodeWithTag(HomeScreenTestTags.missingBadge(LUNA.id), useUnmergedTree = true)
+        .assertDoesNotExist()
+    composeTestRule.onNodeWithText("Lost 2 h ago", useUnmergedTree = true).assertIsDisplayed()
+    composeTestRule.onNodeWithText("Safe", useUnmergedTree = true).assertIsDisplayed()
   }
 
   @Test
-  fun tappingABanner_opensThatAlert() {
-    show(HomeUiState(ownLostPets = listOf(MILO_ALERT, NALA_ALERT)))
-
-    composeTestRule.onNodeWithTag(HomeScreenTestTags.missingBanner(NALA_ALERT.id)).performClick()
-
-    assertEquals(listOf(NALA_ALERT.id), clicked)
-  }
-
-  @Test
-  fun missingPet_hasABadge_theOthersDoNot() {
+  fun tappingTheMissingPet_opensItsAlert() {
     show(
         HomeUiState(
             pets = HomeSection(items = listOf(MILO, LUNA)),
@@ -73,22 +80,39 @@ class HomeMissingPetsTest {
         )
     )
 
-    // The badge is inside the clickable pet card, whose semantics merge its children
-    composeTestRule
-        .onNodeWithTag(HomeScreenTestTags.missingBadge(MILO.id), useUnmergedTree = true)
-        .assertExists()
-    composeTestRule
-        .onNodeWithTag(HomeScreenTestTags.missingBadge(LUNA.id), useUnmergedTree = true)
-        .assertDoesNotExist()
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(MILO.id)).performClick()
+
+    assertEquals(listOf(MILO_ALERT.id), alertsOpened)
+    assertEquals(emptyList<String>(), profilesOpened)
+  }
+
+  @Test
+  fun tappingAnotherPet_opensItsProfile() {
+    show(
+        HomeUiState(
+            pets = HomeSection(items = listOf(MILO, LUNA)),
+            ownLostPets = listOf(MILO_ALERT),
+        )
+    )
+
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(LUNA.id)).performClick()
+
+    assertEquals(listOf(LUNA.id), profilesOpened)
+    assertEquals(emptyList<String>(), alertsOpened)
+  }
+
+  @Test
+  fun alertOfAPetNotInTheList_showsNoCard() {
+    // Nala's alert is open, but her profile is not loaded: nothing to make red
+    show(HomeUiState(pets = HomeSection(items = listOf(LUNA)), ownLostPets = listOf(NALA_ALERT)))
+
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(NALA_ALERT.petId)).assertDoesNotExist()
   }
 
   @Test
   fun missingDetail_showsTheTimeOnlyWhenItIsKnown() {
-    assertEquals("See the sightings", missingDetail(lostAtMillis = NOW, nowMillis = 0L))
-    assertEquals(
-        "Lost 2 h ago · see the sightings",
-        missingDetail(lostAtMillis = NOW - 2 * HOUR, nowMillis = NOW),
-    )
+    assertEquals("Missing", missingDetail(lostAtMillis = NOW, nowMillis = 0L))
+    assertEquals("Lost 2 h ago", missingDetail(lostAtMillis = NOW - 2 * HOUR, nowMillis = NOW))
   }
 
   private companion object {

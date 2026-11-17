@@ -10,21 +10,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -50,13 +49,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -109,8 +118,6 @@ object HomeScreenTestTags {
   const val TAB_PROFILE = "home_tabProfile"
 
   fun petCard(petId: String) = "home_pet_$petId"
-
-  fun missingBanner(alertId: String) = "home_missing_$alertId"
 
   fun missingBadge(petId: String) = "home_missingBadge_$petId"
 
@@ -308,10 +315,7 @@ private fun HomeList(
       }
     }
 
-    // The user's own missing pets come first: that is what they open the app for
-    missingPetsSection(state.ownLostPets, state.nowMillis, onMissingPetClick)
-
-    petsSection(state.pets, state.missingPetIds, onRetryClick, onAddPetClick, onPetClick)
+    petsSection(state, onRetryClick, onAddPetClick, onPetClick, onMissingPetClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 
@@ -435,54 +439,77 @@ private fun HeaderButton(
 }
 
 /**
- * "Your pets": one title, then one card per pet, with its own loading, error and empty state, and
- * an "Add a pet" button so pets can still be added after skipping that onboarding step.
+ * "Your pets · N", from the Figma frame "05 · Home · Near you": one white card with a horizontal
+ * carousel of the user's pets, ending with "Add a pet" so pets can still be added after skipping
+ * that onboarding step. A missing pet's card is red and opens its alert; the others open their
+ * profile. The card has its own loading, error and empty state.
  */
 private fun LazyListScope.petsSection(
-    pets: HomeSection<Pet>,
-    missingPetIds: Set<String>,
+    state: HomeUiState,
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
     onPetClick: (petId: String) -> Unit,
+    onMissingPetClick: (alertId: String) -> Unit,
 ) {
-  item(key = "petsTitle") {
-    Text(
-        HomeScreenTexts.PETS_TITLE,
-        style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
-        modifier = Modifier.padding(top = 18.dp).testTag(HomeScreenTestTags.PETS_TITLE),
-    )
-  }
-  val error = pets.errorMessage
-  when {
-    pets.isLoading && pets.items.isEmpty() ->
-        item(key = "petsLoader") { SectionLoader(HomeScreenTestTags.PETS_LOADER) }
-    error != null && pets.items.isEmpty() ->
-        item(key = "petsError") { PetsError(error, onRetryClick) }
-    pets.isEmpty ->
-        item(key = "petsEmpty") {
-          SectionMessage(
-              HomeScreenTexts.NO_PETS,
-              SpottedTheme.colors.textSecondary,
-              HomeScreenTestTags.PETS_EMPTY,
+  item(key = "pets") {
+    val pets = state.pets
+    val error = pets.errorMessage
+    // The open alert of each missing pet, to open it from the pet's card
+    val alertByPetId = state.ownLostPets.associateBy { it.petId }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier =
+            Modifier.padding(top = 18.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(SpottedTheme.colors.surface)
+                .padding(start = 14.dp, top = 10.dp, bottom = 10.dp),
+    ) {
+      // "Your pets" keeps its own node, so it can still be found by its exact text
+      Row {
+        Text(
+            HomeScreenTexts.PETS_TITLE,
+            style = jakarta(15, 19f, FontWeight.Bold, SpottedTheme.colors.ink),
+            modifier = Modifier.testTag(HomeScreenTestTags.PETS_TITLE),
+        )
+        if (pets.items.isNotEmpty()) {
+          Text(
+              " · ${pets.items.size}",
+              style = jakarta(15, 19f, FontWeight.Bold, SpottedTheme.colors.ink),
           )
         }
-  }
-  items(pets.items, key = { "pet_${it.id}" }) { pet ->
-    PetCard(pet, missing = pet.id in missingPetIds) { onPetClick(pet.id) }
-  }
-  // A refresh that failed keeps the pets and shows the error under them
-  if (error != null && pets.items.isNotEmpty()) {
-    item(key = "petsError") { PetsError(error, onRetryClick) }
-  }
-  item(key = "addPet") {
-    TextButton(
-        onClick = onAddPetClick,
-        modifier = Modifier.testTag(HomeScreenTestTags.ADD_PET_BUTTON),
-    ) {
-      Text(
-          HomeScreenTexts.ADD_PET,
-          style = jakarta(14, 18f, FontWeight.SemiBold, SpottedTheme.colors.tabSelected),
-      )
+      }
+      Column(Modifier.padding(end = 14.dp)) {
+        when {
+          pets.isLoading && pets.items.isEmpty() -> SectionLoader(HomeScreenTestTags.PETS_LOADER)
+          error != null && pets.items.isEmpty() -> PetsError(error, onRetryClick)
+          pets.isEmpty ->
+              SectionMessage(
+                  HomeScreenTexts.NO_PETS,
+                  SpottedTheme.colors.textSecondary,
+                  HomeScreenTestTags.PETS_EMPTY,
+              )
+        }
+      }
+      if (!(pets.isLoading && pets.items.isEmpty())) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 14.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+          items(pets.items, key = { "pet_${it.id}" }) { pet ->
+            val alert = alertByPetId[pet.id]
+            PetCard(pet, alert, state.nowMillis) {
+              if (alert != null) onMissingPetClick(alert.id) else onPetClick(pet.id)
+            }
+          }
+          item(key = "addPet") { AddPetCard(onAddPetClick) }
+        }
+      }
+      // A refresh that failed keeps the pets and shows the error under them
+      if (error != null && pets.items.isNotEmpty()) {
+        Column(Modifier.padding(end = 14.dp)) { PetsError(error, onRetryClick) }
+      }
     }
   }
 }
@@ -512,66 +539,123 @@ internal fun SectionError(
 }
 
 /**
- * The pet's name and status on the left, its photo on the right; grows with long texts. A [missing]
- * pet shows a "Missing" badge instead of the "profile ready" check.
+ * One pet of the carousel: photo, name, status and a chip. A pet with an open [alert] is red, says
+ * since when it is lost and has a "Missing" chip; the others are "Profile ready" and "Safe".
  */
 @Composable
-private fun PetCard(pet: Pet, missing: Boolean, onClick: () -> Unit) {
+private fun PetCard(pet: Pet, alert: Alert?, nowMillis: Long, onClick: () -> Unit) {
+  val missing = alert != null
+  val colors = SpottedTheme.colors
+  val shape = RoundedCornerShape(16.dp)
   Row(
-      Modifier.padding(top = 12.dp)
-          .fillMaxWidth()
-          .heightIn(min = 131.dp)
-          .height(IntrinsicSize.Min)
-          .clip(RoundedCornerShape(22.dp))
-          .background(SpottedTheme.colors.surface)
-          .clickable(onClickLabel = "See ${pet.name}'s profile", onClick = onClick)
-          .testTag(HomeScreenTestTags.petCard(pet.id))
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      modifier =
+          Modifier.clip(shape)
+              .background(if (missing) colors.missingCardBackground else colors.petCardBackground)
+              .border(
+                  if (missing) 2.dp else 1.dp,
+                  if (missing) colors.lostRed else colors.petCardBorder,
+                  shape,
+              )
+              .clickable(
+                  onClickLabel =
+                      if (missing) "See ${pet.name}'s alert" else "See ${pet.name}'s profile",
+                  onClick = onClick,
+              )
+              .padding(start = 10.dp, top = 10.dp, end = 12.dp, bottom = 10.dp)
+              .testTag(HomeScreenTestTags.petCard(pet.id)),
   ) {
-    // Name and status centred in the card's height, not stuck to its top
-    Column(
-        verticalArrangement = Arrangement.Center,
-        modifier =
-            Modifier.weight(1f)
-                .fillMaxHeight()
-                .padding(start = 13.dp, top = 14.dp, end = 8.dp, bottom = 14.dp),
-    ) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            pet.name,
-            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.ink),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Spacer(Modifier.width(if (missing) 6.dp else 3.dp))
-        if (missing) {
-          Text(
-              "Missing",
-              style = jakarta(12, 16f, FontWeight.SemiBold, SpottedTheme.colors.lostRed),
-              modifier =
-                  Modifier.clip(RoundedCornerShape(8.dp))
-                      .background(SpottedTheme.colors.errorTint)
-                      .padding(horizontal = 8.dp, vertical = 2.dp)
-                      .testTag(HomeScreenTestTags.missingBadge(pet.id)),
-          )
-        } else {
-          Image(
-              painterResource(R.drawable.ic_check_verified),
-              contentDescription = "Profile ready",
-              modifier = Modifier.size(21.dp),
-          )
-        }
-      }
-      Spacer(Modifier.height(3.dp))
+    PetPhoto(
+        pet.photoUrl,
+        Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)).background(colors.avatarBackground),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
       Text(
-          if (missing) "Your alert is open: the community is looking out"
-          else "Profile ready if they go missing",
-          style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
-          maxLines = 3,
+          pet.name,
+          style = jakarta(14, 18f, FontWeight.Bold, colors.ink),
+          maxLines = 1,
           overflow = TextOverflow.Ellipsis,
+          modifier = Modifier.widthIn(max = 140.dp),
       )
+      Text(
+          if (alert != null) missingDetail(alert.lostAtMillis, nowMillis) else "Profile ready",
+          style = jakarta(11, 14f, FontWeight.Medium, colors.textSecondary),
+      )
+      if (missing) {
+        PetChip(
+            "Missing",
+            colors.missingChipBackground,
+            colors.missingChipText,
+            Modifier.testTag(HomeScreenTestTags.missingBadge(pet.id)),
+        )
+      } else {
+        PetChip("Safe", colors.safeChipBackground, colors.safeChipText)
+      }
     }
-    PetPhoto(pet.photoUrl, Modifier.weight(1.6f).fillMaxHeight())
+  }
+}
+
+/** "Missing" or "Safe" under a pet's name. */
+@Composable
+private fun PetChip(
+    label: String,
+    background: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+) {
+  Text(
+      label,
+      style = jakarta(11, 14f, FontWeight.SemiBold, textColor),
+      modifier =
+          modifier
+              .clip(RoundedCornerShape(8.dp))
+              .background(background)
+              .padding(horizontal = 7.dp, vertical = 2.dp),
+  )
+}
+
+/** "+ Add" at the end of the carousel, in a dashed box as tall as a pet card. */
+@Composable
+private fun AddPetCard(onClick: () -> Unit) {
+  val borderColor = SpottedTheme.colors.addPetBorder
+  val blue = SpottedTheme.colors.blue
+  Column(
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+      modifier =
+          Modifier.height(72.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .drawBehind {
+                val stroke = 1.dp.toPx()
+                drawRoundRect(
+                    color = borderColor,
+                    topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(16.dp.toPx() - stroke / 2),
+                    style =
+                        Stroke(
+                            width = stroke,
+                            pathEffect =
+                                PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
+                        ),
+                )
+              }
+              .testTag(HomeScreenTestTags.ADD_PET_BUTTON)
+              .clickable(onClick = onClick)
+              // Read as one "Add a pet" button, not as "+" and "Add"
+              .clearAndSetSemantics {
+                contentDescription = HomeScreenTexts.ADD_PET
+                role = Role.Button
+                onClick {
+                  onClick()
+                  true
+                }
+              }
+              .padding(horizontal = 16.dp),
+  ) {
+    Text("+", style = jakarta(20, 25f, FontWeight.ExtraBold, blue))
+    Text("Add", style = jakarta(11, 14f, FontWeight.SemiBold, blue))
   }
 }
 
@@ -728,12 +812,33 @@ private val previewState =
             HomeSection(
                 listOf(
                     Pet(
+                        id = "pixel",
+                        ownerId = "me",
+                        name = "Pixel",
+                        species = Species.CAT,
+                        photoUrl = "preview://milo",
+                    ),
+                    Pet(
                         id = "luna",
                         ownerId = "me",
                         name = "Luna",
                         species = Species.DOG,
                         photoUrl = "preview://luna",
-                    )
+                    ),
+                )
+            ),
+        // Pixel is missing: its card is red
+        ownLostPets =
+            listOf(
+                Alert(
+                    id = "pixel-alert",
+                    petId = "pixel",
+                    ownerId = "me",
+                    lastKnownLocation = Location(latitude = 46.2, longitude = 6.14),
+                    lostAtMillis = PREVIEW_NOW - 2 * HOUR,
+                    petName = "Pixel",
+                    petSpecies = Species.CAT,
+                    petPhotoUrl = "preview://milo",
                 )
             ),
         lostPetsNearby =
