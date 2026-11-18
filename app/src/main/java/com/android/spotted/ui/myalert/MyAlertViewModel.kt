@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
+import com.android.spotted.data.trust.TrustRepositoryFirestore
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
@@ -17,6 +18,7 @@ import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.estimateLikelyArea
+import com.android.spotted.model.trust.TrustRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +29,7 @@ class MyAlertViewModel(
     private val alertId: String,
     private val alertRepository: AlertRepository,
     private val sightingRepository: SightingRepository,
+    private val trustRepository: TrustRepository,
     private val authRepository: AuthRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -102,25 +105,29 @@ class MyAlertViewModel(
   }
 
   /**
-   * Confirms the sighting [id], allowing it to inform the likely area. If it is newer than the
-   * alert's last seen time, the alert's last seen place moves to it.
+   * Confirms the sighting [id], allowing it to inform the likely area. The first time, it also
+   * counts for the trust score of its reporter (once, even if confirmed again later). If it is
+   * newer than the alert's last seen time, the alert's last seen place moves to it.
    */
   fun confirm(id: String) =
-      setSightingStatus(id, SightingStatus.CONFIRMED, onUpdated = { moveLastSeenTo(id) })
+      review(update = { trustRepository.confirmSighting(id) }, onUpdated = { moveLastSeenTo(id) })
 
-  /** Dismisses the sighting [id], removing it from the likely-area estimate. */
-  fun dismiss(id: String) = setSightingStatus(id, SightingStatus.DISMISSED)
+  /**
+   * Dismisses the sighting [id], removing it from the likely-area estimate. The trust score of its
+   * reporter does not change.
+   */
+  fun dismiss(id: String) =
+      review(update = { sightingRepository.setSightingStatus(id, SightingStatus.DISMISSED) })
 
-  private fun setSightingStatus(
-      id: String,
-      status: SightingStatus,
+  /** Runs the review [update] of a sighting, then [onUpdated] if it succeeded. */
+  private fun review(
+      update: suspend () -> Result<Unit>,
       onUpdated: suspend () -> Unit = {},
   ) {
     if (!canManageAlert()) return
     _uiState.update { it.copy(errorMessage = null) }
     viewModelScope.launch {
-      sightingRepository
-          .setSightingStatus(id, status)
+      update()
           .fold(
               onSuccess = { onUpdated() },
               onFailure = { failure ->
@@ -207,6 +214,7 @@ class MyAlertViewModel(
               alertId = alertId,
               alertRepository = AlertRepositoryFirestore(),
               sightingRepository = SightingRepositoryFirestore(),
+              trustRepository = TrustRepositoryFirestore(),
               authRepository = AuthRepositoryProvider.authRepository,
           )
         }

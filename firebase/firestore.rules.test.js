@@ -1353,7 +1353,7 @@ describe("Firestore sighting access rules", () => {
     await seedSighting("sighting-1", "user-1", sightingDetails);
     const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
 
-    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+    await assertSucceeds(updateDoc(ref, { status: "DISMISSED" }));
     await assertFails(updateDoc(ref, { conditions: ["LOOKS_FINE"] }));
     await assertFails(updateDoc(ref, { status: "DISMISSED", reactions: ["CAME_CLOSER"] }));
     await assertFails(updateDoc(ref, { collar: "WORE_COLLAR" }));
@@ -1393,7 +1393,7 @@ describe("Firestore sighting access rules", () => {
     await seedSighting("sighting-1", "user-1", { headingDegrees: 45.5 });
     const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
 
-    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+    await assertSucceeds(updateDoc(ref, { status: "DISMISSED" }));
   });
 
   // Only the fields the sighting rules read; the alert schema is tested above.
@@ -1438,7 +1438,7 @@ describe("Firestore sighting access rules", () => {
       await seedAlert("alert-1", "owner-1");
       await seedSighting("sighting-1", "user-1");
       const db = firestoreForUser(testCase.userId);
-      const operation = updateDoc(doc(db, "sightings", "sighting-1"), { status: "CONFIRMED" });
+      const operation = updateDoc(doc(db, "sightings", "sighting-1"), { status: "DISMISSED" });
 
       if (testCase.allowed) {
         await assertSucceeds(operation);
@@ -2047,11 +2047,17 @@ describe("Firestore trust access rules", () => {
   }
 
   /** Judges sightingId as verdict and writes trust to the trust of reporterId, in one write. */
-  function judge(userId, { sightingId = "sighting-1", reporterId = "helper-1", verdict, trust }) {
+  function judge(
+    userId,
+    { sightingId = "sighting-1", reporterId = "helper-1", verdict, trust, status },
+  ) {
     const db = firestoreForUser(userId);
     const batch = writeBatch(db);
     batch.set(doc(db, "trust", reporterId), { lastSightingId: sightingId, ...trust });
-    batch.update(doc(db, "sightings", sightingId), { trustVerdict: verdict });
+    // With a status, the same write also reviews the sighting (confirmSighting)
+    const sightingChange =
+      status === undefined ? { trustVerdict: verdict } : { trustVerdict: verdict, status };
+    batch.update(doc(db, "sightings", sightingId), sightingChange);
     return batch.commit();
   }
 
@@ -2198,5 +2204,81 @@ describe("Firestore trust access rules", () => {
 
     await assertSucceeds(updateDoc(doc(db, "sightings", "sighting-1"), { status: "DISMISSED" }));
     await assertFails(updateDoc(doc(db, "sightings", "sighting-1"), { trustVerdict: "FALSE" }));
+  });
+
+  // The path of TrustRepositoryFirestore.confirmSighting: the status and the verdict together.
+
+  it("trust confirm: the alert owner may confirm and judge a sighting in one write", async () => {
+    await seedJudgeableSighting();
+
+    await assertSucceeds(
+      judge("owner-1", {
+        verdict: "CONFIRMED",
+        status: "CONFIRMED",
+        trust: { score: confirmedFromInitial, judged: 1 },
+      }),
+    );
+  });
+
+  it("trust confirm: the status and the verdict must agree", async () => {
+    await seedJudgeableSighting();
+
+    for (const [status, verdict] of [
+      ["DISMISSED", "CONFIRMED"],
+      ["CONFIRMED", "FALSE"],
+    ]) {
+      const score = verdict === "CONFIRMED" ? confirmedFromInitial : 0.15;
+      await assertFails(judge("owner-1", { verdict, status, trust: { score, judged: 1 } }));
+    }
+  });
+
+  it("trust confirm: a sighting with every animal detail can be confirmed", async () => {
+    await seedAlert("alert-1", "owner-1");
+    // The largest sighting the app writes, so the rules stay under their expression limit
+    await seedSighting("sighting-1", "helper-1", {
+      headingDegrees: 359,
+      photoUrl: "https://example.com/photo.jpg",
+      activities: [
+        "WALKING", "RUNNING", "CROSSING_ROAD", "RESTING", "SLEEPING", "HIDING", "EATING",
+        "DRINKING", "SCAVENGING", "HUNTING", "SNIFFING_EXPLORING", "FOLLOWING_PEOPLE",
+        "PLAYING_WITH_PEOPLE", "WITH_OTHER_ANIMALS", "FIGHTING", "VOCALIZING",
+      ],
+      conditions: ["INJURED", "LIMPING", "BLEEDING", "THIN", "LOOKS_SICK", "EXHAUSTED", "DIRTY", "WET"],
+      reactions: [
+        "CAME_CLOSER", "FOLLOWED_ME", "LET_ITSELF_BE_TOUCHED", "ACCEPTED_FOOD", "IGNORED_ME",
+        "KEPT_ITS_DISTANCE", "RAN_AWAY", "HID", "GROWLED_OR_HISSED", "SNAPPED_OR_ATTACKED",
+      ],
+      placeType: "INSIDE_BUILDING",
+      collar: "NO_COLLAR",
+    });
+
+    await assertSucceeds(
+      judge("owner-1", {
+        verdict: "CONFIRMED",
+        status: "CONFIRMED",
+        trust: { score: confirmedFromInitial, judged: 1 },
+      }),
+    );
+  });
+
+  it("trust confirm: a first confirmation without its verdict is denied", async () => {
+    await seedJudgeableSighting();
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    // It would show as confirmed without moving the reporter's trust
+    await assertFails(updateDoc(ref, { status: "CONFIRMED" }));
+    await assertSucceeds(updateDoc(ref, { status: "DISMISSED" }));
+  });
+
+  it("trust confirm: a judged sighting may be confirmed again without its trust", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "helper-1", {
+      status: "DISMISSED",
+      trustVerdict: "CONFIRMED",
+    });
+    const ref = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(ref, { status: "CONFIRMED" }));
+    await assertFails(updateDoc(ref, { status: "CONFIRMED", trustVerdict: "FALSE" }));
   });
 });

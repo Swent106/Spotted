@@ -272,8 +272,8 @@ class SightingRepositoryFirestoreTest {
       seedBypassingRules(otherAlert)
       seedBypassingRules(sameTime)
       updates.awaitSightings(listOf(sameTime, first))
-      repository.setSightingStatus(first.id, SightingStatus.CONFIRMED).getOrThrow()
-      updates.awaitSightings(listOf(sameTime, first.copy(status = SightingStatus.CONFIRMED)))
+      repository.setSightingStatus(first.id, SightingStatus.DISMISSED).getOrThrow()
+      updates.awaitSightings(listOf(sameTime, first.copy(status = SightingStatus.DISMISSED)))
 
       updates.cancel()
     }

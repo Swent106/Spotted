@@ -25,6 +25,17 @@ interface TrustRepository {
    * failed write is a [Result.failure].
    */
   suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore>
+
+  /**
+   * Confirms the sighting [sightingId] (its status becomes confirmed) and, the first time it is
+   * judged, applies a [Verdict.CONFIRMED] to the trust of its reporter, in the same write.
+   *
+   * A sighting counts once: confirming it again, e.g. after dismissing it, only changes its status.
+   * Both changes are made or neither is. Fails with [SightingNotFoundException] if the sighting
+   * does not exist; only the owner of its alert may confirm it. Never throws; a refused or failed
+   * write is a [Result.failure].
+   */
+  suspend fun confirmSighting(sightingId: String): Result<Unit>
 }
 
 /** The sighting [sightingId] was already judged: its verdict counts once and cannot be changed. */

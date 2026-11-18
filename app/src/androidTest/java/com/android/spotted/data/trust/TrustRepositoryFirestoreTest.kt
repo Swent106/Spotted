@@ -2,6 +2,8 @@
 package com.android.spotted.data.trust
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.data.sighting.SightingRepositoryFirestore
+import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
@@ -32,6 +34,8 @@ class TrustRepositoryFirestoreTest {
   private lateinit var auth: FirebaseAuth
   private lateinit var firestore: FirebaseFirestore
   private lateinit var repository: TrustRepositoryFirestore
+  // The app's path for dismissing (and re-confirming) a sighting: a status-only write
+  private lateinit var sightingRepository: SightingRepositoryFirestore
   private val seededUids = mutableListOf<String>()
   private val seededDocuments = mutableListOf<String>()
 
@@ -41,6 +45,7 @@ class TrustRepositoryFirestoreTest {
       auth = FirebaseAuth.getInstance()
       firestore = FirebaseFirestore.getInstance()
       repository = TrustRepositoryFirestore(firestore)
+      sightingRepository = SightingRepositoryFirestore(firestore)
       Tasks.await(auth.signInAnonymously())
     }
   }
@@ -191,7 +196,131 @@ class TrustRepositoryFirestoreTest {
     assertEquals(TrustScore(0.3, 0), repository.getTrust(helperId).getOrThrow())
   }
 
+  @Test
+  fun confirmSighting_confirmedDismissedConfirmed_updatesTheScoreOnce() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    repository.confirmSighting(sightingId).getOrThrow()
+    sightingRepository.setSightingStatus(sightingId, SightingStatus.DISMISSED).getOrThrow()
+    repository.confirmSighting(sightingId).getOrThrow()
+
+    assertEquals(
+        TrustScore.INITIAL.after(Verdict.CONFIRMED),
+        repository.getTrust(helperId).getOrThrow(),
+    )
+    assertEquals("CONFIRMED", sightingField(sightingId, "status"))
+    assertEquals("CONFIRMED", sightingField(sightingId, "trustVerdict"))
+  }
+
+  @Test
+  fun confirmSighting_twoAtTheSameTime_updateTheScoreOnce() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    // The second transaction sees the sighting judged by the first, and only sets the status
+    val results = coroutineScope {
+      List(2) { async { repository.confirmSighting(sightingId) } }.awaitAll()
+    }
+
+    results.forEach { it.getOrThrow() }
+    assertEquals(
+        TrustScore.INITIAL.after(Verdict.CONFIRMED),
+        repository.getTrust(helperId).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun dismissingASighting_doesNotChangeTheScore() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.6), judged = 5)
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    sightingRepository.setSightingStatus(sightingId, SightingStatus.DISMISSED).getOrThrow()
+
+    assertEquals(TrustScore(0.6, 5), repository.getTrust(helperId).getOrThrow())
+    assertEquals(null, sightingField(sightingId, "trustVerdict"))
+  }
+
+  @Test
+  fun confirmSighting_alreadyJudgedFalse_onlyChangesTheStatus() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+    val afterFalse = repository.applyVerdict(sightingId, Verdict.FALSE).getOrThrow()
+
+    repository.confirmSighting(sightingId).getOrThrow()
+
+    assertEquals(afterFalse, repository.getTrust(helperId).getOrThrow())
+    assertEquals("CONFIRMED", sightingField(sightingId, "status"))
+    assertEquals("FALSE", sightingField(sightingId, "trustVerdict"))
+  }
+
+  @Test
+  fun confirmSighting_byAUserWhoDoesNotOwnTheAlert_changesNeitherStatusNorScore() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = "owner-${UUID.randomUUID()}"))
+
+    val error = repository.confirmSighting(sightingId).exceptionOrNull()
+
+    assertEquals(
+        FirebaseFirestoreException.Code.PERMISSION_DENIED,
+        (error as FirebaseFirestoreException).code,
+    )
+    assertEquals(TrustScore.INITIAL, repository.getTrust(helperId).getOrThrow())
+    assertEquals("PENDING", sightingField(sightingId, "status"))
+    assertEquals(null, sightingField(sightingId, "trustVerdict"))
+  }
+
+  @Test
+  fun confirmSighting_whenTheTransactionFails_changesNeitherStatusNorScore() = runTest {
+    // A trust without a score cannot be read, so the transaction throws before it writes
+    val helperId = seedTrust(score = null, judged = 3)
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    assertTrue(repository.confirmSighting(sightingId).isFailure)
+
+    assertEquals("PENDING", sightingField(sightingId, "status"))
+    assertEquals(null, sightingField(sightingId, "trustVerdict"))
+    assertTrue(repository.getTrust(helperId).isFailure)
+  }
+
+  @Test
+  fun confirmSighting_ofASightingWithoutReporter_failsAndChangesNothing() = runTest {
+    val sightingId = seedSighting(reporterId = null, alertId = seedAlert(ownerId = currentUid()))
+
+    assertTrue(repository.confirmSighting(sightingId).exceptionOrNull() is IllegalStateException)
+
+    assertEquals("PENDING", sightingField(sightingId, "status"))
+    assertEquals(null, sightingField(sightingId, "trustVerdict"))
+  }
+
+  @Test
+  fun confirmSighting_ofAMissingSighting_failsWithSightingNotFound() = runTest {
+    val error = repository.confirmSighting("sighting-${UUID.randomUUID()}").exceptionOrNull()
+
+    assertTrue(error is SightingNotFoundException)
+  }
+
+  @Test
+  fun firstConfirmation_withoutItsVerdict_isDenied() = runTest {
+    val sightingId = seedSighting(newHelperId(), seedAlert(ownerId = currentUid()))
+
+    val error =
+        sightingRepository.setSightingStatus(sightingId, SightingStatus.CONFIRMED).exceptionOrNull()
+
+    // The repository returns what Tasks.await threw: the Firestore error wrapped once
+    val firestoreError =
+        generateSequence(error) { it.cause }.filterIsInstance<FirebaseFirestoreException>().first()
+    assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, firestoreError.code)
+    assertEquals("PENDING", sightingField(sightingId, "status"))
+  }
+
   private fun currentUid(): String = checkNotNull(auth.currentUser).uid
+
+  /** The string [field] of the sighting [sightingId] as stored, or null if it has none. */
+  private suspend fun sightingField(sightingId: String, field: String): String? =
+      withContext(Dispatchers.IO) {
+        Tasks.await(firestore.collection("sightings").document(sightingId).get()).getString(field)
+      }
 
   /** A new reporter uid; its trust document, if a test creates one, is deleted after the test. */
   private fun newHelperId(): String = "helper-${UUID.randomUUID()}".also { seededUids += it }
@@ -209,8 +338,11 @@ class TrustRepositoryFirestoreTest {
     return alertId
   }
 
-  /** Writes a pending sighting of [reporterId] linked to [alertId], bypassing the rules. */
-  private suspend fun seedSighting(reporterId: String, alertId: String): String {
+  /**
+   * Writes a pending sighting of [reporterId] linked to [alertId], bypassing the rules. A null
+   * [reporterId] writes a broken sighting without one.
+   */
+  private suspend fun seedSighting(reporterId: String?, alertId: String): String {
     val sightingId = "sighting-${UUID.randomUUID()}"
     val location =
         mapOf(
@@ -221,9 +353,9 @@ class TrustRepositoryFirestoreTest {
                 )
         )
     val fields =
-        mapOf(
+        mapOfNotNull(
             "id" to stringValue(sightingId),
-            "reporterId" to stringValue(reporterId),
+            reporterId?.let { "reporterId" to stringValue(it) },
             "location" to location,
             "seenAtMillis" to mapOf("integerValue" to "1000000"),
             "species" to stringValue("DOG"),
@@ -246,6 +378,9 @@ class TrustRepositoryFirestoreTest {
   }
 
   private fun stringValue(value: String): Map<String, Any> = mapOf("stringValue" to value)
+
+  private fun <K, V> mapOfNotNull(vararg pairs: Pair<K, V>?): Map<K, V> =
+      pairs.filterNotNull().toMap()
 
   private fun doubleValue(value: Double): Map<String, Any> = mapOf("doubleValue" to value)
 

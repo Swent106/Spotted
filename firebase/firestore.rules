@@ -378,22 +378,31 @@ service cloud.firestore {
 
       // The owner of the linked alert may confirm or dismiss it, and change nothing else.
       // The status stays explicit once reviewed (it cannot be deleted).
+      // The first confirmation must judge the sighting too (next rule), so it moves the trust
+      // score of its reporter. Once judged, the status alone may change again.
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
               request.resource.data, resource.data.get('headingDegrees', null))
           && 'status' in request.resource.data
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && (request.resource.data.status != 'CONFIRMED' || isJudged(resource.data));
 
       // The owner of the linked alert may judge the sighting for the trust score of its reporter:
       // once, and only in the same write as the trust update it causes (see trust/{uid}).
+      // The same write may confirm it, with a confirmed verdict only
+      // (TrustRepositoryFirestore.confirmSighting).
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
               request.resource.data, resource.data.get('headingDegrees', null))
           && !isJudged(resource.data)
           && isJudged(request.resource.data)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['trustVerdict'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['trustVerdict', 'status'])
+          && (statusOf(request.resource.data) == statusOf(resource.data)
+              || (request.resource.data.status == 'CONFIRMED'
+                  && request.resource.data.trustVerdict == 'CONFIRMED'))
           && getAfter(/databases/$(database)/documents/trust/$(resource.data.reporterId))
                .data.get('lastSightingId', null) == sightingId;
 
@@ -476,9 +485,9 @@ service cloud.firestore {
     // trust/{uid}: score (0..1) and judged (count of judged sightings) of a user, and
     // lastSightingId, the sighting judged last. Kept apart from users/{uid}, which holds private
     // contact details, so any signed-in user can see how reliable a helper is.
-    // Only TrustRepositoryFirestore.applyVerdict writes it: in one transaction, the owner of an
-    // alert judges a sighting linked to it (its trustVerdict) and applies that verdict to the
-    // trust of its reporter. The constants match TrustRules in model/trust/TrustScore.kt.
+    // Only TrustRepositoryFirestore (applyVerdict, confirmSighting) writes it: in one transaction,
+    // the owner of an alert judges a sighting linked to it (its trustVerdict) and applies that
+    // verdict to the trust of its reporter. The constants match TrustRules in model/trust/TrustScore.kt.
     match /trust/{uid} {
       function judgedSightingPath() {
         return /databases/$(database)/documents/sightings/$(request.resource.data.lastSightingId);
