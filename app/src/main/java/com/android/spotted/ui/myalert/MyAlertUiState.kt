@@ -23,7 +23,7 @@ data class MyAlertUiState(
     val alert: Alert? = null,
     val sightings: List<Sighting> = emptyList(),
     /** Available reporter trust levels, keyed by reporter ID; absent when the read fails. */
-    val sightingTrustLevels: Map<String, TrustLevel> = emptyMap(),
+    val reporterTrustLevels: Map<String, TrustLevel> = emptyMap(),
     val likelyArea: LikelyArea? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null,

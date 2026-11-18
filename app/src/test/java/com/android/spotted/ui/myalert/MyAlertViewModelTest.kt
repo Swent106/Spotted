@@ -123,7 +123,7 @@ class MyAlertViewModelTest {
                 "trusted-reporter" to TrustLevel.TRUSTED,
                 "very-trusted-reporter" to TrustLevel.VERY_TRUSTED,
             ),
-            viewModel.uiState.value.sightingTrustLevels,
+            viewModel.uiState.value.reporterTrustLevels,
         )
 
         trustRepository.setTrust("new-reporter", TrustScore(score = 0.4, judged = 3))
@@ -132,7 +132,7 @@ class MyAlertViewModelTest {
 
         assertEquals(
             TrustLevel.TRUSTED,
-            viewModel.uiState.value.sightingTrustLevels["new-reporter"],
+            viewModel.uiState.value.reporterTrustLevels["new-reporter"],
         )
       }
 
@@ -150,7 +150,7 @@ class MyAlertViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(sighting), viewModel.uiState.value.sightings)
-        assertTrue(viewModel.uiState.value.sightingTrustLevels.isEmpty())
+        assertTrue(viewModel.uiState.value.reporterTrustLevels.isEmpty())
         assertNull(viewModel.uiState.value.errorMessage)
       }
 

@@ -91,8 +91,8 @@ class MyAlertViewModel(
               _uiState.update {
                 it.copy(
                     sightings = sightings,
-                    sightingTrustLevels =
-                        it.sightingTrustLevels.filterKeys { reporterId ->
+                    reporterTrustLevels =
+                        it.reporterTrustLevels.filterKeys { reporterId ->
                           reporterId in reporterIds
                         },
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
@@ -134,8 +134,8 @@ class MyAlertViewModel(
                             state
                           } else {
                             state.copy(
-                                sightingTrustLevels =
-                                    state.sightingTrustLevels + (reporterId to trust.level)
+                                reporterTrustLevels =
+                                    state.reporterTrustLevels + (reporterId to trust.level)
                             )
                           }
                         }
