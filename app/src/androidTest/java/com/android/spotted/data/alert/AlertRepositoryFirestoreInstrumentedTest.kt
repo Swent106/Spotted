@@ -5,6 +5,8 @@ package com.android.spotted.data.alert
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertAlreadyOpenException
@@ -34,6 +36,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -209,6 +212,36 @@ class AlertRepositoryFirestoreInstrumentedTest {
   }
 
   @Test
+  fun publishAlert_withPetDetails_loadsThemBack() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+            petBirthYear = 2019,
+            petSex = Sex.FEMALE,
+            petSize = PetSize.SMALL,
+        )
+
+    val published = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue("publish failed: ${published.exceptionOrNull()?.message}", published.isSuccess)
+
+    val stored = firestore.collection("alerts").document(alert.id).get().await()
+    assertEquals(2019L, stored.getLong("petBirthYear"))
+    assertEquals("FEMALE", stored.getString("petSex"))
+    assertEquals("SMALL", stored.getString("petSize"))
+    assertEquals(alert, repository.getAlertById(alert.id).getOrNull())
+  }
+
+  @Test
   fun getAlertById_alertSavedBeforeLossDetails_loadsWithUnknown() = runBlocking {
     val ownerId = auth.currentUser!!.uid
     val petId = "pet-${java.util.UUID.randomUUID()}"
@@ -252,6 +285,9 @@ class AlertRepositoryFirestoreInstrumentedTest {
     assertEquals(alert, loaded)
     assertEquals(LossCause.UNKNOWN, loaded?.lossCause)
     assertEquals(LossEnvironment.UNKNOWN, loaded?.lossEnvironment)
+    assertNull(loaded?.petBirthYear)
+    assertEquals(Sex.UNKNOWN, loaded?.petSex)
+    assertEquals(PetSize.UNKNOWN, loaded?.petSize)
   }
 
   @Test
