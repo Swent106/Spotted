@@ -9,14 +9,17 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
+import com.android.spotted.data.trust.TrustRepositoryFirestore
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.estimateLikelyArea
+import com.android.spotted.model.trust.TrustRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,7 @@ class MyAlertViewModel(
     private val alertId: String,
     private val alertRepository: AlertRepository,
     private val sightingRepository: SightingRepository,
+    private val trustRepository: TrustRepository,
     private val authRepository: AuthRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -82,14 +86,18 @@ class MyAlertViewModel(
       sightingRepository.observeSightingsForAlert(alert.id).collect { result ->
         result.fold(
             onSuccess = { sightings ->
+              val sightingIds = sightings.mapTo(mutableSetOf()) { it.id }
               _uiState.update {
                 it.copy(
                     sightings = sightings,
+                    sightingTrustLevels =
+                        it.sightingTrustLevels.filterKeys { id -> id in sightingIds },
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
                     errorMessage = if (it.errorMessage == sightingsError) null else it.errorMessage,
                 )
               }
               sightingsError = null
+              loadTrustLevels(sightings)
             },
             onFailure = { failure ->
               val message = failure.localizedMessage ?: SIGHTINGS_LOAD_FAILED
@@ -99,6 +107,36 @@ class MyAlertViewModel(
         )
       }
     }
+  }
+
+  /** Loads optional trust metadata separately so a failed read never hides its sighting. */
+  private fun loadTrustLevels(sightings: List<Sighting>) {
+    val knownSightingIds = _uiState.value.sightingTrustLevels.keys
+    sightings
+        .filterNot { it.id in knownSightingIds }
+        .groupBy { it.reporterId }
+        .forEach { (reporterId, reporterSightings) ->
+          viewModelScope.launch {
+            trustRepository
+                .getTrust(reporterId)
+                .fold(
+                    onSuccess = { trust ->
+                      val levels = reporterSightings.associate { it.id to trust.level }
+                      _uiState.update { state ->
+                        val currentSightingIds = state.sightings.mapTo(mutableSetOf()) { it.id }
+                        state.copy(
+                            sightingTrustLevels =
+                                state.sightingTrustLevels +
+                                    levels.filterKeys { it in currentSightingIds }
+                        )
+                      }
+                    },
+                    onFailure = {
+                      // Trust is supplementary; leave these sightings visible without a level.
+                    },
+                )
+          }
+        }
   }
 
   /**
@@ -207,6 +245,7 @@ class MyAlertViewModel(
               alertId = alertId,
               alertRepository = AlertRepositoryFirestore(),
               sightingRepository = SightingRepositoryFirestore(),
+              trustRepository = TrustRepositoryFirestore(),
               authRepository = AuthRepositoryProvider.authRepository,
           )
         }
