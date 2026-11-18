@@ -100,6 +100,7 @@ object HomeScreenTestTags {
   const val PETS_ERROR = "home_petsError"
   const val PETS_RETRY = "home_petsRetry"
   const val PETS_EMPTY = "home_petsEmpty"
+  const val PETS_CAROUSEL = "home_petsCarousel"
   const val ALERTS_TITLE = "home_alertsTitle"
   const val ALERTS_LOADER = "home_alertsLoader"
   const val ALERTS_ERROR = "home_alertsError"
@@ -495,7 +496,7 @@ private fun LazyListScope.petsSection(
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(end = 14.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag(HomeScreenTestTags.PETS_CAROUSEL),
         ) {
           items(pets.items, key = { "pet_${it.id}" }) { pet ->
             val alert = alertByPetId[pet.id]
