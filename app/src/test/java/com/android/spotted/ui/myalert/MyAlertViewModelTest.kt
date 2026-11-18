@@ -87,6 +87,11 @@ class MyAlertViewModelTest {
         val sightings =
             listOf(
                 sighting(id = "new", status = SightingStatus.PENDING, reporterId = "new-reporter"),
+                sighting(
+                    id = "new-2",
+                    status = SightingStatus.PENDING,
+                    reporterId = "new-reporter",
+                ),
                 sighting(id = "low", status = SightingStatus.PENDING, reporterId = "low-reporter"),
                 sighting(
                     id = "trusted",
@@ -113,12 +118,21 @@ class MyAlertViewModelTest {
 
         assertEquals(
             mapOf(
-                "new" to TrustLevel.NEW,
-                "low" to TrustLevel.LOW,
-                "trusted" to TrustLevel.TRUSTED,
-                "very-trusted" to TrustLevel.VERY_TRUSTED,
+                "new-reporter" to TrustLevel.NEW,
+                "low-reporter" to TrustLevel.LOW,
+                "trusted-reporter" to TrustLevel.TRUSTED,
+                "very-trusted-reporter" to TrustLevel.VERY_TRUSTED,
             ),
             viewModel.uiState.value.sightingTrustLevels,
+        )
+
+        trustRepository.setTrust("new-reporter", TrustScore(score = 0.4, judged = 3))
+        sightingRepository.setSightingStatus("new", SightingStatus.CONFIRMED).getOrThrow()
+        advanceUntilIdle()
+
+        assertEquals(
+            TrustLevel.TRUSTED,
+            viewModel.uiState.value.sightingTrustLevels["new-reporter"],
         )
       }
 

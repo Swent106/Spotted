@@ -22,7 +22,7 @@ import com.android.spotted.model.trust.TrustLevel
 data class MyAlertUiState(
     val alert: Alert? = null,
     val sightings: List<Sighting> = emptyList(),
-    /** Available reporter trust levels, keyed by sighting ID; absent when the read fails. */
+    /** Available reporter trust levels, keyed by reporter ID; absent when the read fails. */
     val sightingTrustLevels: Map<String, TrustLevel> = emptyMap(),
     val likelyArea: LikelyArea? = null,
     val isLoading: Boolean = true,

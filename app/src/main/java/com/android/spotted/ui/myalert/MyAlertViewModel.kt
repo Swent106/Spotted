@@ -39,6 +39,7 @@ class MyAlertViewModel(
   val uiState: StateFlow<MyAlertUiState> = _uiState.asStateFlow()
   // Tracks the stream error so a successful snapshot clears only that error, not action errors.
   private var sightingsError: String? = null
+  private var trustLevelsRequestId = 0L
 
   init {
     loadAlert()
@@ -86,12 +87,14 @@ class MyAlertViewModel(
       sightingRepository.observeSightingsForAlert(alert.id).collect { result ->
         result.fold(
             onSuccess = { sightings ->
-              val sightingIds = sightings.mapTo(mutableSetOf()) { it.id }
+              val reporterIds = sightings.mapTo(mutableSetOf()) { it.reporterId }
               _uiState.update {
                 it.copy(
                     sightings = sightings,
                     sightingTrustLevels =
-                        it.sightingTrustLevels.filterKeys { id -> id in sightingIds },
+                        it.sightingTrustLevels.filterKeys { reporterId ->
+                          reporterId in reporterIds
+                        },
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
                     errorMessage = if (it.errorMessage == sightingsError) null else it.errorMessage,
                 )
@@ -111,24 +114,31 @@ class MyAlertViewModel(
 
   /** Loads optional trust metadata separately so a failed read never hides its sighting. */
   private fun loadTrustLevels(sightings: List<Sighting>) {
-    val knownSightingIds = _uiState.value.sightingTrustLevels.keys
+    val requestId = ++trustLevelsRequestId
     sightings
-        .filterNot { it.id in knownSightingIds }
-        .groupBy { it.reporterId }
-        .forEach { (reporterId, reporterSightings) ->
+        .map { it.reporterId }
+        .distinct()
+        .forEach { reporterId ->
           viewModelScope.launch {
             trustRepository
                 .getTrust(reporterId)
                 .fold(
                     onSuccess = { trust ->
-                      val levels = reporterSightings.associate { it.id to trust.level }
                       _uiState.update { state ->
-                        val currentSightingIds = state.sightings.mapTo(mutableSetOf()) { it.id }
-                        state.copy(
-                            sightingTrustLevels =
-                                state.sightingTrustLevels +
-                                    levels.filterKeys { it in currentSightingIds }
-                        )
+                        if (requestId != trustLevelsRequestId) {
+                          state
+                        } else {
+                          val currentReporterIds =
+                              state.sightings.mapTo(mutableSetOf()) { it.reporterId }
+                          if (reporterId !in currentReporterIds) {
+                            state
+                          } else {
+                            state.copy(
+                                sightingTrustLevels =
+                                    state.sightingTrustLevels + (reporterId to trust.level)
+                            )
+                          }
+                        }
                       }
                     },
                     onFailure = {
