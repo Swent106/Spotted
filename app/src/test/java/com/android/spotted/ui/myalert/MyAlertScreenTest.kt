@@ -9,6 +9,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
+import com.android.spotted.model.fakes.FakeTrustRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -36,6 +37,7 @@ class MyAlertScreenTest {
             alertId = ALERT.id,
             alertRepository = alertRepository,
             sightingRepository = FakeSightingRepository(),
+            trustRepository = FakeTrustRepository(),
             authRepository = authRepository,
         )
     composeTestRule.setContent { MyAlertScreen(viewModel = viewModel, onBack = { backs++ }) }
