@@ -26,6 +26,7 @@ navigationCompose = "2.8.5"
 osmdroid = "6.1.20"
 playServicesLocation = "21.4.0"
 imageLabeling = "17.0.9"
+work = "2.10.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -64,6 +65,8 @@ androidx-tracing = { group = "androidx.tracing", name = "tracing", version.ref =
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 image-labeling = { group = "com.google.mlkit", name = "image-labeling", version.ref = "imageLabeling" }
+work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+work-testing = { group = "androidx.work", name = "work-testing", version.ref = "work" }
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
