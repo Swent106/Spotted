@@ -3,6 +3,8 @@ package com.android.spotted.data.alert
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
@@ -29,11 +31,15 @@ internal data class AlertDto(
     val lastSeenAtMillis: Long? = null,
     val lossCause: String? = null,
     val lossEnvironment: String? = null,
+    val petBirthYear: Int? = null,
+    val petSex: String? = null,
+    val petSize: String? = null,
 ) {
   /**
    * Returns null when a required value (status, species) is invalid. The loss cause and environment
-   * are optional: missing (alerts from before they existed) or unknown (a value added by a newer
-   * version of the app) reads as UNKNOWN. Losing a detail is better than hiding the alert.
+   * and the pet's sex and size are optional: missing (alerts from before they existed) or unknown
+   * (a value added by a newer version of the app) reads as UNKNOWN. Losing a detail is better than
+   * hiding the alert.
    */
   fun toDomain(): Alert? {
     val alertStatus = runCatching { AlertStatus.valueOf(status) }.getOrNull() ?: return null
@@ -58,6 +64,9 @@ internal data class AlertDto(
         lossCause = lossCause.toEnumOr(LossCause.entries, LossCause.UNKNOWN),
         lossEnvironment =
             lossEnvironment.toEnumOr(LossEnvironment.entries, LossEnvironment.UNKNOWN),
+        petBirthYear = petBirthYear,
+        petSex = petSex.toEnumOr(Sex.entries, Sex.UNKNOWN),
+        petSize = petSize.toEnumOr(PetSize.entries, PetSize.UNKNOWN),
     )
   }
 }
@@ -85,4 +94,7 @@ internal fun Alert.toDto() =
         lastSeenAtMillis = lastSeenAtMillis,
         lossCause = lossCause.name,
         lossEnvironment = lossEnvironment.name,
+        petBirthYear = petBirthYear,
+        petSex = petSex.name,
+        petSize = petSize.name,
     )

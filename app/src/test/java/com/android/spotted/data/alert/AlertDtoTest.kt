@@ -2,12 +2,15 @@
 package com.android.spotted.data.alert
 
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.LossCause
 import com.android.spotted.model.alert.LossEnvironment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AlertDtoTest {
@@ -92,5 +95,45 @@ class AlertDtoTest {
   fun newAlert_defaultsToUnknown() {
     assertEquals(LossCause.UNKNOWN, alert.lossCause)
     assertEquals(LossEnvironment.UNKNOWN, alert.lossEnvironment)
+  }
+
+  @Test
+  fun roundTrip_keepsThePetDetails() {
+    for (sex in Sex.entries) {
+      for (size in PetSize.entries) {
+        val withDetails = alert.copy(petBirthYear = 2019, petSex = sex, petSize = size)
+
+        assertEquals(withDetails, withDetails.toDto().toDomain())
+      }
+    }
+  }
+
+  @Test
+  fun toDto_storesThePetDetails() {
+    val dto = alert.copy(petBirthYear = 2019, petSex = Sex.MALE, petSize = PetSize.LARGE).toDto()
+
+    assertEquals(2019, dto.petBirthYear)
+    assertEquals("MALE", dto.petSex)
+    assertEquals("LARGE", dto.petSize)
+  }
+
+  @Test
+  fun toDomain_alertWithoutPetDetails_readsUnknownAndNull() {
+    val legacy = alert.toDto().copy(petBirthYear = null, petSex = null, petSize = null)
+
+    val loaded = legacy.toDomain()
+
+    assertNull(loaded?.petBirthYear)
+    assertEquals(Sex.UNKNOWN, loaded?.petSex)
+    assertEquals(PetSize.UNKNOWN, loaded?.petSize)
+  }
+
+  @Test
+  fun toDomain_unknownPetSexOrSize_keepsTheAlert_withUnknown() {
+    val loaded = alert.toDto().copy(petSex = "OTHER", petSize = "HUGE").toDomain()
+
+    assertNotNull("An unknown sex or size must not hide the alert", loaded)
+    assertEquals(Sex.UNKNOWN, loaded?.petSex)
+    assertEquals(PetSize.UNKNOWN, loaded?.petSize)
   }
 }
