@@ -108,7 +108,7 @@ class PhotoRepositoryFirestore(
               null,
               BitmapFactory.Options().apply { inSampleSize = sampleSize },
           )
-        } ?: throw IllegalArgumentException("$uri is not an image")
+        } ?: throw NotAnImageException(uri)
     // Cameras save the photo sideways with an EXIF tag saying how to turn it: apply it, or the
     // photo is shown rotated (and cropped wrong in the round and square frames)
     val orientation =

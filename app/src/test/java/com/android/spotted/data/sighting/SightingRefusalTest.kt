@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.sighting
 
+import com.android.spotted.data.photo.NotAnImageException
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.FirebaseFirestoreException.Code
 import java.io.FileNotFoundException
@@ -45,7 +46,12 @@ class SightingRefusalTest {
   @Test
   fun aMissingOrInvalidPhoto_isARefusal_butANetworkErrorIsNot() {
     assertEquals(true, isSightingRefusal(FileNotFoundException("photo copy gone")))
-    assertEquals(true, isSightingRefusal(IllegalArgumentException("not an image")))
+    assertEquals(true, isSightingRefusal(NotAnImageException("file:///pending/s1.jpg")))
     assertEquals(false, isSightingRefusal(IOException("offline")))
+  }
+
+  @Test
+  fun anUnexpectedIllegalArgument_isNotARefusal_soTheSightingIsKept() {
+    assertEquals(false, isSightingRefusal(IllegalArgumentException("bug somewhere")))
   }
 }
