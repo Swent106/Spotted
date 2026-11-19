@@ -75,6 +75,7 @@ object ReportSightingScreenTestTags {
   const val PHOTO_CHECKING = "sighting_photoChecking"
   const val PHOTO_WARNING = "sighting_photoWarning"
   const val PHOTO_REQUIRED = "sighting_photoRequired"
+  const val SAVED_OFFLINE = "sighting_savedOffline"
 }
 
 @Composable
@@ -362,8 +363,8 @@ fun ReportSightingContent(
           onDirectionSelected = onDirectionSelected,
       )
 
-      // Offline Banner
-      if (state.isOffline) {
+      // Offline Banner, replaced by the saved message once the sighting is queued
+      if (state.isOffline && !state.savedOffline) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier =
@@ -383,8 +384,18 @@ fun ReportSightingContent(
         }
       }
 
-      // Loader or Submit Button
-      if (state.isSubmitting) {
+      // Saved offline message, loader or Submit Button
+      if (state.savedOffline) {
+        Text(
+            stringResource(R.string.sighting_saved_offline),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .background(SpottedTheme.colors.surface, RoundedCornerShape(12.dp))
+                    .padding(14.dp)
+                    .testTag(ReportSightingScreenTestTags.SAVED_OFFLINE),
+            style = jakarta(14, 18f, 700, SpottedTheme.colors.ink, TextAlign.Center),
+        )
+      } else if (state.isSubmitting) {
         Box(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             contentAlignment = Alignment.Center,

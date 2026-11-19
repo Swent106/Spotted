@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.LocationRepositoryProvider
+import com.android.spotted.data.network.NetworkMonitorAndroid
 import com.android.spotted.data.photo.AnimalDetectorMlKit
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
@@ -20,12 +21,14 @@ import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.distanceKm
 import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.network.NetworkMonitor
 import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.sighting.AnimalActivity
 import com.android.spotted.model.sighting.AnimalCondition
 import com.android.spotted.model.sighting.AnimalReaction
 import com.android.spotted.model.sighting.CollarStatus
+import com.android.spotted.model.sighting.PendingSightingRepository
 import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.PlausibilityIssue
 import com.android.spotted.model.sighting.Sighting
@@ -47,9 +50,15 @@ class ReportSightingViewModel(
     private val now: () -> Long = { System.currentTimeMillis() },
     private val alertRepository: AlertRepository? = null,
     private val animalDetector: AnimalDetector? = null,
+    /** Where a sighting sent offline is queued; without one, an offline send shows an error. */
+    private val pendingSightingRepository: PendingSightingRepository? = null,
+    /** Tells whether Send can reach the server; without one, the phone is taken to be online. */
+    private val networkMonitor: NetworkMonitor? = null,
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow(ReportSightingUiState())
+  /** Opens offline when [networkMonitor] says so, so the screen warns before Send. */
+  private val _uiState =
+      MutableStateFlow(ReportSightingUiState(isOffline = networkMonitor?.isOnline() == false))
   val uiState: StateFlow<ReportSightingUiState> = _uiState.asStateFlow()
 
   /** Detection of the current photo, cancelled when another photo is chosen. */
@@ -328,6 +337,8 @@ class ReportSightingViewModel(
 
     viewModelScope.launch {
       try {
+        val online = networkMonitor?.isOnline() ?: true
+        _uiState.update { it.copy(isOffline = !online) }
         val sightingId = sightingRepository.getNewId()
         val reporterId = currentUser.uid
         val nowMillis = now()
@@ -350,9 +361,17 @@ class ReportSightingViewModel(
             )
 
         // Checked before the photo is uploaded, so nothing is uploaded for a refused sighting
-        val refusal = alertId?.let { implausibilityMessage(plausibilitySighting, it, nowMillis) }
+        val refusal = alertId?.let {
+          implausibilityMessage(plausibilitySighting, it, nowMillis, online)
+        }
         if (refusal != null) {
           _uiState.update { it.copy(isSubmitting = false, errorMessage = refusal) }
+          return@launch
+        }
+
+        // Offline: keep it on the phone with its local photo, it is sent once the network is back
+        if (!online) {
+          queue(plausibilitySighting, currentState.photoUri)
           return@launch
         }
 
@@ -402,16 +421,33 @@ class ReportSightingViewModel(
   }
 
   /**
+   * Queues [sighting] with the photo at [photoUri] in [pendingSightingRepository], and tells the
+   * user it will be sent later, or that it couldn't be saved.
+   */
+  private suspend fun queue(sighting: Sighting, photoUri: String?) {
+    val repository = pendingSightingRepository
+    val queued = repository != null && repository.add(sighting, photoUri).isSuccess
+    _uiState.update {
+      if (queued) it.copy(isSubmitting = false, savedOffline = true)
+      else it.copy(isSubmitting = false, errorMessage = OFFLINE_SAVE_FAILED)
+    }
+  }
+
+  /**
    * Loads the alert [alertId] and checks that [sighting] can be a sighting of its pet. Returns why
-   * it can't, one line per issue, or null when it is plausible. A sighting is also refused when the
-   * alert can't be loaded, as nothing could then be checked.
+   * it can't, one line per issue, or null when it is plausible. When the alert can't be loaded, a
+   * sighting is refused [online], as nothing could then be checked; offline it is let through, and
+   * the server checks it when the queue is sent.
    */
   private suspend fun implausibilityMessage(
       sighting: Sighting,
       alertId: String,
       nowMillis: Long,
+      online: Boolean,
   ): String? {
-    val alert = alertRepository?.getAlertById(alertId)?.getOrNull() ?: return ALERT_NOT_LOADED
+    val alert =
+        alertRepository?.getAlertById(alertId)?.getOrNull()
+            ?: return if (online) ALERT_NOT_LOADED else null
     val issues = checkPlausibility(sighting, alert, nowMillis)
     return if (issues.isEmpty()) null else issues.joinToString("\n") { it.message() }
   }
@@ -428,6 +464,7 @@ class ReportSightingViewModel(
   companion object {
     const val ALERT_NOT_LOADED = "Couldn't check this alert. Try again."
     const val PHOTO_UPLOAD_FAILED = "Couldn't upload your photo. Try again."
+    const val OFFLINE_SAVE_FAILED = "Couldn't save your sighting on the phone. Try again."
     const val SEEN_IN_THE_FUTURE_MESSAGE = "The time of this sighting is in the future."
     const val SEEN_BEFORE_LOST_MESSAGE = "This pet was seen before it was lost."
     const val TOO_FAR_MESSAGE = "This is too far from where the pet was lost for the time elapsed."
@@ -449,6 +486,9 @@ class ReportSightingViewModel(
                 authRepository = AuthRepositoryProvider.authRepository,
                 alertRepository = AlertRepositoryFirestore(),
                 animalDetector = AnimalDetectorMlKit(application),
+                // TODO(#444): PendingSightingRepositoryProvider.get(application) once it is merged
+                pendingSightingRepository = null,
+                networkMonitor = NetworkMonitorAndroid(application),
             )
                 as T
           }
