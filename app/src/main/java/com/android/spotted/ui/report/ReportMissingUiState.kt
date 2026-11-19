@@ -3,6 +3,8 @@ package com.android.spotted.ui.report
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 
 /**
  * State of the "Report a pet missing" screen.
@@ -19,6 +21,11 @@ import com.android.spotted.model.Pet.Pet
  * @property alreadyMissingPetId pet already missing that the owner tapped: the screen offers to
  *   open its alert. Null when no such offer is shown.
  * @property openAlertId alert to open in My alert; the screen then navigates there.
+ * @property showWhatHappened true while the optional "What happened?" step is shown, after the pet
+ *   and the location are chosen.
+ * @property cause how the pet got lost, chosen in that step. Nothing is pre-selected.
+ * @property environment the kind of place where the pet got lost, chosen in that step. Nothing is
+ *   pre-selected: the geocoder can't reliably tell a city from the countryside.
  */
 data class ReportMissingUiState(
     val pets: List<Pet> = emptyList(),
@@ -31,6 +38,9 @@ data class ReportMissingUiState(
     val openAlertIdByPetId: Map<String, String> = emptyMap(),
     val alreadyMissingPetId: String? = null,
     val openAlertId: String? = null,
+    val showWhatHappened: Boolean = false,
+    val cause: LossCause = LossCause.UNKNOWN,
+    val environment: LossEnvironment = LossEnvironment.UNKNOWN,
 ) {
   /** The pet the owner chose, or null if none is chosen. A pet already missing is never chosen. */
   val selectedPet: Pet?

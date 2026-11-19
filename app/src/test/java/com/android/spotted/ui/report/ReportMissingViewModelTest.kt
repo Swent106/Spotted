@@ -13,6 +13,8 @@ import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import kotlinx.coroutines.Dispatchers
@@ -475,6 +477,112 @@ class ReportMissingViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(LUNA, state.selectedPet)
         assertNull(state.errorMessage)
+      }
+
+  // ===================== "What happened?" step =====================
+
+  @Test
+  fun whatHappened_nothingIsPreselected() =
+      runTest(testDispatcher) {
+        val state = loadedViewModel(LUNA).uiState.value
+
+        assertFalse(state.showWhatHappened)
+        assertEquals(LossCause.UNKNOWN, state.cause)
+        assertEquals(LossEnvironment.UNKNOWN, state.environment)
+      }
+
+  @Test
+  fun openWhatHappened_withoutLocation_staysOnTheForm() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+
+        viewModel.openWhatHappened()
+
+        assertFalse(viewModel.uiState.value.showWhatHappened)
+      }
+
+  @Test
+  fun openWhatHappened_thenBackToForm_keepsTheChoices() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+
+        viewModel.openWhatHappened()
+        assertTrue(viewModel.uiState.value.showWhatHappened)
+        viewModel.setCause(LossCause.STOLEN)
+        viewModel.backToForm()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.showWhatHappened)
+        assertEquals(LossCause.STOLEN, state.cause)
+      }
+
+  @Test
+  fun publish_withCauseAndEnvironment_sendsBoth() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setCause(LossCause.DURING_A_WALK)
+        viewModel.setEnvironment(LossEnvironment.SUBURB)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.DURING_A_WALK, alert.lossCause)
+        assertEquals(LossEnvironment.SUBURB, alert.lossEnvironment)
+        assertTrue(viewModel.uiState.value.published)
+      }
+
+  @Test
+  fun publish_withOnlyTheCause_sendsAnUnknownEnvironment() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setCause(LossCause.SCARED_BY_NOISE)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.SCARED_BY_NOISE, alert.lossCause)
+        assertEquals(LossEnvironment.UNKNOWN, alert.lossEnvironment)
+      }
+
+  @Test
+  fun publish_withOnlyTheEnvironment_sendsAnUnknownCause() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setEnvironment(LossEnvironment.FOREST_OR_MOUNTAIN)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.UNKNOWN, alert.lossCause)
+        assertEquals(LossEnvironment.FOREST_OR_MOUNTAIN, alert.lossEnvironment)
+      }
+
+  @Test
+  fun skipWhatHappened_forgetsTheChoices_andPublishesAsWithoutTheStep() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setCause(LossCause.STOLEN)
+        viewModel.setEnvironment(LossEnvironment.CITY_CENTRE)
+
+        viewModel.skipWhatHappened()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.UNKNOWN, alert.lossCause)
+        assertEquals(LossEnvironment.UNKNOWN, alert.lossEnvironment)
+        assertTrue(viewModel.uiState.value.published)
       }
 
   private companion object {
