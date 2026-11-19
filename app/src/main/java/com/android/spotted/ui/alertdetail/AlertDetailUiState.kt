@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.alertdetail
 
 import com.android.spotted.model.alert.Alert
@@ -7,6 +8,7 @@ import com.android.spotted.model.alert.Alert
  *
  * @property distanceText "600 m away" from the device position, else from the home; null when
  *   neither is known.
+ * @property placeName where the pet was last seen, e.g. "Ouchy, Lausanne"; null while unknown.
  */
 data class AlertDetailUiState(
     val alert: Alert? = null,
@@ -14,4 +16,5 @@ data class AlertDetailUiState(
     val notFound: Boolean = false,
     val errorMessage: String? = null,
     val distanceText: String? = null,
+    val placeName: String? = null,
 )
