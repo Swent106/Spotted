@@ -10,6 +10,8 @@ import com.android.spotted.ui.personalinfo.PersonalInfoUiState
  */
 data class HelperProfileUiState(
     val name: String = "",
+    /** Shown as "@username" under [name]; empty for a profile saved before it was asked for. */
+    val username: String = "",
     val homeArea: String = "",
     /**
      * The user's profile photo; the avatar shows [initial] behind it, and alone when there is none.

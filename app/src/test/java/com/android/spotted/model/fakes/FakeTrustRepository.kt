@@ -1,0 +1,63 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
+package com.android.spotted.model.fakes
+
+import com.android.spotted.model.trust.SightingNotFoundException
+import com.android.spotted.model.trust.TrustRepository
+import com.android.spotted.model.trust.TrustScore
+import com.android.spotted.model.trust.Verdict
+import com.android.spotted.model.trust.VerdictAlreadyAppliedException
+
+/**
+ * In-memory [TrustRepository] for tests.
+ *
+ * @param trusts the stored trust of each user, by uid; other users read as [TrustScore.INITIAL].
+ * @param reporters the reporter of each sighting that can be judged, by sighting id.
+ */
+class FakeTrustRepository(
+    trusts: Map<String, TrustScore> = emptyMap(),
+    reporters: Map<String, String> = emptyMap(),
+) : TrustRepository {
+  private val trusts = trusts.toMutableMap()
+  private val reporters = reporters.toMutableMap()
+
+  /** The verdict applied to each judged sighting, by sighting id. */
+  val verdicts: Map<String, Verdict>
+    get() = appliedVerdicts.toMap()
+
+  private val appliedVerdicts = mutableMapOf<String, Verdict>()
+
+  /** If set, every read and write fails with it. */
+  var failure: Throwable? = null
+
+  /** Stores [trust] as the trust of [uid], as if their sightings had been judged. */
+  fun setTrust(uid: String, trust: TrustScore) {
+    trusts[uid] = trust
+  }
+
+  /** Makes the sighting [sightingId], reported by [reporterId], one that can be judged. */
+  fun addSighting(sightingId: String, reporterId: String) {
+    reporters[sightingId] = reporterId
+  }
+
+  override suspend fun getTrust(uid: String): Result<TrustScore> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    return Result.success(trusts[uid] ?: TrustScore.INITIAL)
+  }
+
+  override suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore> {
+    failure?.let {
+      return Result.failure(it)
+    }
+    val reporterId =
+        reporters[sightingId] ?: return Result.failure(SightingNotFoundException(sightingId))
+    if (sightingId in appliedVerdicts) {
+      return Result.failure(VerdictAlreadyAppliedException(sightingId))
+    }
+    val next = (trusts[reporterId] ?: TrustScore.INITIAL).after(verdict)
+    trusts[reporterId] = next
+    appliedVerdicts[sightingId] = verdict
+    return Result.success(next)
+  }
+}

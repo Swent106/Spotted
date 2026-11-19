@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -80,6 +81,71 @@ class PetRepositoryFirestoreTest {
 
     assertTrue(repository.addPet(pet).isSuccess)
     assertEquals(pet, repository.getPet(pet.id).getOrThrow())
+  }
+
+  @Test
+  fun addPet_andGetPet_roundTripsTheOptionalDetails() = runTest {
+    val pet =
+        pet(id = repository.getNewId(), ownerId = currentUserId())
+            .copy(
+                birthYear = 2019,
+                breedId = "labrador",
+                sex = Sex.FEMALE,
+                neutered = Neutered.YES,
+                size = PetSize.LARGE,
+                lifestyle = Lifestyle.INDOOR_AND_OUTDOOR,
+                microchipped = Microchipped.NO,
+            )
+    insertedPetIds += pet.id
+
+    assertTrue(repository.addPet(pet).isSuccess)
+    assertEquals(pet, repository.getPet(pet.id).getOrThrow())
+  }
+
+  @Test
+  fun addPet_withoutTheOptionalDetails_readsUnknownAndNull() = runTest {
+    val pet = pet(id = repository.getNewId(), ownerId = currentUserId())
+    insertedPetIds += pet.id
+
+    assertTrue(repository.addPet(pet).isSuccess)
+    val loaded = repository.getPet(pet.id).getOrThrow()
+
+    assertEquals(pet, loaded)
+    assertNull(loaded.birthYear)
+    assertNull(loaded.breedId)
+    assertEquals(Sex.UNKNOWN, loaded.sex)
+    assertEquals(Microchipped.UNKNOWN, loaded.microchipped)
+  }
+
+  @Test
+  fun getPet_whenStoredPetPredatesTheDetails_readsUnknownAndKeepsTheFreeTextBreed() = runTest {
+    val id = repository.getNewId()
+    insertedPetIds += id
+    writeRawPet(id, species = Species.DOG.name, extra = mapOf("breed" to "Golden retriever"))
+
+    val pet = repository.getPet(id).getOrThrow()
+
+    assertEquals("Golden retriever", pet.breed)
+    assertNull(pet.birthYear)
+    assertNull(pet.breedId)
+    assertEquals(Sex.UNKNOWN, pet.sex)
+    assertEquals(Neutered.UNKNOWN, pet.neutered)
+    assertEquals(PetSize.UNKNOWN, pet.size)
+    assertEquals(Lifestyle.UNKNOWN, pet.lifestyle)
+    assertEquals(Microchipped.UNKNOWN, pet.microchipped)
+  }
+
+  @Test
+  fun updatePet_clearsTheBirthYearAndBreedId() = runTest {
+    val original =
+        pet(id = repository.getNewId(), ownerId = currentUserId())
+            .copy(birthYear = 2019, breedId = "labrador", sex = Sex.MALE)
+    insertedPetIds += original.id
+    repository.addPet(original).getOrThrow()
+    val updated = original.copy(birthYear = null, breedId = null, sex = Sex.UNKNOWN)
+
+    assertTrue(repository.updatePet(updated).isSuccess)
+    assertEquals(updated, repository.getPet(updated.id).getOrThrow())
   }
 
   @Test
@@ -199,6 +265,7 @@ class PetRepositoryFirestoreTest {
       id: String,
       species: String,
       behaviors: List<String> = emptyList(),
+      extra: Map<String, Any> = emptyMap(),
   ) =
       withContext(Dispatchers.IO) {
         Tasks.await(
@@ -211,7 +278,7 @@ class PetRepositoryFirestoreTest {
                         "name" to "Milo",
                         "species" to species,
                         "behaviors" to behaviors,
-                    )
+                    ) + extra
                 )
         )
       }

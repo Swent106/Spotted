@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.myalert
@@ -10,15 +11,18 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
+import com.android.spotted.data.trust.TrustRepositoryFirestore
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.estimateLikelyArea
+import com.android.spotted.model.trust.TrustRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +33,7 @@ class MyAlertViewModel(
     private val alertId: String,
     private val alertRepository: AlertRepository,
     private val sightingRepository: SightingRepository,
+    private val trustRepository: TrustRepository,
     private val authRepository: AuthRepository,
     private val now: () -> Long = System::currentTimeMillis,
     /** Names the place the pet was last seen, for the shared text; null: coordinates instead. */
@@ -39,6 +44,7 @@ class MyAlertViewModel(
   val uiState: StateFlow<MyAlertUiState> = _uiState.asStateFlow()
   // Tracks the stream error so a successful snapshot clears only that error, not action errors.
   private var sightingsError: String? = null
+  private var trustLevelsRequestId = 0L
 
   init {
     loadAlert()
@@ -92,14 +98,20 @@ class MyAlertViewModel(
       sightingRepository.observeSightingsForAlert(alert.id).collect { result ->
         result.fold(
             onSuccess = { sightings ->
+              val reporterIds = sightings.mapTo(mutableSetOf()) { it.reporterId }
               _uiState.update {
                 it.copy(
                     sightings = sightings,
+                    reporterTrustLevels =
+                        it.reporterTrustLevels.filterKeys { reporterId ->
+                          reporterId in reporterIds
+                        },
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
                     errorMessage = if (it.errorMessage == sightingsError) null else it.errorMessage,
                 )
               }
               sightingsError = null
+              loadTrustLevels(sightings)
             },
             onFailure = { failure ->
               val message = failure.localizedMessage ?: SIGHTINGS_LOAD_FAILED
@@ -111,20 +123,99 @@ class MyAlertViewModel(
     }
   }
 
-  /** Confirms the sighting [id], allowing it to inform the likely area. */
-  fun confirm(id: String) = setSightingStatus(id, SightingStatus.CONFIRMED)
+  /** Loads optional trust metadata separately so a failed read never hides its sighting. */
+  private fun loadTrustLevels(sightings: List<Sighting>) {
+    val requestId = ++trustLevelsRequestId
+    sightings
+        .map { it.reporterId }
+        .distinct()
+        .forEach { reporterId ->
+          viewModelScope.launch {
+            trustRepository
+                .getTrust(reporterId)
+                .fold(
+                    onSuccess = { trust ->
+                      _uiState.update { state ->
+                        if (requestId != trustLevelsRequestId) {
+                          state
+                        } else {
+                          val currentReporterIds =
+                              state.sightings.mapTo(mutableSetOf()) { it.reporterId }
+                          if (reporterId !in currentReporterIds) {
+                            state
+                          } else {
+                            state.copy(
+                                reporterTrustLevels =
+                                    state.reporterTrustLevels + (reporterId to trust.level)
+                            )
+                          }
+                        }
+                      }
+                    },
+                    onFailure = {
+                      // Trust is supplementary; leave these sightings visible without a level.
+                    },
+                )
+          }
+        }
+  }
+
+  /**
+   * Confirms the sighting [id], allowing it to inform the likely area. If it is newer than the
+   * alert's last seen time, the alert's last seen place moves to it.
+   */
+  fun confirm(id: String) =
+      setSightingStatus(id, SightingStatus.CONFIRMED, onUpdated = { moveLastSeenTo(id) })
 
   /** Dismisses the sighting [id], removing it from the likely-area estimate. */
   fun dismiss(id: String) = setSightingStatus(id, SightingStatus.DISMISSED)
 
-  private fun setSightingStatus(id: String, status: SightingStatus) {
+  private fun setSightingStatus(
+      id: String,
+      status: SightingStatus,
+      onUpdated: suspend () -> Unit = {},
+  ) {
     if (!canManageAlert()) return
     _uiState.update { it.copy(errorMessage = null) }
     viewModelScope.launch {
-      sightingRepository.setSightingStatus(id, status).onFailure { failure ->
-        _uiState.update { it.copy(errorMessage = failure.localizedMessage ?: STATUS_UPDATE_FAILED) }
-      }
+      sightingRepository
+          .setSightingStatus(id, status)
+          .fold(
+              onSuccess = { onUpdated() },
+              onFailure = { failure ->
+                _uiState.update {
+                  it.copy(errorMessage = failure.localizedMessage ?: STATUS_UPDATE_FAILED)
+                }
+              },
+          )
     }
+  }
+
+  /** Moves the alert's last seen place to the sighting [sightingId], if it is newer. */
+  private suspend fun moveLastSeenTo(sightingId: String) {
+    val sighting = _uiState.value.sightings.firstOrNull { it.id == sightingId } ?: return
+    alertRepository
+        .updateLastSeen(alertId, sighting.location, sighting.seenAtMillis)
+        .fold(
+            onSuccess = { moved ->
+              if (moved) {
+                _uiState.update { state ->
+                  state.copy(
+                      alert =
+                          state.alert?.copy(
+                              lastKnownLocation = sighting.location,
+                              lastSeenAtMillis = sighting.seenAtMillis,
+                          )
+                  )
+                }
+              }
+            },
+            onFailure = { failure ->
+              _uiState.update {
+                it.copy(errorMessage = failure.localizedMessage ?: LAST_SEEN_UPDATE_FAILED)
+              }
+            },
+        )
   }
 
   /** Closes the alert after the owner has found their pet. */
@@ -165,6 +256,7 @@ class MyAlertViewModel(
     const val LOAD_FAILED = "Couldn't load the alert. Please try again."
     const val SIGHTINGS_LOAD_FAILED = "Couldn't load sightings. Please try again."
     const val STATUS_UPDATE_FAILED = "Couldn't update the sighting. Please try again."
+    const val LAST_SEEN_UPDATE_FAILED = "Couldn't update the last seen place. Please try again."
     const val CLOSE_FAILED = "Couldn't mark the alert as found. Please try again."
 
     val Factory: (String) -> ViewModelProvider.Factory = { alertId ->
@@ -174,6 +266,7 @@ class MyAlertViewModel(
               alertId = alertId,
               alertRepository = AlertRepositoryFirestore(),
               sightingRepository = SightingRepositoryFirestore(),
+              trustRepository = TrustRepositoryFirestore(),
               authRepository = AuthRepositoryProvider.authRepository,
               addressRepository =
                   this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]?.let {

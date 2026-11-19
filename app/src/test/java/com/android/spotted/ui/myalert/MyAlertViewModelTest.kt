@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 // Portions of this code were generated with the help of Copilot.
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.myalert
@@ -10,8 +11,11 @@ import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
+import com.android.spotted.model.fakes.FakeTrustRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.trust.TrustLevel
+import com.android.spotted.model.trust.TrustScore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -33,6 +37,7 @@ class MyAlertViewModelTest {
   private val testDispatcher = StandardTestDispatcher()
   private lateinit var alertRepository: FakeAlertRepository
   private lateinit var sightingRepository: FakeSightingRepository
+  private lateinit var trustRepository: FakeTrustRepository
   private lateinit var authRepository: FakeAuthRepository
 
   @Before
@@ -40,6 +45,7 @@ class MyAlertViewModelTest {
     Dispatchers.setMain(testDispatcher)
     alertRepository = FakeAlertRepository(now = { NOW })
     sightingRepository = FakeSightingRepository()
+    trustRepository = FakeTrustRepository()
     authRepository = FakeAuthRepository()
   }
 
@@ -73,6 +79,81 @@ class MyAlertViewModelTest {
 
         assertEquals(SightingStatus.CONFIRMED, viewModel.uiState.value.sightings.single().status)
         assertNotNull(viewModel.uiState.value.likelyArea)
+      }
+
+  @Test
+  fun sightings_receiveTheirReportersTrustLevels() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sightings =
+            listOf(
+                sighting(id = "new", status = SightingStatus.PENDING, reporterId = "new-reporter"),
+                sighting(
+                    id = "new-2",
+                    status = SightingStatus.PENDING,
+                    reporterId = "new-reporter",
+                ),
+                sighting(id = "low", status = SightingStatus.PENDING, reporterId = "low-reporter"),
+                sighting(
+                    id = "trusted",
+                    status = SightingStatus.PENDING,
+                    reporterId = "trusted-reporter",
+                ),
+                sighting(
+                    id = "very-trusted",
+                    status = SightingStatus.PENDING,
+                    reporterId = "very-trusted-reporter",
+                ),
+            )
+        trustRepository.setTrust("new-reporter", TrustScore(score = 0.9, judged = 2))
+        trustRepository.setTrust("low-reporter", TrustScore(score = 0.39, judged = 3))
+        trustRepository.setTrust("trusted-reporter", TrustScore(score = 0.4, judged = 3))
+        trustRepository.setTrust("very-trusted-reporter", TrustScore(score = 0.76, judged = 3))
+        alertRepository.publishAlert(alert)
+        for (sighting in sightings) {
+          sightingRepository.reportSighting(sighting)
+        }
+        val viewModel = viewModel(alert.id)
+
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf(
+                "new-reporter" to TrustLevel.NEW,
+                "low-reporter" to TrustLevel.LOW,
+                "trusted-reporter" to TrustLevel.TRUSTED,
+                "very-trusted-reporter" to TrustLevel.VERY_TRUSTED,
+            ),
+            viewModel.uiState.value.reporterTrustLevels,
+        )
+
+        trustRepository.setTrust("new-reporter", TrustScore(score = 0.4, judged = 3))
+        sightingRepository.setSightingStatus("new", SightingStatus.CONFIRMED).getOrThrow()
+        advanceUntilIdle()
+
+        assertEquals(
+            TrustLevel.TRUSTED,
+            viewModel.uiState.value.reporterTrustLevels["new-reporter"],
+        )
+      }
+
+  @Test
+  fun trustLoadFailure_keepsSightingsWithoutLevels() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        trustRepository.failure = IllegalStateException("offline")
+        val viewModel = viewModel(alert.id)
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(sighting), viewModel.uiState.value.sightings)
+        assertTrue(viewModel.uiState.value.reporterTrustLevels.isEmpty())
+        assertNull(viewModel.uiState.value.errorMessage)
       }
 
   @Test
@@ -485,10 +566,104 @@ class MyAlertViewModelTest {
           alertId = alertId,
           alertRepository = alertRepository,
           sightingRepository = sightingRepository,
+          trustRepository = trustRepository,
           authRepository = authRepository,
           now = { NOW },
           addressRepository = addressRepository,
       )
+
+  @Test
+  fun confirm_newerSighting_movesTheAlertLastSeenPlace() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        val moved = alert.copy(lastKnownLocation = sighting.location, lastSeenAtMillis = NOW + HOUR)
+        assertEquals(moved, viewModel.uiState.value.alert)
+        assertEquals(moved, alertRepository.getAlertById(alert.id).getOrThrow())
+      }
+
+  @Test
+  fun confirm_olderSighting_keepsTheAlertLastSeenPlace() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert().copy(lastSeenAtMillis = NOW + 2 * HOUR)
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(SightingStatus.CONFIRMED, viewModel.uiState.value.sightings.single().status)
+        assertEquals(alert, viewModel.uiState.value.alert)
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+      }
+
+  @Test
+  fun dismiss_newerSighting_keepsTheAlertLastSeenPlace() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+      }
+
+  @Test
+  fun confirm_statusFailure_doesNotMoveTheAlert() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        sightingRepository.statusFailure = IllegalStateException("offline")
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+        assertEquals("offline", viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun confirm_lastSeenFailure_showsError() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        alertRepository.failure = IllegalStateException()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(MyAlertViewModel.LAST_SEEN_UPDATE_FAILED, viewModel.uiState.value.errorMessage)
+        assertEquals(alert, viewModel.uiState.value.alert)
+      }
 
   private fun alert(ownerId: String = OWNER_ID) =
       Alert(
@@ -504,10 +679,11 @@ class MyAlertViewModelTest {
   private fun sighting(
       id: String = "sighting-1",
       status: SightingStatus,
+      reporterId: String = "reporter-1",
   ) =
       Sighting(
           id = id,
-          reporterId = "reporter-1",
+          reporterId = reporterId,
           location = Location(latitude = 46.21, longitude = 6.11),
           seenAtMillis = NOW,
           species = Species.CAT,
@@ -518,5 +694,6 @@ class MyAlertViewModelTest {
   private companion object {
     const val OWNER_ID = "fake_uid_from_token"
     const val NOW = 1_700_000_000_000L
+    const val HOUR = 60 * 60 * 1000L
   }
 }

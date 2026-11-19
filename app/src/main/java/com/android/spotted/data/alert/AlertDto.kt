@@ -1,10 +1,15 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.alert
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 
 internal data class LocationDto(val latitude: Double = 0.0, val longitude: Double = 0.0) {
   fun toDomain() = Location(latitude = latitude, longitude = longitude)
@@ -23,7 +28,19 @@ internal data class AlertDto(
     val petPhotoUrl: String? = null,
     val petAllergies: List<String> = emptyList(),
     val petBehaviors: List<String> = emptyList(),
+    val lastSeenAtMillis: Long? = null,
+    val lossCause: String? = null,
+    val lossEnvironment: String? = null,
+    val petBirthYear: Int? = null,
+    val petSex: String? = null,
+    val petSize: String? = null,
 ) {
+  /**
+   * Returns null when a required value (status, species) is invalid. The loss cause and environment
+   * and the pet's sex and size are optional: missing (alerts from before they existed) or unknown
+   * (a value added by a newer version of the app) reads as UNKNOWN. Losing a detail is better than
+   * hiding the alert.
+   */
   fun toDomain(): Alert? {
     val alertStatus = runCatching { AlertStatus.valueOf(status) }.getOrNull() ?: return null
     val species = runCatching { Species.valueOf(petSpecies) }.getOrNull() ?: return null
@@ -43,9 +60,20 @@ internal data class AlertDto(
             petBehaviors
                 .mapNotNull { b -> runCatching { Behavior.valueOf(b) }.getOrNull() }
                 .toSet(),
+        lastSeenAtMillis = lastSeenAtMillis,
+        lossCause = lossCause.toEnumOr(LossCause.entries, LossCause.UNKNOWN),
+        lossEnvironment =
+            lossEnvironment.toEnumOr(LossEnvironment.entries, LossEnvironment.UNKNOWN),
+        petBirthYear = petBirthYear,
+        petSex = petSex.toEnumOr(Sex.entries, Sex.UNKNOWN),
+        petSize = petSize.toEnumOr(PetSize.entries, PetSize.UNKNOWN),
     )
   }
 }
+
+/** The value with this name, or [default] if the name is missing or unknown. */
+private fun <E : Enum<E>> String?.toEnumOr(entries: List<E>, default: E): E =
+    entries.firstOrNull { it.name == this } ?: default
 
 internal fun Location.toDto() = LocationDto(latitude, longitude)
 
@@ -63,4 +91,10 @@ internal fun Alert.toDto() =
         petPhotoUrl = petPhotoUrl,
         petAllergies = petAllergies,
         petBehaviors = petBehaviors.map { it.name },
+        lastSeenAtMillis = lastSeenAtMillis,
+        lossCause = lossCause.name,
+        lossEnvironment = lossEnvironment.name,
+        petBirthYear = petBirthYear,
+        petSex = petSex.name,
+        petSize = petSize.name,
     )

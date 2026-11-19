@@ -42,7 +42,13 @@ class HelperProfileViewModelTest {
     authRepository = FakeAuthRepository()
     uid = authRepository.signInWithGoogle("token").getOrThrow().uid
     userRepository.saveUser(
-        UserProfile(uid = uid, name = "Rayen", email = "rayen@example.com", homeArea = "Lausanne")
+        UserProfile(
+            uid = uid,
+            name = "Rayen",
+            email = "rayen@example.com",
+            homeArea = "Lausanne",
+            username = "rayen",
+        )
     )
   }
 
@@ -56,10 +62,11 @@ class HelperProfileViewModelTest {
       HelperProfileViewModel(userRepository, auth, petRepository, alertRepository).apply { load() }
 
   @Test
-  fun init_loadsTheNameAndArea() {
+  fun init_loadsTheNameUsernameAndArea() {
     val state = viewModel().uiState.value
 
     assertEquals("Rayen", state.name)
+    assertEquals("rayen", state.username)
     assertEquals("Lausanne", state.homeArea)
     assertEquals("R", state.initial)
     assertFalse(state.isLoading)

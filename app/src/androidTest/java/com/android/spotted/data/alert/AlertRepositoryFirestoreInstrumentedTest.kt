@@ -5,10 +5,14 @@ package com.android.spotted.data.alert
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.net.HttpURLConnection
@@ -32,6 +36,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -176,6 +181,113 @@ class AlertRepositoryFirestoreInstrumentedTest {
 
     assertTrue("Lookup should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
     assertEquals(alert, result.getOrNull())
+  }
+
+  @Test
+  fun publishAlert_withLossCauseAndEnvironment_loadsThemBack() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+            lossCause = LossCause.DURING_A_WALK,
+            lossEnvironment = LossEnvironment.SUBURB,
+        )
+
+    val published = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue("publish failed: ${published.exceptionOrNull()?.message}", published.isSuccess)
+
+    val stored = firestore.collection("alerts").document(alert.id).get().await()
+    assertEquals("DURING_A_WALK", stored.getString("lossCause"))
+    assertEquals("SUBURB", stored.getString("lossEnvironment"))
+    assertEquals(alert, repository.getAlertById(alert.id).getOrNull())
+  }
+
+  @Test
+  fun publishAlert_withPetDetails_loadsThemBack() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+            petBirthYear = 2019,
+            petSex = Sex.FEMALE,
+            petSize = PetSize.SMALL,
+        )
+
+    val published = repository.publishAlert(alert)
+    createdAlertIds.add(alert.id)
+    assertTrue("publish failed: ${published.exceptionOrNull()?.message}", published.isSuccess)
+
+    val stored = firestore.collection("alerts").document(alert.id).get().await()
+    assertEquals(2019L, stored.getLong("petBirthYear"))
+    assertEquals("FEMALE", stored.getString("petSex"))
+    assertEquals("SMALL", stored.getString("petSize"))
+    assertEquals(alert, repository.getAlertById(alert.id).getOrNull())
+  }
+
+  @Test
+  fun getAlertById_alertSavedBeforeLossDetails_loadsWithUnknown() = runBlocking {
+    val ownerId = auth.currentUser!!.uid
+    val petId = "pet-${java.util.UUID.randomUUID()}"
+    seedPet(petId, ownerId, "Rex")
+    val alert =
+        Alert(
+            id = repository.getNewId(),
+            petId = petId,
+            ownerId = ownerId,
+            lastKnownLocation = Location(latitude = 46.5196, longitude = 6.6322),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+        )
+    // Written as an older app version did: without the two fields
+    val legacy =
+        mapOf(
+            "id" to alert.id,
+            "petId" to petId,
+            "ownerId" to ownerId,
+            "lastKnownLocation" to mapOf("latitude" to 46.5196, "longitude" to 6.6322),
+            "lostAtMillis" to alert.lostAtMillis,
+            "closedAtMillis" to null,
+            "status" to "OPEN",
+            "petName" to "Rex",
+            "petSpecies" to "DOG",
+            "petAllergies" to emptyList<String>(),
+            "petBehaviors" to emptyList<String>(),
+        )
+    val batch = firestore.batch()
+    batch.set(firestore.collection("alerts").document(alert.id), legacy)
+    batch.set(
+        firestore.collection("openPetAlerts").document(petId),
+        mapOf("alertId" to alert.id, "ownerId" to ownerId),
+    )
+    batch.commit().await()
+    createdAlertIds.add(alert.id)
+
+    val loaded = repository.getAlertById(alert.id).getOrNull()
+
+    assertEquals(alert, loaded)
+    assertEquals(LossCause.UNKNOWN, loaded?.lossCause)
+    assertEquals(LossEnvironment.UNKNOWN, loaded?.lossEnvironment)
+    assertNull(loaded?.petBirthYear)
+    assertEquals(Sex.UNKNOWN, loaded?.petSex)
+    assertEquals(PetSize.UNKNOWN, loaded?.petSize)
   }
 
   @Test
@@ -509,6 +621,50 @@ class AlertRepositoryFirestoreInstrumentedTest {
         result.isSuccess,
     )
     assertEquals(5_000L, repository.getAlertById(alert.id).getOrThrow()?.closedAtMillis)
+  }
+
+  @Test
+  fun updateLastSeen_withNewerTime_movesTheAlert() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0), lostAtMillis = 1000L)
+    val seenAt = Location(latitude = 46.01, longitude = 6.02)
+
+    val result = repository.updateLastSeen(alert.id, seenAt, seenAtMillis = 2000L)
+
+    assertTrue("Should move: ${result.exceptionOrNull()?.message}", result.getOrNull() == true)
+    assertEquals(
+        alert.copy(lastKnownLocation = seenAt, lastSeenAtMillis = 2000L),
+        repository.getAlertById(alert.id).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun updateLastSeen_withOlderTime_leavesTheAlert() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0), lostAtMillis = 1000L)
+    val newer = Location(latitude = 46.01, longitude = 6.02)
+    repository.updateLastSeen(alert.id, newer, seenAtMillis = 3000L).getOrThrow()
+
+    val result = repository.updateLastSeen(alert.id, Location(46.03, 6.04), seenAtMillis = 2000L)
+
+    assertTrue("Should not move: ${result.exceptionOrNull()?.message}", result.getOrNull() == false)
+    assertEquals(
+        alert.copy(lastKnownLocation = newer, lastSeenAtMillis = 3000L),
+        repository.getAlertById(alert.id).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun updateLastSeen_returnsNoSuchElementWhenAlertDoesNotExist() = runBlocking {
+    val result =
+        repository.updateLastSeen(
+            "missing-${java.util.UUID.randomUUID()}",
+            Location(46.0, 6.0),
+            2000L,
+        )
+
+    assertTrue(
+        "Expected NoSuchElementException, got ${result.exceptionOrNull()}",
+        result.exceptionOrNull() is NoSuchElementException,
+    )
   }
 
   @Test
