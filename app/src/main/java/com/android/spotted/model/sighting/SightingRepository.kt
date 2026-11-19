@@ -43,6 +43,11 @@ interface SightingRepository {
    *
    * Only the owner of the alert the sighting is linked to is allowed to do it. Fails if the
    * sighting does not exist, is not linked to an alert, or the user is not allowed.
+   *
+   * Confirming must also count for the reporter's trust, so it goes through
+   * [com.android.spotted.model.trust.TrustRepository.confirmSighting]: setting
+   * [SightingStatus.CONFIRMED] here fails with an [IllegalArgumentException] saying so, and changes
+   * nothing. Use this to dismiss a sighting.
    */
   suspend fun setSightingStatus(sightingId: String, status: SightingStatus): Result<Unit>
 }

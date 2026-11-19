@@ -12,8 +12,9 @@ import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.fakes.FakeTrustRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
-import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.model.trust.TrustScore
+import com.android.spotted.model.trust.Verdict
+import com.android.spotted.model.trust.TrustLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -43,7 +44,7 @@ class MyAlertViewModelTest {
     Dispatchers.setMain(testDispatcher)
     alertRepository = FakeAlertRepository(now = { NOW })
     sightingRepository = FakeSightingRepository()
-    trustRepository = FakeTrustRepository()
+    trustRepository = FakeTrustRepository(sightings = sightingRepository)
     authRepository = FakeAuthRepository()
   }
 
@@ -543,6 +544,92 @@ class MyAlertViewModelTest {
           authRepository = authRepository,
           now = { NOW },
       )
+
+  @Test
+  fun confirm_dismiss_confirm_countsTheSightingOnceForTrust() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+        assertEquals(SightingStatus.DISMISSED, viewModel.uiState.value.sightings.single().status)
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(SightingStatus.CONFIRMED, viewModel.uiState.value.sightings.single().status)
+        assertEquals(mapOf(sighting.id to Verdict.CONFIRMED), trustRepository.verdicts)
+        assertEquals(
+            TrustScore.INITIAL.after(Verdict.CONFIRMED),
+            trustRepository.getTrust(sighting.reporterId).getOrThrow(),
+        )
+      }
+
+  @Test
+  fun dismiss_doesNotChangeTheReporterTrust() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(SightingStatus.DISMISSED, viewModel.uiState.value.sightings.single().status)
+        assertTrue(trustRepository.verdicts.isEmpty())
+        assertEquals(TrustScore.INITIAL, trustRepository.getTrust(sighting.reporterId).getOrThrow())
+      }
+
+  @Test
+  fun dismiss_failureWithoutMessage_showsTheDismissError() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        sightingRepository.statusFailure = IllegalStateException()
+
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(MyAlertViewModel.DISMISS_FAILED, viewModel.uiState.value.errorMessage)
+        assertEquals(SightingStatus.PENDING, viewModel.uiState.value.sightings.single().status)
+      }
+
+  @Test
+  fun confirm_trustFailure_showsErrorAndChangesNothing() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING).copy(seenAtMillis = NOW + HOUR)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        trustRepository.failure = IllegalStateException()
+
+        viewModel.confirm(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(MyAlertViewModel.CONFIRM_FAILED, viewModel.uiState.value.errorMessage)
+        assertEquals(SightingStatus.PENDING, viewModel.uiState.value.sightings.single().status)
+        assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
+        assertTrue(trustRepository.verdicts.isEmpty())
+      }
 
   @Test
   fun confirm_newerSighting_movesTheAlertLastSeenPlace() =

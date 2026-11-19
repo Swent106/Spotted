@@ -1,21 +1,24 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.model.fakes
 
+import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
-import com.android.spotted.model.trust.VerdictAlreadyAppliedException
 
 /**
  * In-memory [TrustRepository] for tests.
  *
  * @param trusts the stored trust of each user, by uid; other users read as [TrustScore.INITIAL].
  * @param reporters the reporter of each sighting that can be judged, by sighting id.
+ * @param sightings if set, [confirmSighting] also confirms the sighting there (and finds its
+ *   reporter there), like the single Firestore transaction does.
  */
 class FakeTrustRepository(
     trusts: Map<String, TrustScore> = emptyMap(),
     reporters: Map<String, String> = emptyMap(),
+    private val sightings: FakeSightingRepository? = null,
 ) : TrustRepository {
   private val trusts = trusts.toMutableMap()
   private val reporters = reporters.toMutableMap()
@@ -46,18 +49,22 @@ class FakeTrustRepository(
     return Result.success(trusts[uid] ?: TrustScore.INITIAL)
   }
 
-  override suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore> {
+  override suspend fun confirmSighting(sightingId: String): Result<Unit> {
     failure?.let {
       return Result.failure(it)
     }
     val reporterId =
-        reporters[sightingId] ?: return Result.failure(SightingNotFoundException(sightingId))
-    if (sightingId in appliedVerdicts) {
-      return Result.failure(VerdictAlreadyAppliedException(sightingId))
+        reporters[sightingId]
+            ?: sightings?.reportedSightings?.firstOrNull { it.id == sightingId }?.reporterId
+            ?: return Result.failure(SightingNotFoundException(sightingId))
+    // The status first: if it fails, the trust is left as it was (all or nothing)
+    sightings?.setSightingStatus(sightingId, SightingStatus.CONFIRMED)?.onFailure {
+      return Result.failure(it)
     }
-    val next = (trusts[reporterId] ?: TrustScore.INITIAL).after(verdict)
-    trusts[reporterId] = next
-    appliedVerdicts[sightingId] = verdict
-    return Result.success(next)
+    if (sightingId !in appliedVerdicts) {
+      trusts[reporterId] = (trusts[reporterId] ?: TrustScore.INITIAL).after(Verdict.CONFIRMED)
+      appliedVerdicts[sightingId] = Verdict.CONFIRMED
+    }
+    return Result.success(Unit)
   }
 }

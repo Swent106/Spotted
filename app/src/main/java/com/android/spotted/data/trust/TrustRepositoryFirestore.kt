@@ -1,15 +1,16 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.trust
 
+import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
-import com.android.spotted.model.trust.VerdictAlreadyAppliedException
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Transaction
 import java.util.concurrent.ExecutionException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,9 @@ import kotlinx.coroutines.withContext
  *
  * A judged sighting gets a `trustVerdict` field, so it is counted once. The Firestore rules only
  * accept a trust write made together with that field, by the owner of the sighting's alert, and
- * with the score [TrustScore.after] gives.
+ * with the score [TrustScore.after] gives. In S6 that write must also confirm the sighting, with a
+ * confirmed verdict ([confirmSighting]). `trustVerdict` (what counted) is kept apart from `status`
+ * (what the owner sees): the status may change later, the verdict cannot.
  */
 class TrustRepositoryFirestore(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -34,17 +37,40 @@ class TrustRepositoryFirestore(
     Tasks.await(trust.document(uid).get()).toTrustScore()
   }
 
+  override suspend fun confirmSighting(sightingId: String): Result<Unit> = retryingStaleTrust {
+    runSightingTransaction(sightingId) { transaction, sighting ->
+      if (sighting.getString(TRUST_VERDICT_FIELD) != null) {
+        // Already counted (e.g. confirmed, dismissed, now confirmed again): only the status moves
+        transaction.update(sighting.reference, STATUS_FIELD, SightingStatus.CONFIRMED.name)
+      } else {
+        judge(
+            transaction,
+            sighting,
+            Verdict.CONFIRMED,
+            mapOf(STATUS_FIELD to SightingStatus.CONFIRMED.name),
+        )
+      }
+      Unit
+    }
+  }
+
   /**
+   * Runs [transaction] again while the rules refuse it, at most [MAX_VERDICT_ATTEMPTS] times.
+   *
    * Two verdicts given at the same time both read the same trust, and the second to commit is
    * stale. Firestore checks the rules before it notices the conflict, so instead of retrying it the
    * rules refuse it (its judged count is no longer the stored one + 1) with PERMISSION_DENIED. The
    * transaction is then run again, from the trust the first verdict wrote. A write that is really
    * not allowed is refused every time, and that refusal is returned after the last attempt.
+   *
+   * The two cannot be told apart from the error, so a real refusal (e.g. by a user who does not own
+   * the alert) is also tried [MAX_VERDICT_ATTEMPTS] times. That only costs a few round trips before
+   * the error is shown, and changes nothing: every attempt is refused.
    */
-  override suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore> {
+  private suspend fun <T> retryingStaleTrust(transaction: () -> T): Result<T> {
     var attempt = 1
     while (true) {
-      val result = firestoreResult { runVerdictTransaction(sightingId, verdict) }
+      val result = firestoreResult(transaction)
       val denied =
           (result.exceptionOrNull() as? FirebaseFirestoreException)?.code ==
               FirebaseFirestoreException.Code.PERMISSION_DENIED
@@ -54,36 +80,52 @@ class TrustRepositoryFirestore(
   }
 
   /**
-   * Reads the sighting and its reporter's trust, and writes both back in one transaction. A
-   * conflict seen by Firestore itself (e.g. on the sighting) is retried by the transaction.
+   * Reads the sighting [sightingId] in a transaction and gives it to [body], which may read more
+   * and then write. Nothing is written if [body] throws. A conflict seen by Firestore itself (e.g.
+   * on the sighting) is retried by the transaction.
    */
-  private fun runVerdictTransaction(sightingId: String, verdict: Verdict): TrustScore {
+  private fun <T> runSightingTransaction(
+      sightingId: String,
+      body: (Transaction, DocumentSnapshot) -> T,
+  ): T {
     val sightingRef = sightings.document(sightingId)
     val transaction = firestore.runTransaction { transaction ->
       val sighting = transaction.get(sightingRef)
       if (!sighting.exists()) throw SightingNotFoundException(sightingId)
-      // The first verdict is final: changing it would mean replaying the whole history
-      if (sighting.getString(TRUST_VERDICT_FIELD) != null) {
-        throw VerdictAlreadyAppliedException(sightingId)
-      }
-      val reporterId =
-          checkNotNull(sighting.getString(REPORTER_ID_FIELD)) {
-            "sightings/$sightingId has no reporterId"
-          }
-      val trustRef = trust.document(reporterId)
-      val next = transaction.get(trustRef).toTrustScore().after(verdict)
-      transaction.set(
-          trustRef,
-          mapOf(
-              SCORE_FIELD to next.score,
-              JUDGED_FIELD to next.judged,
-              LAST_SIGHTING_ID_FIELD to sightingId,
-          ),
-      )
-      transaction.update(sightingRef, TRUST_VERDICT_FIELD, verdict.name)
-      next
+      body(transaction, sighting)
     }
     return Tasks.await(transaction)
+  }
+
+  /**
+   * Applies [verdict] to the trust of the reporter of [sighting], and marks the sighting judged
+   * with it, together with the [otherSightingFields]. Returns the new trust.
+   */
+  private fun judge(
+      transaction: Transaction,
+      sighting: DocumentSnapshot,
+      verdict: Verdict,
+      otherSightingFields: Map<String, Any> = emptyMap(),
+  ): TrustScore {
+    val reporterId =
+        checkNotNull(sighting.getString(REPORTER_ID_FIELD)) {
+          "sightings/${sighting.id} has no reporterId"
+        }
+    val trustRef = trust.document(reporterId)
+    val next = transaction.get(trustRef).toTrustScore().after(verdict)
+    transaction.set(
+        trustRef,
+        mapOf(
+            SCORE_FIELD to next.score,
+            JUDGED_FIELD to next.judged,
+            LAST_SIGHTING_ID_FIELD to sighting.id,
+        ),
+    )
+    transaction.update(
+        sighting.reference,
+        otherSightingFields + (TRUST_VERDICT_FIELD to verdict.name),
+    )
+    return next
   }
 
   /** The stored trust, or [TrustScore.INITIAL] if there is no document. */
@@ -96,8 +138,8 @@ class TrustRepositoryFirestore(
 
   /**
    * Runs [action] on [Dispatchers.IO] and returns its result. Errors become a [Result.failure];
-   * what the transaction threw (e.g. [VerdictAlreadyAppliedException]) is given back as it is, even
-   * when Firestore wraps it.
+   * what the transaction threw (e.g. [SightingNotFoundException]) is given back as it is, even when
+   * Firestore wraps it.
    */
   private suspend fun <T> firestoreResult(action: () -> T): Result<T> =
       try {
@@ -108,9 +150,7 @@ class TrustRepositoryFirestore(
         val cause = if (exception is ExecutionException) exception.cause ?: exception else exception
         val thrownInTransaction =
             generateSequence<Throwable>(cause) { it.cause }
-                .firstOrNull {
-                  it is VerdictAlreadyAppliedException || it is SightingNotFoundException
-                }
+                .firstOrNull { it is SightingNotFoundException }
         Result.failure(thrownInTransaction ?: cause)
       }
 
@@ -122,6 +162,7 @@ class TrustRepositoryFirestore(
     const val LAST_SIGHTING_ID_FIELD = "lastSightingId"
     const val REPORTER_ID_FIELD = "reporterId"
     const val TRUST_VERDICT_FIELD = "trustVerdict"
+    const val STATUS_FIELD = "status"
 
     /** Enough for a few verdicts given at the same time on the same reporter. */
     const val MAX_VERDICT_ATTEMPTS = 5
