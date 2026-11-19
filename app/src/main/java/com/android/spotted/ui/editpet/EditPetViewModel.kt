@@ -12,11 +12,18 @@ import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
+import com.android.spotted.model.Pet.Microchipped
+import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.photo.PhotoRepository
+import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +35,7 @@ class EditPetViewModel(
     private val petRepository: PetRepository,
     private val alertRepository: AlertRepository,
     private val photoRepository: PhotoRepository,
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(EditPetUiState())
@@ -47,7 +55,11 @@ class EditPetViewModel(
   }
 
   fun onBreedChanged(breed: String) {
-    _uiState.update { it.copy(breed = breed, errorMessage = null) }
+    _uiState.update { it.copy(breed = breed, breedId = null, errorMessage = null) }
+  }
+
+  fun onBreedSelected(breedId: String, breed: String) {
+    _uiState.update { it.copy(breed = breed, breedId = breedId, errorMessage = null) }
   }
 
   fun onPhotoChanged(photoUri: String?) {
@@ -56,6 +68,34 @@ class EditPetViewModel(
 
   fun onDescriptionChanged(description: String) {
     _uiState.update { it.copy(description = description, errorMessage = null) }
+  }
+
+  fun onBirthYearChanged(birthYear: Int?) {
+    if (birthYear != null && birthYear > currentYear()) {
+      _uiState.update { it.copy(errorMessage = R.string.edit_pet_future_birth_year_error) }
+      return
+    }
+    _uiState.update { it.copy(birthYear = birthYear, errorMessage = null) }
+  }
+
+  fun onSexChanged(sex: Sex) {
+    _uiState.update { it.copy(sex = sex, errorMessage = null) }
+  }
+
+  fun onNeuteredChanged(neutered: Neutered) {
+    _uiState.update { it.copy(neutered = neutered, errorMessage = null) }
+  }
+
+  fun onSizeChanged(size: PetSize) {
+    _uiState.update { it.copy(size = size, errorMessage = null) }
+  }
+
+  fun onLifestyleChanged(lifestyle: Lifestyle) {
+    _uiState.update { it.copy(lifestyle = lifestyle, errorMessage = null) }
+  }
+
+  fun onMicrochippedChanged(microchipped: Microchipped) {
+    _uiState.update { it.copy(microchipped = microchipped, errorMessage = null) }
   }
 
   fun onAllergiesChanged(allergies: List<String>) {
@@ -84,6 +124,10 @@ class EditPetViewModel(
     val state = _uiState.value
     val pet = originalPet ?: return
     if (!state.canSave) return
+    if (state.birthYear != null && state.birthYear > currentYear()) {
+      _uiState.update { it.copy(errorMessage = R.string.edit_pet_future_birth_year_error) }
+      return
+    }
 
     _uiState.update { it.copy(saving = true, errorMessage = null) }
     viewModelScope.launch {
@@ -108,10 +152,17 @@ class EditPetViewModel(
               name = state.name.trim(),
               species = state.species ?: pet.species,
               breed = state.breed.trim(),
+              breedId = state.breedId,
               photoUrl = photoUrl,
               allergies = state.allergies,
               behaviors = state.behaviors,
               note = state.description.trim(),
+              birthYear = state.birthYear,
+              sex = state.sex,
+              neutered = state.neutered,
+              size = state.size,
+              lifestyle = state.lifestyle,
+              microchipped = state.microchipped,
           )
       if (petRepository.updatePet(updatedPet).isFailure) {
         _uiState.update { it.copy(saving = false, errorMessage = R.string.edit_pet_save_error) }
@@ -192,8 +243,15 @@ class EditPetViewModel(
                       name = pet.name,
                       species = pet.species,
                       breed = pet.breed,
+                      breedId = pet.breedId,
                       photoUri = pet.photoUrl,
                       description = pet.note,
+                      birthYear = pet.birthYear,
+                      sex = pet.sex,
+                      neutered = pet.neutered,
+                      size = pet.size,
+                      lifestyle = pet.lifestyle,
+                      microchipped = pet.microchipped,
                       allergies = pet.allergies,
                       behaviors = pet.behaviors,
                       isLoading = false,
@@ -213,6 +271,8 @@ class EditPetViewModel(
           )
     }
   }
+
+  private fun currentYear(): Int = Instant.ofEpochMilli(now()).atZone(ZoneId.systemDefault()).year
 
   companion object {
     fun factory(petId: String): ViewModelProvider.Factory = viewModelFactory {

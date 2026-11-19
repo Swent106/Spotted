@@ -36,6 +36,7 @@
     <string name="add_pets_save_error">Unable to save the pet</string>
     <string name="edit_pet_load_error">Unable to load the pet</string>
     <string name="edit_pet_save_error">Unable to save changes to the pet</string>
+    <string name="edit_pet_future_birth_year_error">Birth year cannot be in the future</string>
     <string name="edit_pet_photo_upload_error">Unable to upload the new photo; pet changes were not saved</string>
     <string name="edit_pet_photo_delete_error">Unable to remove the old photo. Save again to retry.</string>
     <string name="edit_pet_delete_error">Unable to delete the pet</string>
