@@ -11,6 +11,8 @@ import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeAnimalDetector
 import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.fakes.FakeNetworkMonitor
+import com.android.spotted.model.fakes.FakePendingSightingRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.AnimalDetection
 import com.android.spotted.model.photo.AnimalDetector
@@ -1197,6 +1199,269 @@ class ReportSightingViewModelTest {
     assertFalse(incomplete.withDetails().canSubmit)
     assertTrue(complete.canSubmit)
     assertTrue(complete.withDetails().canSubmit)
+  }
+
+  // ===================== Sending while offline =====================
+
+  @Test
+  fun submitSighting_offline_queuesTheSightingWithItsLocalPhotoAndSendsNothing() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    vm.setDirection(90)
+    vm.toggleCondition(AnimalCondition.LIMPING)
+
+    vm.submitSighting()
+
+    val queued = pendingSightings.pending.single()
+    assertEquals(PHOTO, queued.photoUri)
+    with(queued.sighting) {
+      assertEquals("sighting-1", id)
+      assertEquals(signedInUid(), reporterId)
+      assertEquals(Location(46.5, 6.6), location)
+      assertEquals(fixedTimestamp, seenAtMillis)
+      assertEquals(Species.DOG, species)
+      assertNull(alertId)
+      assertNull("The photo is uploaded when the sighting is sent", photoUrl)
+      assertEquals(90, headingDegrees)
+      assertEquals(setOf(AnimalCondition.LIMPING), conditions)
+    }
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+    assertTrue(photoRepository.uploadedPhotos.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offline_showsSavedOfflineAndCantBeSentAgain() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertTrue(state.savedOffline)
+    assertFalse("Saved, not sent: the screen stays open", state.submitted)
+    assertFalse(state.isSubmitting)
+    assertNull(state.errorMessage)
+    assertFalse(state.canSubmit)
+
+    vm.submitSighting()
+
+    assertEquals(1, pendingSightings.addCount)
+  }
+
+  @Test
+  fun submitSighting_offlineOnAPlausibleAlert_queuesItWithTheAlert() = runTest {
+    val alerts = FakeAlertRepository().apply { publishAlert(alertOwnedBy("someone-else")) }
+    val vm = offlineViewModel(alerts).onAlert()
+
+    vm.submitSighting()
+
+    assertEquals(ALERT_ID, pendingSightings.pending.single().sighting.alertId)
+    assertNull(pendingSightings.pending.single().photoUri)
+    assertTrue(vm.uiState.value.savedOffline)
+  }
+
+  @Test
+  fun submitSighting_offlineOnAnAlertThatCantBeLoaded_isStillQueued() = runTest {
+    val alerts = FakeAlertRepository().apply { failure = Exception("Offline") }
+    val vm = offlineViewModel(alerts).onAlert()
+
+    vm.submitSighting()
+
+    assertEquals(ALERT_ID, pendingSightings.pending.single().sighting.alertId)
+    assertTrue(vm.uiState.value.savedOffline)
+  }
+
+  @Test
+  fun submitSighting_offlineOnOwnAlert_isRefusedAndNotQueued() = runTest {
+    val alerts = FakeAlertRepository().apply { publishAlert(alertOwnedBy(signedInUid())) }
+    val vm = offlineViewModel(alerts).onAlert()
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.OWN_ALERT_MESSAGE, vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineWhenTheQueueFails_showsAnErrorAndKeepsTheFormToRetry() = runTest {
+    pendingSightings.addFailure = Exception("Disk full")
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertEquals(ReportSightingViewModel.OFFLINE_SAVE_FAILED, state.errorMessage)
+    assertFalse(state.savedOffline)
+    assertFalse(state.isSubmitting)
+    assertTrue(state.canSubmit)
+    assertTrue(pendingSightings.pending.isEmpty())
+
+    pendingSightings.addFailure = null
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.savedOffline)
+    assertNull(vm.uiState.value.errorMessage)
+    assertEquals(1, pendingSightings.pending.size)
+  }
+
+  @Test
+  fun submitSighting_offlineWithoutAQueue_showsAnError() = runTest {
+    val vm =
+        ReportSightingViewModel(
+                sightingRepository = sightingRepository,
+                photoRepository = photoRepository,
+                authRepository = authRepository,
+                now = { fixedTimestamp },
+                networkMonitor = FakeNetworkMonitor(online = false),
+            )
+            .withAValidForm()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.OFFLINE_SAVE_FAILED, vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineAndSignedOut_isRefusedAndNotQueued() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    authRepository.signOut()
+
+    vm.submitSighting()
+
+    assertEquals("You must be signed in to submit a sighting", vm.uiState.value.errorMessage)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineWithoutALocation_isRefusedAndNotQueued() = runTest {
+    val vm = offlineViewModel()
+    vm.setSpecies(Species.DOG)
+    vm.selectNoMatchingAlert()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    assertEquals("Species and position are required", vm.uiState.value.errorMessage)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineWithNoMatchingAlertAndNoPhoto_isRefusedAndNotQueued() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+
+    vm.submitSighting()
+
+    assertNotNull(vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_online_isSentAsBeforeAndNothingIsQueued() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    network.online = true
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertNotNull(sightingRepository.reportedSightings.single().photoUrl)
+    assertEquals(PHOTO, photoRepository.uploadedPhotos.values.single())
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_onlineOnAnAlertThatCantBeLoaded_isStillRefused() = runTest {
+    val alerts = FakeAlertRepository().apply { failure = Exception("Server down") }
+    val vm = offlineViewModel(alerts).onAlert()
+    network.online = true
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.ALERT_NOT_LOADED, vm.uiState.value.errorMessage)
+    assertTrue(pendingSightings.pending.isEmpty())
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun isOffline_isTrueWhenTheFormOpensOffline() {
+    assertTrue(offlineViewModel().uiState.value.isOffline)
+  }
+
+  @Test
+  fun isOffline_isFalseWhenTheFormOpensOnline() {
+    network.online = true
+
+    assertFalse(offlineViewModel().uiState.value.isOffline)
+  }
+
+  @Test
+  fun isOffline_isFalseWithoutANetworkMonitor() {
+    assertFalse(viewModel.uiState.value.isOffline)
+  }
+
+  @Test
+  fun submitSighting_whenTheNetworkWasLostAfterOpening_showsOfflineAndQueues() = runTest {
+    network.online = true
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    network.online = false
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.isOffline)
+    assertTrue(vm.uiState.value.savedOffline)
+    assertEquals(1, pendingSightings.pending.size)
+  }
+
+  @Test
+  fun submitSighting_whenTheNetworkCameBackAfterOpening_clearsOfflineAndSends() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    network.online = true
+
+    vm.submitSighting()
+
+    assertFalse(vm.uiState.value.isOffline)
+    assertTrue(vm.uiState.value.submitted)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun canSubmit_isFalseOnceSavedOffline() {
+    val state = validNoMatchState().copy(photoUri = PHOTO, photoCheck = PhotoCheck.ANIMAL)
+
+    assertTrue(state.canSubmit)
+    assertFalse(state.copy(savedOffline = true).canSubmit)
+  }
+
+  private val pendingSightings = FakePendingSightingRepository()
+  private val network = FakeNetworkMonitor(online = false)
+
+  /** A view model that is offline (see [network]) and queues in [pendingSightings]. */
+  private fun offlineViewModel(alertRepository: FakeAlertRepository? = null) =
+      ReportSightingViewModel(
+          sightingRepository = sightingRepository,
+          photoRepository = photoRepository,
+          authRepository = authRepository,
+          now = { fixedTimestamp },
+          alertRepository = alertRepository,
+          pendingSightingRepository = pendingSightings,
+          networkMonitor = network,
+      )
+
+  /** Fills the form for a sighting at [ALERT_PLACE] on [ALERT_ID], without a photo. */
+  private fun ReportSightingViewModel.onAlert() = apply {
+    setSpecies(Species.DOG)
+    setLocation(ALERT_PLACE)
+    selectAlert(ALERT_ID)
   }
 
   private fun signedInUid() = authRepository.currentUser.value!!.uid

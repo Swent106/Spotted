@@ -42,6 +42,8 @@ data class ReportSightingUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val submitted: Boolean = false,
+    /** Sent while offline: kept on the phone, and sent automatically once the network is back. */
+    val savedOffline: Boolean = false,
     val photoCheck: PhotoCheck = PhotoCheck.NONE,
     val activities: Set<AnimalActivity> = emptySet(),
     val conditions: Set<AnimalCondition> = emptySet(),
@@ -58,6 +60,7 @@ data class ReportSightingUiState(
             photoCheck != PhotoCheck.NO_ANIMAL &&
             !isSubmitting &&
             !submitted &&
+            !savedOffline &&
             (!isNoMatchingAlertSelected || photoCheck == PhotoCheck.ANIMAL)
 
   /**
