@@ -26,8 +26,11 @@ import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import java.io.File
 import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -89,6 +92,28 @@ class PendingSightingSendWorkerTest {
   }
 
   @Test
+  fun doWork_whenSendingThrowsUnexpectedly_logsIt_andAsksToRetry() = runTest {
+    pending.add(sighting("s1"))
+
+    val result = buildWorker { throw IllegalStateException("Firebase not ready") }.doWork()
+
+    assertEquals(ListenableWorker.Result.retry(), result)
+    assertEquals(1, pending.pending.size)
+    assertTrue(
+        ShadowLog.getLogsForTag("PendingSightingSend").any {
+          it.type == Log.ERROR && it.throwable?.message == "Firebase not ready"
+        }
+    )
+  }
+
+  @Test
+  fun doWork_whenCancelled_stopsInsteadOfRetrying() = runTest {
+    val worker = buildWorker { throw CancellationException("stopped by WorkManager") }
+
+    assertThrows(CancellationException::class.java) { runBlocking { worker.doWork() } }
+  }
+
+  @Test
   fun schedule_waitsForTheNetwork_andQueuesASecondSendAfterTheFirst() {
     PendingSightingSendWorker.schedule(context)
     PendingSightingSendWorker.schedule(context)
@@ -125,7 +150,17 @@ class PendingSightingSendWorkerTest {
           .getWorkInfosForUniqueWork(PendingSightingSendWorker.WORK_NAME)
           .get()
 
-  private fun buildWorker(): PendingSightingSendWorker =
+  private fun buildWorker(
+      createSender: (Context) -> PendingSightingSender = {
+        PendingSightingSender(
+            pending,
+            sightings,
+            FakePhotoRepository(),
+            currentUserId = { "reporter" },
+            isRefusal = { it is IllegalStateException },
+        )
+      }
+  ): PendingSightingSendWorker =
       TestListenableWorkerBuilder<PendingSightingSendWorker>(context)
           .setWorkerFactory(
               object : WorkerFactory() {
@@ -133,16 +168,7 @@ class PendingSightingSendWorkerTest {
                     appContext: Context,
                     workerClassName: String,
                     workerParameters: WorkerParameters,
-                ) =
-                    PendingSightingSendWorker(appContext, workerParameters) {
-                      PendingSightingSender(
-                          pending,
-                          sightings,
-                          FakePhotoRepository(),
-                          currentUserId = { "reporter" },
-                          isRefusal = { it is IllegalStateException },
-                      )
-                    }
+                ) = PendingSightingSendWorker(appContext, workerParameters, createSender)
               }
           )
           .build()

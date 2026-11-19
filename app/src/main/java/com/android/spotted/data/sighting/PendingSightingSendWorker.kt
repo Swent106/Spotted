@@ -15,6 +15,7 @@ import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.sighting.PendingSightingSender
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Sends the queued sightings with [PendingSightingSender] once the phone is online.
@@ -43,7 +44,17 @@ class PendingSightingSendWorker(
   ) : this(context, params, ::productionSender)
 
   override suspend fun doWork(): Result {
-    val report = createSender(applicationContext).sendAll()
+    val report =
+        try {
+          createSender(applicationContext).sendAll()
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          // Unexpected (e.g. Firebase not ready): a failed work would leave the queue unsent until
+          // the next sighting is queued, so try again later instead
+          Log.e(TAG, "Sending the queued sightings failed", e)
+          return Result.retry()
+        }
     report.dropped.forEach { Log.w(TAG, "Dropped sighting ${it.sightingId}: ${it.reason}") }
     return if (report.retryLater) Result.retry() else Result.success()
   }

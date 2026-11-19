@@ -231,6 +231,8 @@ class PendingSightingSendWorkerFirestoreTest {
             )
         val connection = url.openConnection() as HttpURLConnection
         try {
+          connection.connectTimeout = HTTP_TIMEOUT_MILLIS
+          connection.readTimeout = HTTP_TIMEOUT_MILLIS
           connection.requestMethod = method
           connection.setRequestProperty("Authorization", "Bearer owner")
           connection.responseCode
@@ -242,5 +244,8 @@ class PendingSightingSendWorkerFirestoreTest {
   private companion object {
     const val TIMEOUT_MILLIS = 20_000L
     const val POLL_MILLIS = 100L
+
+    /** So an emulator that stops answering fails the test instead of hanging it. */
+    const val HTTP_TIMEOUT_MILLIS = 10_000
   }
 }
