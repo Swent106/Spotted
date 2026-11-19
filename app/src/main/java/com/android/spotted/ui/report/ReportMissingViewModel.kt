@@ -158,6 +158,9 @@ class ReportMissingViewModel(
               petPhotoUrl = pet.photoUrl,
               petAllergies = pet.allergies,
               petBehaviors = pet.behaviors,
+              petBirthYear = pet.birthYear,
+              petSex = pet.sex,
+              petSize = pet.size,
           )
       alertRepository
           .publishAlert(alert)
