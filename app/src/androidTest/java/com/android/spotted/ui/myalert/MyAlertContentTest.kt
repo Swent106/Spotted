@@ -4,9 +4,11 @@ package com.android.spotted.ui.myalert
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -23,6 +25,8 @@ import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.trust.TrustLevel
+import com.android.spotted.ui.theme.SpottedTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

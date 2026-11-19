@@ -60,6 +60,7 @@ import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.compassLabel
+import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.components.createMapView
 import com.android.spotted.ui.theme.SpottedTheme
@@ -204,6 +205,7 @@ fun MyAlertContent(
           SightingRow(
               number = numbers.getValue(sighting.id),
               sighting = sighting,
+              trustLevel = state.reporterTrustLevels[sighting.reporterId],
               onConfirm = { onConfirm(sighting.id) },
               onDismiss = { onDismiss(sighting.id) },
           )
@@ -268,6 +270,7 @@ private fun ErrorMessage(message: String) {
 private fun SightingRow(
     number: Int,
     sighting: Sighting,
+    trustLevel: TrustLevel?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -334,6 +337,7 @@ private fun SightingRow(
       }
       StatusChip(sighting)
     }
+    trustLevel?.let { TrustBadge(it) }
     SightingDetails(sighting)
     if (sighting.status == SightingStatus.PENDING) {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -352,6 +356,30 @@ private fun SightingRow(
         }
       }
     }
+  }
+}
+
+@Composable
+private fun TrustBadge(level: TrustLevel) {
+  val label =
+      when (level) {
+        TrustLevel.NEW -> "New"
+        TrustLevel.LOW -> "Low"
+        TrustLevel.TRUSTED -> "Trusted"
+        TrustLevel.VERY_TRUSTED -> "Very trusted"
+      }
+
+  Row(
+      modifier =
+          Modifier.clip(CircleShape)
+              .background(SpottedTheme.colors.badgeEarned)
+              .padding(horizontal = 10.dp, vertical = 4.dp)
+              .testTag("myalert_trustBadge"),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    Text("★", style = jakarta(14, 18f, 700, SpottedTheme.colors.rankYou))
+    Text(label, style = jakarta(12, 16f, 700, SpottedTheme.colors.rankYou))
   }
 }
 
@@ -565,7 +593,13 @@ private fun MyAlertScreenPreview() {
 
   SpottedTheme {
     MyAlertContent(
-        state = MyAlertUiState(alert = alert, sightings = listOf(sighting), isLoading = false),
+        state =
+            MyAlertUiState(
+                alert = alert,
+                sightings = listOf(sighting),
+                reporterTrustLevels = mapOf(sighting.reporterId to TrustLevel.VERY_TRUSTED),
+                isLoading = false,
+            ),
         map = { _, _, _, modifier -> Box(modifier) },
     )
   }
