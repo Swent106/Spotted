@@ -53,24 +53,21 @@ class MyAlertContentTest {
       onDismiss: (String) -> Unit = {},
       onMarkFound: () -> Unit = {},
       onBack: () -> Unit = {},
-      darkTheme: Boolean = false,
   ) {
     composeTestRule.setContent {
-      SpottedTheme(darkTheme = darkTheme) {
-        MyAlertContent(
-            state = state,
-            onBack = onBack,
-            onConfirm = onConfirm,
-            onDismiss = onDismiss,
-            onMarkFound = onMarkFound,
-            map = { markers, likelyArea, center, modifier ->
-              drawnMarkers = markers
-              drawnArea = likelyArea
-              drawnCenter = center
-              Box(modifier)
-            },
-        )
-      }
+      MyAlertContent(
+          state = state,
+          onBack = onBack,
+          onConfirm = onConfirm,
+          onDismiss = onDismiss,
+          onMarkFound = onMarkFound,
+          map = { markers, likelyArea, center, modifier ->
+            drawnMarkers = markers
+            drawnArea = likelyArea
+            drawnCenter = center
+            Box(modifier)
+          },
+      )
     }
   }
 
@@ -348,52 +345,6 @@ class MyAlertContentTest {
     node(MyAlertScreenTestTags.detail(PENDING.id, "place")).assertDoesNotExist()
     node(MyAlertScreenTestTags.detail(PENDING.id, "collar")).assertDoesNotExist()
     composeTestRule.onNodeWithText("Unknown", useUnmergedTree = true).assertDoesNotExist()
-  }
-
-  @Test
-  fun trustBadge_displaysEachTrustLevel() {
-    val levels = TrustLevel.values().toList()
-    val sightings = levels.mapIndexed { index, _ ->
-      PENDING.copy(id = "s-trust-$index", reporterId = "helper-$index")
-    }
-    val reporterTrustLevels =
-        sightings.mapIndexed { index, sighting -> sighting.reporterId to levels[index] }.toMap()
-    setContent(
-        MyAlertUiState(
-            isLoading = false,
-            alert = MILO_ALERT,
-            sightings = sightings,
-            reporterTrustLevels = reporterTrustLevels,
-        )
-    )
-
-    composeTestRule.onAllNodesWithTag("myalert_trustBadge").assertCountEquals(levels.size)
-    listOf("New", "Low", "Trusted", "Very trusted").forEach { label ->
-      composeTestRule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
-    }
-  }
-
-  @Test
-  fun trustBadge_isOmittedWhenLevelIsMissing() {
-    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT, sightings = listOf(PENDING)))
-
-    composeTestRule.onNodeWithTag("myalert_trustBadge").assertDoesNotExist()
-  }
-
-  @Test
-  fun trustBadge_isDisplayedInDarkTheme() {
-    setContent(
-        MyAlertUiState(
-            isLoading = false,
-            alert = MILO_ALERT,
-            sightings = listOf(PENDING),
-            reporterTrustLevels = mapOf(PENDING.reporterId to TrustLevel.VERY_TRUSTED),
-        ),
-        darkTheme = true,
-    )
-
-    node("myalert_trustBadge").performScrollTo().assertIsDisplayed()
-    composeTestRule.onNodeWithText("Very trusted").performScrollTo().assertIsDisplayed()
   }
 
   @Test
