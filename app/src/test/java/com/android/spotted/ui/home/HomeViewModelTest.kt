@@ -536,7 +536,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
-        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+        assertTrue(viewModel.uiState.value.alertByPetId.keys.isEmpty())
       }
 
   @Test
@@ -551,7 +551,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(missing), viewModel.uiState.value.ownLostPets)
-        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.alertByPetId.keys)
       }
 
   @Test
@@ -565,7 +565,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
-        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+        assertTrue(viewModel.uiState.value.alertByPetId.keys.isEmpty())
       }
 
   @Test
@@ -577,13 +577,13 @@ class HomeViewModelTest {
         publish(missing)
         val viewModel = viewModel()
         advanceUntilIdle()
-        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.alertByPetId.keys)
 
         alertRepository.closeAlert(missing.id)
         viewModel.refresh()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+        assertTrue(viewModel.uiState.value.alertByPetId.keys.isEmpty())
       }
 
   @Test
@@ -623,7 +623,7 @@ class HomeViewModelTest {
         publish(lunaMissing())
         val viewModel = viewModel()
         advanceUntilIdle()
-        assertEquals(setOf(LUNA.id), viewModel.uiState.value.missingPetIds)
+        assertEquals(setOf(LUNA.id), viewModel.uiState.value.alertByPetId.keys)
 
         signIn(BOB)
         runCurrent() // Bob's alerts are still loading
@@ -631,7 +631,7 @@ class HomeViewModelTest {
 
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.ownLostPets.isEmpty())
-        assertTrue(viewModel.uiState.value.missingPetIds.isEmpty())
+        assertTrue(viewModel.uiState.value.alertByPetId.keys.isEmpty())
       }
 
   // ===================== Refresh =====================
