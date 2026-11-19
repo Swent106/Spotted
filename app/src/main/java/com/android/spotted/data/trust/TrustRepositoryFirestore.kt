@@ -6,7 +6,6 @@ import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
-import com.android.spotted.model.trust.VerdictAlreadyAppliedException
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -24,8 +23,9 @@ import kotlinx.coroutines.withContext
  *
  * A judged sighting gets a `trustVerdict` field, so it is counted once. The Firestore rules only
  * accept a trust write made together with that field, by the owner of the sighting's alert, and
- * with the score [TrustScore.after] gives. `trustVerdict` (what counted) is kept apart from
- * `status` (what the owner sees): the status may change later, the verdict cannot.
+ * with the score [TrustScore.after] gives. In S6 that write must also confirm the sighting, with a
+ * confirmed verdict ([confirmSighting]). `trustVerdict` (what counted) is kept apart from `status`
+ * (what the owner sees): the status may change later, the verdict cannot.
  */
 class TrustRepositoryFirestore(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -36,17 +36,6 @@ class TrustRepositoryFirestore(
   override suspend fun getTrust(uid: String): Result<TrustScore> = firestoreResult {
     Tasks.await(trust.document(uid).get()).toTrustScore()
   }
-
-  override suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore> =
-      retryingStaleTrust {
-        runSightingTransaction(sightingId) { transaction, sighting ->
-          // The first verdict is final: changing it would mean replaying the whole history
-          if (sighting.getString(TRUST_VERDICT_FIELD) != null) {
-            throw VerdictAlreadyAppliedException(sightingId)
-          }
-          judge(transaction, sighting, verdict)
-        }
-      }
 
   override suspend fun confirmSighting(sightingId: String): Result<Unit> = retryingStaleTrust {
     runSightingTransaction(sightingId) { transaction, sighting ->
@@ -73,6 +62,10 @@ class TrustRepositoryFirestore(
    * rules refuse it (its judged count is no longer the stored one + 1) with PERMISSION_DENIED. The
    * transaction is then run again, from the trust the first verdict wrote. A write that is really
    * not allowed is refused every time, and that refusal is returned after the last attempt.
+   *
+   * The two cannot be told apart from the error, so a real refusal (e.g. by a user who does not own
+   * the alert) is also tried [MAX_VERDICT_ATTEMPTS] times. That only costs a few round trips before
+   * the error is shown, and changes nothing: every attempt is refused.
    */
   private suspend fun <T> retryingStaleTrust(transaction: () -> T): Result<T> {
     var attempt = 1
@@ -145,8 +138,8 @@ class TrustRepositoryFirestore(
 
   /**
    * Runs [action] on [Dispatchers.IO] and returns its result. Errors become a [Result.failure];
-   * what the transaction threw (e.g. [VerdictAlreadyAppliedException]) is given back as it is, even
-   * when Firestore wraps it.
+   * what the transaction threw (e.g. [SightingNotFoundException]) is given back as it is, even when
+   * Firestore wraps it.
    */
   private suspend fun <T> firestoreResult(action: () -> T): Result<T> =
       try {
@@ -157,9 +150,7 @@ class TrustRepositoryFirestore(
         val cause = if (exception is ExecutionException) exception.cause ?: exception else exception
         val thrownInTransaction =
             generateSequence<Throwable>(cause) { it.cause }
-                .firstOrNull {
-                  it is VerdictAlreadyAppliedException || it is SightingNotFoundException
-                }
+                .firstOrNull { it is SightingNotFoundException }
         Result.failure(thrownInTransaction ?: cause)
       }
 

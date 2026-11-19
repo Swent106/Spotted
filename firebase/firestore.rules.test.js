@@ -2046,17 +2046,19 @@ describe("Firestore trust access rules", () => {
     await seedSighting("sighting-1", "helper-1");
   }
 
-  /** Judges sightingId as verdict and writes trust to the trust of reporterId, in one write. */
+  /**
+   * Judges sightingId as verdict and writes trust to the trust of reporterId, in one write. The
+   * same write sets the sighting's status, like confirmSighting; a null status leaves it as it is.
+   */
   function judge(
     userId,
-    { sightingId = "sighting-1", reporterId = "helper-1", verdict, trust, status },
+    { sightingId = "sighting-1", reporterId = "helper-1", verdict, trust, status = "CONFIRMED" },
   ) {
     const db = firestoreForUser(userId);
     const batch = writeBatch(db);
     batch.set(doc(db, "trust", reporterId), { lastSightingId: sightingId, ...trust });
-    // With a status, the same write also reviews the sighting (confirmSighting)
     const sightingChange =
-      status === undefined ? { trustVerdict: verdict } : { trustVerdict: verdict, status };
+      status === null ? { trustVerdict: verdict } : { trustVerdict: verdict, status };
     batch.update(doc(db, "sightings", sightingId), sightingChange);
     return batch.commit();
   }
@@ -2069,11 +2071,43 @@ describe("Firestore trust access rules", () => {
     );
   });
 
-  it("trust verdict: the alert owner may apply a false verdict to a stored trust", async () => {
+  it("trust verdict: a confirmed verdict moves a stored trust", async () => {
     await seedJudgeableSighting();
     await seedTrust("helper-1", 0.6, 5);
 
-    await assertSucceeds(judge("owner-1", { verdict: "FALSE", trust: { score: 0.3, judged: 6 } }));
+    await assertSucceeds(
+      judge("owner-1", { verdict: "CONFIRMED", trust: { score: 0.6 + 0.1 * (1 - 0.6), judged: 6 } }),
+    );
+  });
+
+  // #384: in S6 only confirmations move the score, so one owner cannot lower a reporter's score
+  it("trust verdict: a false verdict is denied, whatever the status", async () => {
+    await seedJudgeableSighting();
+    await seedTrust("helper-1", 0.6, 5);
+
+    for (const status of ["CONFIRMED", "DISMISSED", null]) {
+      await assertFails(
+        judge("owner-1", { verdict: "FALSE", status, trust: { score: 0.3, judged: 6 } }),
+      );
+    }
+  });
+
+  it("trust verdict: a verdict that does not confirm the sighting is denied", async () => {
+    await seedJudgeableSighting();
+    const trust = { score: confirmedFromInitial, judged: 1 };
+
+    for (const status of ["DISMISSED", "PENDING", null]) {
+      await assertFails(judge("owner-1", { verdict: "CONFIRMED", status, trust }));
+    }
+  });
+
+  it("trust verdict: a dismissed sighting cannot be credited without confirming it", async () => {
+    await seedAlert("alert-1", "owner-1");
+    await seedSighting("sighting-1", "helper-1", { status: "DISMISSED" });
+    const trust = { score: confirmedFromInitial, judged: 1 };
+
+    await assertFails(judge("owner-1", { verdict: "CONFIRMED", status: null, trust }));
+    await assertSucceeds(judge("owner-1", { verdict: "CONFIRMED", trust }));
   });
 
   it("trust verdict: a sighting with every animal detail can be judged", async () => {
@@ -2107,13 +2141,13 @@ describe("Firestore trust access rules", () => {
     await seedTrust("helper-1", 0.6, 5);
 
     for (const trust of [
-      { score: 0.3, judged: 7 },
-      { score: 0.3, judged: 5 },
+      { score: 0.64, judged: 7 },
+      { score: 0.64, judged: 5 },
       { score: 1, judged: 6 },
-      // What a confirmed verdict would give, sent with a false one
-      { score: 0.6 + 0.1 * (1 - 0.6), judged: 6 },
+      // What a false verdict would give, sent with a confirmed one
+      { score: 0.3, judged: 6 },
     ]) {
-      await assertFails(judge("owner-1", { verdict: "FALSE", trust }));
+      await assertFails(judge("owner-1", { verdict: "CONFIRMED", trust }));
     }
   });
 
@@ -2133,8 +2167,8 @@ describe("Firestore trust access rules", () => {
 
     await assertFails(
       judge("owner-1", {
-        verdict: "FALSE",
-        trust: { score: confirmedFromInitial * 0.5, judged: 2 },
+        verdict: "CONFIRMED",
+        trust: { score: confirmedFromInitial + 0.1 * (1 - confirmedFromInitial), judged: 2 },
       }),
     );
   });

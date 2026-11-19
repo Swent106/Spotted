@@ -110,18 +110,29 @@ class MyAlertViewModel(
    * newer than the alert's last seen time, the alert's last seen place moves to it.
    */
   fun confirm(id: String) =
-      review(update = { trustRepository.confirmSighting(id) }, onUpdated = { moveLastSeenTo(id) })
+      review(
+          update = { trustRepository.confirmSighting(id) },
+          failedMessage = CONFIRM_FAILED,
+          onUpdated = { moveLastSeenTo(id) },
+      )
 
   /**
    * Dismisses the sighting [id], removing it from the likely-area estimate. The trust score of its
    * reporter does not change.
    */
   fun dismiss(id: String) =
-      review(update = { sightingRepository.setSightingStatus(id, SightingStatus.DISMISSED) })
+      review(
+          update = { sightingRepository.setSightingStatus(id, SightingStatus.DISMISSED) },
+          failedMessage = DISMISS_FAILED,
+      )
 
-  /** Runs the review [update] of a sighting, then [onUpdated] if it succeeded. */
+  /**
+   * Runs the review [update] of a sighting, then [onUpdated] if it succeeded. If it failed, shows
+   * the error, or [failedMessage] if it has none.
+   */
   private fun review(
       update: suspend () -> Result<Unit>,
+      failedMessage: String,
       onUpdated: suspend () -> Unit = {},
   ) {
     if (!canManageAlert()) return
@@ -132,7 +143,7 @@ class MyAlertViewModel(
               onSuccess = { onUpdated() },
               onFailure = { failure ->
                 _uiState.update {
-                  it.copy(errorMessage = failure.localizedMessage ?: STATUS_UPDATE_FAILED)
+                  it.copy(errorMessage = failure.localizedMessage ?: failedMessage)
                 }
               },
           )
@@ -203,7 +214,9 @@ class MyAlertViewModel(
     const val ALERT_NOT_FOUND = "Alert not found."
     const val LOAD_FAILED = "Couldn't load the alert. Please try again."
     const val SIGHTINGS_LOAD_FAILED = "Couldn't load sightings. Please try again."
-    const val STATUS_UPDATE_FAILED = "Couldn't update the sighting. Please try again."
+    const val CONFIRM_FAILED =
+        "Couldn't confirm the sighting or update the reporter's trust. Please try again."
+    const val DISMISS_FAILED = "Couldn't dismiss the sighting. Please try again."
     const val LAST_SEEN_UPDATE_FAILED = "Couldn't update the last seen place. Please try again."
     const val CLOSE_FAILED = "Couldn't mark the alert as found. Please try again."
 

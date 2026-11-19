@@ -6,7 +6,6 @@ import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
-import com.android.spotted.model.trust.VerdictAlreadyAppliedException
 
 /**
  * In-memory [TrustRepository] for tests.
@@ -48,21 +47,6 @@ class FakeTrustRepository(
       return Result.failure(it)
     }
     return Result.success(trusts[uid] ?: TrustScore.INITIAL)
-  }
-
-  override suspend fun applyVerdict(sightingId: String, verdict: Verdict): Result<TrustScore> {
-    failure?.let {
-      return Result.failure(it)
-    }
-    val reporterId =
-        reporters[sightingId] ?: return Result.failure(SightingNotFoundException(sightingId))
-    if (sightingId in appliedVerdicts) {
-      return Result.failure(VerdictAlreadyAppliedException(sightingId))
-    }
-    val next = (trusts[reporterId] ?: TrustScore.INITIAL).after(verdict)
-    trusts[reporterId] = next
-    appliedVerdicts[sightingId] = verdict
-    return Result.success(next)
   }
 
   override suspend fun confirmSighting(sightingId: String): Result<Unit> {

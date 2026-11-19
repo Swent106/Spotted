@@ -516,6 +516,25 @@ class MyAlertViewModelTest {
       }
 
   @Test
+  fun dismiss_failureWithoutMessage_showsTheDismissError() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        sightingRepository.statusFailure = IllegalStateException()
+
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+
+        assertEquals(MyAlertViewModel.DISMISS_FAILED, viewModel.uiState.value.errorMessage)
+        assertEquals(SightingStatus.PENDING, viewModel.uiState.value.sightings.single().status)
+      }
+
+  @Test
   fun confirm_trustFailure_showsErrorAndChangesNothing() =
       runTest(testDispatcher) {
         signIn()
@@ -530,7 +549,7 @@ class MyAlertViewModelTest {
         viewModel.confirm(sighting.id)
         advanceUntilIdle()
 
-        assertEquals(MyAlertViewModel.STATUS_UPDATE_FAILED, viewModel.uiState.value.errorMessage)
+        assertEquals(MyAlertViewModel.CONFIRM_FAILED, viewModel.uiState.value.errorMessage)
         assertEquals(SightingStatus.PENDING, viewModel.uiState.value.sightings.single().status)
         assertEquals(alert, alertRepository.getAlertById(alert.id).getOrThrow())
         assertTrue(trustRepository.verdicts.isEmpty())

@@ -355,10 +355,10 @@ class SightingRepositoryFirestoreTest {
     repository.reportSighting(notMyAlert).getOrThrow()
     repository.reportSighting(noAlert).getOrThrow()
 
-    assertTrue(repository.setSightingStatus(notMyAlert.id, SightingStatus.CONFIRMED).isFailure)
-    assertTrue(repository.setSightingStatus(noAlert.id, SightingStatus.CONFIRMED).isFailure)
+    assertTrue(repository.setSightingStatus(notMyAlert.id, SightingStatus.DISMISSED).isFailure)
+    assertTrue(repository.setSightingStatus(noAlert.id, SightingStatus.DISMISSED).isFailure)
     assertTrue(
-        repository.setSightingStatus(repository.getNewId(), SightingStatus.CONFIRMED).isFailure
+        repository.setSightingStatus(repository.getNewId(), SightingStatus.DISMISSED).isFailure
     )
     assertEquals(
         SightingStatus.PENDING,

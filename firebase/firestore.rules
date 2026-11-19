@@ -390,8 +390,10 @@ service cloud.firestore {
 
       // The owner of the linked alert may judge the sighting for the trust score of its reporter:
       // once, and only in the same write as the trust update it causes (see trust/{uid}).
-      // The same write may confirm it, with a confirmed verdict only
-      // (TrustRepositoryFirestore.confirmSighting).
+      // In S6 only a confirmation judges (TrustRepositoryFirestore.confirmSighting): the write
+      // must confirm the sighting with a confirmed verdict. So one owner, even a new account,
+      // cannot lower a reporter's score, nor credit a dismissed sighting. FALSE verdicts come
+      // with the votes of US-T2 (#385).
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
@@ -400,9 +402,8 @@ service cloud.firestore {
           && isJudged(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['trustVerdict', 'status'])
-          && (statusOf(request.resource.data) == statusOf(resource.data)
-              || (request.resource.data.status == 'CONFIRMED'
-                  && request.resource.data.trustVerdict == 'CONFIRMED'))
+          && request.resource.data.status == 'CONFIRMED'
+          && request.resource.data.trustVerdict == 'CONFIRMED'
           && getAfter(/databases/$(database)/documents/trust/$(resource.data.reporterId))
                .data.get('lastSightingId', null) == sightingId;
 
