@@ -1,8 +1,10 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -42,6 +44,9 @@ class HomeMissingPetsTest {
   fun noOpenAlert_noPetIsMissing() {
     show(HomeUiState(pets = HomeSection(items = listOf(LUNA, MILO))))
 
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(LUNA.id)).assertExists()
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(MILO.id)).assertExists()
+    composeTestRule.onAllNodesWithText("Safe", useUnmergedTree = true).assertCountEquals(2)
     // The chips are inside the clickable pet cards, whose semantics merge their children
     composeTestRule
         .onNodeWithTag(HomeScreenTestTags.missingBadge(MILO.id), useUnmergedTree = true)
@@ -102,11 +107,44 @@ class HomeMissingPetsTest {
   }
 
   @Test
-  fun alertOfAPetNotInTheList_showsNoCard() {
-    // Nala's alert is open, but her profile is not loaded: nothing to make red
+  fun alertOfAPetNotInTheList_stillShowsItsCard_whichOpensTheAlert() {
+    // Nala's alert is open, but her profile is not loaded: her card is drawn from the alert
     show(HomeUiState(pets = HomeSection(items = listOf(LUNA)), ownLostPets = listOf(NALA_ALERT)))
 
-    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(NALA_ALERT.petId)).assertDoesNotExist()
+    composeTestRule
+        .onNodeWithTag(HomeScreenTestTags.missingBadge(NALA_ALERT.petId), useUnmergedTree = true)
+        .assertExists()
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(NALA_ALERT.petId)).performClick()
+
+    assertEquals(listOf(NALA_ALERT.id), alertsOpened)
+    assertEquals(emptyList<String>(), profilesOpened)
+  }
+
+  @Test
+  fun petsFailedToLoad_theMissingPetCanStillBeReached() {
+    show(
+        HomeUiState(
+            pets = HomeSection(errorMessage = "Could not load your pets"),
+            ownLostPets = listOf(MILO_ALERT),
+        )
+    )
+
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.PETS_ERROR).assertExists()
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(MILO.id)).performClick()
+
+    assertEquals(listOf(MILO_ALERT.id), alertsOpened)
+  }
+
+  @Test
+  fun lostPetsNotListed_keepsOnlyAlertsWhosePetIsNotLoaded() {
+    val state =
+        HomeUiState(
+            pets = HomeSection(items = listOf(MILO, LUNA)),
+            ownLostPets = listOf(MILO_ALERT, NALA_ALERT),
+        )
+
+    assertEquals(listOf(NALA_ALERT), state.lostPetsNotListed)
+    assertEquals(mapOf(MILO.id to MILO_ALERT, "nala" to NALA_ALERT), state.alertByPetId)
   }
 
   @Test

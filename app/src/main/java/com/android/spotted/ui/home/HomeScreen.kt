@@ -455,8 +455,6 @@ private fun LazyListScope.petsSection(
   item(key = "pets") {
     val pets = state.pets
     val error = pets.errorMessage
-    // The open alert of each missing pet, to open it from the pet's card
-    val alertByPetId = state.ownLostPets.associateBy { it.petId }
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier =
@@ -499,9 +497,15 @@ private fun LazyListScope.petsSection(
             modifier = Modifier.fillMaxWidth().testTag(HomeScreenTestTags.PETS_CAROUSEL),
         ) {
           items(pets.items, key = { "pet_${it.id}" }) { pet ->
-            val alert = alertByPetId[pet.id]
-            PetCard(pet, alert, state.nowMillis) {
+            val alert = state.alertByPetId[pet.id]
+            PetCard(pet.id, pet.name, pet.photoUrl, alert, state.nowMillis) {
               if (alert != null) onMissingPetClick(alert.id) else onPetClick(pet.id)
+            }
+          }
+          // A missing pet whose profile is not loaded still gets its card, drawn from its alert
+          items(state.lostPetsNotListed, key = { "lost_${it.id}" }) { alert ->
+            PetCard(alert.petId, alert.petName, alert.petPhotoUrl, alert, state.nowMillis) {
+              onMissingPetClick(alert.id)
             }
           }
           item(key = "addPet") { AddPetCard(onAddPetClick) }
@@ -544,7 +548,14 @@ internal fun SectionError(
  * since when it is lost and has a "Missing" chip; the others are "Profile ready" and "Safe".
  */
 @Composable
-private fun PetCard(pet: Pet, alert: Alert?, nowMillis: Long, onClick: () -> Unit) {
+private fun PetCard(
+    petId: String,
+    name: String,
+    photoUrl: String?,
+    alert: Alert?,
+    nowMillis: Long,
+    onClick: () -> Unit,
+) {
   val missing = alert != null
   val colors = SpottedTheme.colors
   val shape = RoundedCornerShape(16.dp)
@@ -560,20 +571,19 @@ private fun PetCard(pet: Pet, alert: Alert?, nowMillis: Long, onClick: () -> Uni
                   shape,
               )
               .clickable(
-                  onClickLabel =
-                      if (missing) "See ${pet.name}'s alert" else "See ${pet.name}'s profile",
+                  onClickLabel = if (missing) "See ${name}'s alert" else "See ${name}'s profile",
                   onClick = onClick,
               )
               .padding(start = 10.dp, top = 10.dp, end = 12.dp, bottom = 10.dp)
-              .testTag(HomeScreenTestTags.petCard(pet.id)),
+              .testTag(HomeScreenTestTags.petCard(petId)),
   ) {
     PetPhoto(
-        pet.photoUrl,
+        photoUrl,
         Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)).background(colors.avatarBackground),
     )
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
       Text(
-          pet.name,
+          name,
           style = jakarta(14, 18f, FontWeight.Bold, colors.ink),
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
@@ -588,7 +598,7 @@ private fun PetCard(pet: Pet, alert: Alert?, nowMillis: Long, onClick: () -> Uni
             "Missing",
             colors.missingChipBackground,
             colors.missingChipText,
-            Modifier.testTag(HomeScreenTestTags.missingBadge(pet.id)),
+            Modifier.testTag(HomeScreenTestTags.missingBadge(petId)),
         )
       } else {
         PetChip("Safe", colors.safeChipBackground, colors.safeChipText)
