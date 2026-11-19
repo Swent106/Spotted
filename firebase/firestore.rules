@@ -11,7 +11,8 @@ service cloud.firestore {
     // phone and homeArea may be empty; all fields have size limits below.
     // The document ID and uid field identify the authenticated profile owner.
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
-    // behaviors, and note; existing pet authorization rules are unchanged.
+    // behaviors, and note; optional birthYear, breedId, sex, neutered, size,
+    // lifestyle and microchipped, checked by validPetDetails when present.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
     // and optional photoUrl, alertId, status and headingDegrees (null or 0..359);
     // only the reporter may change or delete them until the alert owner reviews it.
@@ -83,13 +84,31 @@ service cloud.firestore {
     }
 
     match /pets/{petId} {
+      // Optional details (#388): absent in older pets, else one of the allowed values. The birth
+      // year can't be in the future; null means "not given" for it and for the breed id.
+      function validPetDetails(d) {
+        return (d.get('birthYear', null) == null
+              || (d.birthYear is int && d.birthYear >= 1950
+                  && d.birthYear <= request.time.year()))
+          && (d.get('breedId', null) == null
+              || (d.breedId is string && d.breedId.size() > 0 && d.breedId.size() <= 100))
+          && (!('sex' in d) || d.sex in ['MALE', 'FEMALE', 'UNKNOWN'])
+          && (!('neutered' in d) || d.neutered in ['YES', 'NO', 'UNKNOWN'])
+          && (!('size' in d) || d.size in ['SMALL', 'MEDIUM', 'LARGE', 'UNKNOWN'])
+          && (!('lifestyle' in d) || d.lifestyle in [
+                'INDOOR_ONLY', 'INDOOR_AND_OUTDOOR', 'OUTDOOR_ONLY', 'UNKNOWN'])
+          && (!('microchipped' in d) || d.microchipped in ['YES', 'NO', 'UNKNOWN']);
+      }
+
       allow create: if request.auth != null
-          && request.resource.data.ownerId == request.auth.uid;
+          && request.resource.data.ownerId == request.auth.uid
+          && validPetDetails(request.resource.data);
       allow read, delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
       allow update: if request.auth != null
           && resource.data.ownerId == request.auth.uid
-          && request.resource.data.ownerId == request.auth.uid;
+          && request.resource.data.ownerId == request.auth.uid
+          && validPetDetails(request.resource.data);
     }
 
     match /alerts/{alertId} {
@@ -114,7 +133,8 @@ service cloud.firestore {
           && d.keys().hasOnly([
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
                 'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors',
-                'lastSeenAtMillis', 'lossCause', 'lossEnvironment'])
+                'lastSeenAtMillis', 'lossCause', 'lossEnvironment', 'petBirthYear', 'petSex',
+                'petSize'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
@@ -147,7 +167,14 @@ service cloud.firestore {
                 'ESCAPED_FROM_HOME', 'DURING_A_WALK', 'SCARED_BY_NOISE', 'DURING_MOVE_OR_TRIP',
                 'STOLEN', 'UNKNOWN'])
           && (!('lossEnvironment' in d) || d.lossEnvironment in [
-                'CITY_CENTRE', 'SUBURB', 'VILLAGE_OR_RURAL', 'FOREST_OR_MOUNTAIN', 'UNKNOWN']);
+                'CITY_CENTRE', 'SUBURB', 'VILLAGE_OR_RURAL', 'FOREST_OR_MOUNTAIN', 'UNKNOWN'])
+          // Copied from the pet when the alert is published (older alerts don't have them), so
+          // finders can read them: same values as the pet's, not in the fields an update may change
+          && (d.get('petBirthYear', null) == null
+              || (d.petBirthYear is int && d.petBirthYear >= 1950
+                  && d.petBirthYear <= request.time.year()))
+          && (!('petSex' in d) || d.petSex in ['MALE', 'FEMALE', 'UNKNOWN'])
+          && (!('petSize' in d) || d.petSize in ['SMALL', 'MEDIUM', 'LARGE', 'UNKNOWN']);
       }
 
       // The last seen time only moves forward: an older sighting can't move the pet back

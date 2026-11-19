@@ -175,6 +175,90 @@ describe("Firestore security rules", () => {
     await assertFails(updateDoc(doc(db, "pets", "pet-1"), { ownerId: "owner-2" }));
   });
 
+  // Optional pet details (#388): only the allowed values, birth year not in the future
+  const PET_DETAILS = {
+    sex: ["MALE", "FEMALE", "UNKNOWN"],
+    neutered: ["YES", "NO", "UNKNOWN"],
+    size: ["SMALL", "MEDIUM", "LARGE", "UNKNOWN"],
+    lifestyle: ["INDOOR_ONLY", "INDOOR_AND_OUTDOOR", "OUTDOOR_ONLY", "UNKNOWN"],
+    microchipped: ["YES", "NO", "UNKNOWN"],
+  };
+
+  function petWith(details) {
+    return { ownerId: "owner-1", name: "Milo", ...details };
+  }
+
+  it("details: every allowed value is accepted on create and update", async () => {
+    const db = firestoreForUser("owner-1");
+    for (const [field, values] of Object.entries(PET_DETAILS)) {
+      for (const value of values) {
+        await assertSucceeds(setDoc(doc(db, "pets", `pet-${field}-${value}`), petWith({ [field]: value })));
+        await assertSucceeds(updateDoc(doc(db, "pets", `pet-${field}-${value}`), { [field]: value }));
+      }
+    }
+  });
+
+  it("details: an unknown value is denied on create and update", async () => {
+    await seedPet("pet-1", "owner-1");
+    const db = firestoreForUser("owner-1");
+    for (const field of Object.keys(PET_DETAILS)) {
+      for (const value of ["HUGE", "unknown", "", 42, null]) {
+        await assertFails(setDoc(doc(db, "pets", "pet-new"), petWith({ [field]: value })));
+        await assertFails(updateDoc(doc(db, "pets", "pet-1"), { [field]: value }));
+      }
+    }
+  });
+
+  it("details: a pet with all of them is accepted", async () => {
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, "pets", "pet-1"),
+        petWith({
+          birthYear: 2020,
+          breedId: "labrador",
+          sex: "FEMALE",
+          neutered: "YES",
+          size: "LARGE",
+          lifestyle: "INDOOR_AND_OUTDOOR",
+          microchipped: "NO",
+        }),
+      ),
+    );
+  });
+
+  it("details: birth year and breed id may be null or absent", async () => {
+    const db = firestoreForUser("owner-1");
+
+    await assertSucceeds(setDoc(doc(db, "pets", "pet-1"), petWith({})));
+    await assertSucceeds(setDoc(doc(db, "pets", "pet-2"), petWith({ birthYear: null, breedId: null })));
+    await assertSucceeds(updateDoc(doc(db, "pets", "pet-2"), { birthYear: 2015, breedId: "siamese" }));
+    await assertSucceeds(
+      updateDoc(doc(db, "pets", "pet-2"), { birthYear: deleteField(), breedId: deleteField() }),
+    );
+  });
+
+  it("details: the current year is accepted, a future or invalid birth year is denied", async () => {
+    const db = firestoreForUser("owner-1");
+    const thisYear = new Date().getUTCFullYear();
+
+    await assertSucceeds(setDoc(doc(db, "pets", "pet-1"), petWith({ birthYear: thisYear })));
+    await assertSucceeds(setDoc(doc(db, "pets", "pet-2"), petWith({ birthYear: 1950 })));
+    for (const birthYear of [thisYear + 1, 1949, 2020.5, "2020"]) {
+      await assertFails(setDoc(doc(db, "pets", "pet-3"), petWith({ birthYear })));
+      await assertFails(updateDoc(doc(db, "pets", "pet-1"), { birthYear }));
+    }
+  });
+
+  it("details: an empty, too long or non-string breed id is denied", async () => {
+    const db = firestoreForUser("owner-1");
+
+    for (const breedId of ["", "x".repeat(101), 42]) {
+      await assertFails(setDoc(doc(db, "pets", "pet-1"), petWith({ breedId })));
+    }
+  });
+
   const deleteCases = [
     { who: "owner", userId: "owner-1", allowed: true },
     { who: "another user", userId: "owner-2", allowed: false },
@@ -963,6 +1047,45 @@ describe("Firestore alert access rules", () => {
     const db = firestoreForUser("owner-1");
 
     await assertSucceeds(updateDoc(doc(db, "alerts", "alert-1"), closing));
+  });
+
+  // Pet details copied into the alert (#403): same values as the pet's, set at publication
+  it("pet details: allowed birth year, sex and size are accepted when publishing", async () => {
+    await assertSucceeds(
+      publish("alert-details", "pet-details", { petBirthYear: 2019, petSex: "MALE", petSize: "SMALL" }),
+    );
+    for (const petSex of ["MALE", "FEMALE", "UNKNOWN"]) {
+      await assertSucceeds(publish(`alert-sex-${petSex}`, `pet-sex-${petSex}`, { petSex }));
+    }
+    for (const petSize of ["SMALL", "MEDIUM", "LARGE", "UNKNOWN"]) {
+      await assertSucceeds(publish(`alert-size-${petSize}`, `pet-size-${petSize}`, { petSize }));
+    }
+    await assertSucceeds(publish("alert-no-year", "pet-no-year", { petBirthYear: null }));
+  });
+
+  it("pet details: unknown values or a future birth year are denied", async () => {
+    const nextYear = new Date().getUTCFullYear() + 1;
+    for (const [i, overrides] of [
+      { petSex: "OTHER" },
+      { petSex: null },
+      { petSize: "huge" },
+      { petSize: 3 },
+      { petBirthYear: nextYear },
+      { petBirthYear: "2019" },
+    ].entries()) {
+      await assertFails(publish(`alert-bad-details-${i}`, `pet-bad-details-${i}`, overrides));
+    }
+  });
+
+  it("pet details: the owner can't change them after publishing, but can still close", async () => {
+    await seedAlert({ petBirthYear: 2019, petSex: "MALE", petSize: "SMALL" });
+    const db = firestoreForUser("owner-1");
+    const alert = doc(db, "alerts", "alert-1");
+
+    await assertFails(updateDoc(alert, { petBirthYear: 2018 }));
+    await assertFails(updateDoc(alert, { petSex: "FEMALE" }));
+    await assertFails(updateDoc(alert, { petSize: "LARGE" }));
+    await assertSucceeds(updateDoc(alert, closing));
   });
 
   // openPetAlerts/{petId}: the lock publishAlert writes with each alert (one open alert per pet)

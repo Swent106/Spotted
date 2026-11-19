@@ -15,6 +15,7 @@ import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.estimateLikelyArea
@@ -38,6 +39,7 @@ class MyAlertViewModel(
   val uiState: StateFlow<MyAlertUiState> = _uiState.asStateFlow()
   // Tracks the stream error so a successful snapshot clears only that error, not action errors.
   private var sightingsError: String? = null
+  private var trustLevelsRequestId = 0L
 
   init {
     loadAlert()
@@ -85,14 +87,20 @@ class MyAlertViewModel(
       sightingRepository.observeSightingsForAlert(alert.id).collect { result ->
         result.fold(
             onSuccess = { sightings ->
+              val reporterIds = sightings.mapTo(mutableSetOf()) { it.reporterId }
               _uiState.update {
                 it.copy(
                     sightings = sightings,
+                    reporterTrustLevels =
+                        it.reporterTrustLevels.filterKeys { reporterId ->
+                          reporterId in reporterIds
+                        },
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
                     errorMessage = if (it.errorMessage == sightingsError) null else it.errorMessage,
                 )
               }
               sightingsError = null
+              loadTrustLevels(sightings)
             },
             onFailure = { failure ->
               val message = failure.localizedMessage ?: SIGHTINGS_LOAD_FAILED
@@ -102,6 +110,43 @@ class MyAlertViewModel(
         )
       }
     }
+  }
+
+  /** Loads optional trust metadata separately so a failed read never hides its sighting. */
+  private fun loadTrustLevels(sightings: List<Sighting>) {
+    val requestId = ++trustLevelsRequestId
+    sightings
+        .map { it.reporterId }
+        .distinct()
+        .forEach { reporterId ->
+          viewModelScope.launch {
+            trustRepository
+                .getTrust(reporterId)
+                .fold(
+                    onSuccess = { trust ->
+                      _uiState.update { state ->
+                        if (requestId != trustLevelsRequestId) {
+                          state
+                        } else {
+                          val currentReporterIds =
+                              state.sightings.mapTo(mutableSetOf()) { it.reporterId }
+                          if (reporterId !in currentReporterIds) {
+                            state
+                          } else {
+                            state.copy(
+                                reporterTrustLevels =
+                                    state.reporterTrustLevels + (reporterId to trust.level)
+                            )
+                          }
+                        }
+                      }
+                    },
+                    onFailure = {
+                      // Trust is supplementary; leave these sightings visible without a level.
+                    },
+                )
+          }
+        }
   }
 
   /**

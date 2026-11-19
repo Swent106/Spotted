@@ -3,6 +3,8 @@ package com.android.spotted.model.alert
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 
 enum class AlertStatus {
@@ -56,6 +58,10 @@ data class Alert(
     val lossCause: LossCause = LossCause.UNKNOWN,
     /** Optional, set when the alert is published. */
     val lossEnvironment: LossEnvironment = LossEnvironment.UNKNOWN,
+    // Copied from the pet when the alert is published: only the owner can read the pet
+    val petBirthYear: Int? = null,
+    val petSex: Sex = Sex.UNKNOWN,
+    val petSize: PetSize = PetSize.UNKNOWN,
 ) {
   /** When the pet was last seen at [lastKnownLocation]: confirmed sighting, else when lost. */
   val lastSeenAt: Long
