@@ -2323,3 +2323,92 @@ describe("Firestore trust access rules", () => {
     await assertFails(updateDoc(doc(db, "sightings", "sighting-1"), { trustVerdict: "FALSE" }));
   });
 });
+
+describe("Firestore block list rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  const blockDoc = (db, userId, blockedUid) => doc(db, "users", userId, "blocks", blockedUid);
+
+  const seedBlock = (userId, blockedUid) =>
+    testEnvironment.withSecurityRulesDisabled((context) =>
+      setDoc(blockDoc(context.firestore(), userId, blockedUid), { blockedUid }),
+    );
+
+  it("block: a user can block someone in their own list, and block them again", async () => {
+    const db = firestoreForUser("alice");
+
+    await assertSucceeds(setDoc(blockDoc(db, "alice", "spammer"), { blockedUid: "spammer" }));
+    await assertSucceeds(setDoc(blockDoc(db, "alice", "spammer"), { blockedUid: "spammer" }));
+  });
+
+  it("block: writing in someone else's list, or signed out, is denied", async () => {
+    await assertFails(
+      setDoc(blockDoc(firestoreForUser("bob"), "alice", "spammer"), { blockedUid: "spammer" }),
+    );
+    await assertFails(
+      setDoc(blockDoc(firestoreForUser(null), "alice", "spammer"), { blockedUid: "spammer" }),
+    );
+  });
+
+  it("block: blocking yourself, a wrong uid or extra fields are denied", async () => {
+    const db = firestoreForUser("alice");
+
+    await assertFails(setDoc(blockDoc(db, "alice", "alice"), { blockedUid: "alice" }));
+    await assertFails(setDoc(blockDoc(db, "alice", "spammer"), { blockedUid: "someone-else" }));
+    await assertFails(
+      setDoc(blockDoc(db, "alice", "spammer"), { blockedUid: "spammer", reason: "rude" }),
+    );
+  });
+
+  it("block list read: only its owner can read or list it", async () => {
+    await seedBlock("alice", "spammer");
+
+    const ownList = await assertSucceeds(
+      getDocs(collection(firestoreForUser("alice"), "users", "alice", "blocks")),
+    );
+    assert.deepEqual(ownList.docs.map((d) => d.id), ["spammer"]);
+    await assertSucceeds(getDoc(blockDoc(firestoreForUser("alice"), "alice", "spammer")));
+
+    for (const userId of ["bob", "spammer", null]) {
+      const db = firestoreForUser(userId);
+      await assertFails(getDoc(blockDoc(db, "alice", "spammer")));
+      await assertFails(getDocs(collection(db, "users", "alice", "blocks")));
+    }
+  });
+
+  it("unblock: only the owner can delete from their list", async () => {
+    await seedBlock("alice", "spammer");
+
+    await assertFails(deleteDoc(blockDoc(firestoreForUser("bob"), "alice", "spammer")));
+    await assertFails(deleteDoc(blockDoc(firestoreForUser("spammer"), "alice", "spammer")));
+    await assertFails(deleteDoc(blockDoc(firestoreForUser(null), "alice", "spammer")));
+    await assertSucceeds(deleteDoc(blockDoc(firestoreForUser("alice"), "alice", "spammer")));
+  });
+});
