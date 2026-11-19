@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.sighting
 
+import com.android.spotted.data.photo.NotAnImageException
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.FirebaseFirestoreException.Code
 import java.io.FileNotFoundException
@@ -21,15 +22,16 @@ private val REFUSAL_CODES =
  * of sent again: the server refused it (Firestore rules or invalid data), or its photo copy is
  * missing or is not an image.
  *
- * Anything else (no network, server unavailable...) is false: it may work later. A sighting sent
- * while signed out or by another account is also refused with `PERMISSION_DENIED`, so
- * [com.android.spotted.model.sighting.PendingSightingSender] never sends those. The cause chain is
- * searched, as errors are sometimes wrapped (e.g. by `Tasks.await`).
+ * Anything else (no network, server unavailable, an unexpected bug...) is false: it may work later,
+ * so the sighting is kept. A sighting sent while signed out or by another account is also refused
+ * with `PERMISSION_DENIED`, so [com.android.spotted.model.sighting.PendingSightingSender] never
+ * sends those. The cause chain is searched, as errors are sometimes wrapped (e.g. by
+ * `Tasks.await`).
  */
 fun isSightingRefusal(error: Throwable): Boolean =
     generateSequence(error) { it.cause }
         .any {
           (it is FirebaseFirestoreException && it.code in REFUSAL_CODES) ||
               it is FileNotFoundException ||
-              it is IllegalArgumentException
+              it is NotAnImageException
         }

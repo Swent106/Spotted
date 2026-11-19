@@ -189,6 +189,57 @@ class PendingSightingSenderTest {
   }
 
   @Test
+  fun sendAll_whenAnotherAccountSignsInDuringTheRun_stopsThere_andKeepsTheRest() = runTest {
+    queue(sighting("s1"), sighting("s2"))
+    // The account changes right after s1 is sent
+    val switchingSender =
+        PendingSightingSender(
+            pending,
+            sightings,
+            photos,
+            currentUserId = { if (sightings.reportedSightings.isEmpty()) "reporter" else "other" },
+            isRefusal = { true },
+        )
+
+    val report = switchingSender.sendAll()
+
+    // s2 is neither sent as the other account nor dropped: it waits for its reporter
+    assertEquals(SendReport(sent = listOf("s1"), retryLater = true), report)
+    assertEquals(listOf("s2"), pending.pending.map { it.sighting.id })
+  }
+
+  @Test
+  fun sendAll_whenARefusedSightingCantBeRemoved_doesNotReportItAsDropped() = runTest {
+    queue(sighting("s1"))
+    sightings.reportFailure = IllegalStateException("refused")
+    pending.deleteFailure = IOException("disk full")
+
+    val report = sender.sendAll()
+
+    assertEquals(SendReport(retryLater = true), report)
+    assertEquals(listOf("s1"), pending.pending.map { it.sighting.id })
+  }
+
+  @Test
+  fun sendAll_whenThePhotoIsUploadedButTheReportFailsOffline_sendsItNextTime() = runTest {
+    pending.add(sighting("s1"), photoUri = "file:///pending/s1.jpg")
+    sightings.reportFailure = IOException("offline")
+
+    val firstRun = sender.sendAll()
+    sightings.reportFailure = null
+    val secondRun = sender.sendAll()
+
+    assertEquals(SendReport(retryLater = true), firstRun)
+    assertEquals(SendReport(sent = listOf("s1")), secondRun)
+    // Uploaded twice to the same path, so the sent sighting points to the one photo
+    assertEquals(
+        "${FakePhotoRepository.FAKE_URL_PREFIX}/pets/reporter/s1/photo.jpg",
+        sightings.reportedSightings.single().photoUrl,
+    )
+    assertEquals(emptyList<PendingSighting>(), pending.pending)
+  }
+
+  @Test
   fun sendAll_whenTheQueueCantBeRead_asksToRetry() = runTest {
     pending.listFailure = IOException("unreadable")
 

@@ -6,6 +6,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.trust.TrustLevel
 
 /**
  * State of the owner's "My alert" screen: one of their alerts, the sightings reported on it, and
@@ -21,6 +22,8 @@ import com.android.spotted.model.sighting.SightingStatus
 data class MyAlertUiState(
     val alert: Alert? = null,
     val sightings: List<Sighting> = emptyList(),
+    /** Available reporter trust levels, keyed by reporter ID; absent when the read fails. */
+    val reporterTrustLevels: Map<String, TrustLevel> = emptyMap(),
     val likelyArea: LikelyArea? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null,

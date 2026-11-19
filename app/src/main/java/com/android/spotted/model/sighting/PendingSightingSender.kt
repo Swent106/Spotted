@@ -35,7 +35,8 @@ data class SendReport(
  *
  * - Only the sightings of the signed-in user are sent: the server refuses a sighting reported by
  *   someone else. With nobody signed in, nothing is sent and it asks to retry later; the sightings
- *   of another account stay queued, for when that account signs in again.
+ *   of another account stay queued, for when that account signs in again. The user is checked again
+ *   before each sighting, so a sign-out or account switch during a run stops it there.
  *
  * Two calls may overlap (a send blocked on the network can outlive a cancelled run): a sighting is
  * then sent twice, which writes the same document.
@@ -62,15 +63,19 @@ class PendingSightingSender(
     val sent = mutableListOf<String>()
     val dropped = mutableListOf<DroppedSighting>()
     for (entry in queue.filter { it.sighting.reporterId == userId }) {
+      // Another account signed in meanwhile: the server would refuse the rest, which would drop
+      // them
+      if (currentUserId() != userId) return SendReport(sent, dropped, retryLater = true)
       val id = entry.sighting.id
       val error = send(entry)
       when {
         error == null -> sent += id
-        isRefusal(error) -> dropped += DroppedSighting(id, reasonOf(error))
-        else -> return SendReport(sent, dropped, retryLater = true)
+        !isRefusal(error) -> return SendReport(sent, dropped, retryLater = true)
       }
       // If it can't be removed, it is sent again next time, which writes the same document
       if (pending.delete(id).isFailure) return SendReport(sent, dropped, retryLater = true)
+      // Only reported as dropped once it is really out of the queue
+      if (error != null) dropped += DroppedSighting(id, reasonOf(error))
     }
     return SendReport(sent, dropped)
   }
