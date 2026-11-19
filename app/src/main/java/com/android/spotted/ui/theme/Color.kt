@@ -49,6 +49,10 @@ private val SpottedRankYou = Color(0xFF1B4FC0)
  * of notices (offline, pet found), [errorTint] the pale red behind error messages, and [onAccent]
  * the white of text and icons on blue or red buttons and on photos, in both modes. [success] is the
  * green of confirmed sightings.
+ *
+ * The pet cards of Home's "Your pets" carousel: [petCardBackground] and [petCardBorder] for a safe
+ * pet, [missingCardBackground] for a missing one, the "Missing" and "Safe" chips, and the dashed
+ * border of "Add a pet" ([addPetBorder]).
  */
 @Immutable
 data class SpottedColors(
@@ -88,6 +92,14 @@ data class SpottedColors(
     val errorTint: Color,
     val onAccent: Color,
     val success: Color,
+    val petCardBackground: Color,
+    val petCardBorder: Color,
+    val missingCardBackground: Color,
+    val missingChipBackground: Color,
+    val missingChipText: Color,
+    val safeChipBackground: Color,
+    val safeChipText: Color,
+    val addPetBorder: Color,
 )
 
 /** The Figma colours, as they are used today. */
@@ -129,6 +141,14 @@ val LightSpottedColors =
         errorTint = Color(0xFFFCE9E9),
         onAccent = Color.White,
         success = Color(0xFF1E8E3E),
+        petCardBackground = Color(0xFFF6F7F9),
+        petCardBorder = Color(0xFFE3E5E9),
+        missingCardBackground = Color(0xFFFDF3F3),
+        missingChipBackground = Color(0xFFFCEBEB),
+        missingChipText = Color(0xFF791F1F),
+        safeChipBackground = Color(0xFFEAF3DE),
+        safeChipText = Color(0xFF27500A),
+        addPetBorder = Color(0xFFC9CDD3),
     )
 
 /**
@@ -173,6 +193,14 @@ val DarkSpottedColors =
         errorTint = Color(0xFF3A1A1C),
         onAccent = Color.White,
         success = Color(0xFF5BBF7A),
+        petCardBackground = Color(0xFF29303D),
+        petCardBorder = Color(0xFFE3E5E9),
+        missingCardBackground = Color(0xFF4F1717),
+        missingChipBackground = Color(0xFF4F1717),
+        missingChipText = Color(0xFFEAAEAE),
+        safeChipBackground = Color(0xFF364B1B),
+        safeChipText = Color(0xFFC6F0A8),
+        addPetBorder = Color(0xFFC9CDD3),
     )
 
 /**
