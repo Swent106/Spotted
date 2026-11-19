@@ -9,6 +9,9 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeTrustRepository
+import com.android.spotted.model.trust.TrustLevel
+import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -235,6 +238,77 @@ class HelperProfileViewModelTest {
 
     assertTrue(viewModel.uiState.value.isLeaving)
     assertFalse(viewModel.uiState.value.isDeleteConfirmationVisible)
+  }
+
+  // ===================== Trust level =====================
+
+  /** A loaded ViewModel whose user has [trust] stored. */
+  private fun viewModelWithTrust(trust: TrustScore): HelperProfileViewModel {
+    val trustRepository = FakeTrustRepository(trusts = mapOf(uid to trust))
+    return viewModelWith(trustRepository)
+  }
+
+  private fun viewModelWith(trustRepository: FakeTrustRepository) =
+      HelperProfileViewModel(
+              userRepository,
+              authRepository,
+              petRepository,
+              alertRepository,
+              trustRepository = trustRepository,
+          )
+          .apply { load() }
+
+  @Test
+  fun trustLevel_fewJudgedSightings_isNew() {
+    val state = viewModelWithTrust(TrustScore(score = 0.9, judged = 2)).uiState.value
+
+    assertEquals(TrustLevel.NEW, state.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_lowScore_isLow() {
+    val state = viewModelWithTrust(TrustScore(score = 0.2, judged = 5)).uiState.value
+
+    assertEquals(TrustLevel.LOW, state.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_middleScore_isTrusted() {
+    val state = viewModelWithTrust(TrustScore(score = 0.5, judged = 5)).uiState.value
+
+    assertEquals(TrustLevel.TRUSTED, state.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_highScore_isVeryTrusted() {
+    val state = viewModelWithTrust(TrustScore(score = 0.9, judged = 10)).uiState.value
+
+    assertEquals(TrustLevel.VERY_TRUSTED, state.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_userNeverJudged_isNew() {
+    val state = viewModelWith(FakeTrustRepository()).uiState.value
+
+    assertEquals(TrustLevel.NEW, state.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_readFails_profileStillLoads_withoutLevelOrError() {
+    val trustRepository = FakeTrustRepository().apply { failure = IllegalStateException("offline") }
+
+    val state = viewModelWith(trustRepository).uiState.value
+
+    assertEquals("Rayen", state.name)
+    assertEquals("rayen", state.username)
+    assertEquals("Lausanne", state.homeArea)
+    assertNull(state.trustLevel)
+    assertNull(state.errorMessage)
+  }
+
+  @Test
+  fun trustLevel_withoutTrustRepository_isNull() {
+    assertNull(viewModel().uiState.value.trustLevel)
   }
 
   private suspend fun addRexAndHisAlert() {

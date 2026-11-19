@@ -1,5 +1,7 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.profile
 
+import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.ui.personalinfo.PersonalInfoUiState
 
 /**
@@ -19,6 +21,8 @@ data class HelperProfileUiState(
     val photoUrl: String? = null,
     val alertRadiusKm: Int = PersonalInfoUiState.DEFAULT_ALERT_RADIUS_KM,
     val petsBroughtHome: Int = 0,
+    /** The user's own trust level; null while it isn't loaded or if reading it failed. */
+    val trustLevel: TrustLevel? = null,
     val isLoading: Boolean = false,
     /** True while signing out or deleting the account. */
     val isLeaving: Boolean = false,
