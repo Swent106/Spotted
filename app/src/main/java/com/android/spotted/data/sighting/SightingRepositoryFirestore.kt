@@ -70,14 +70,19 @@ class SightingRepositoryFirestore(
       // Each emission is the full list, so a slow collector only needs the latest one
       .conflate()
 
-  override suspend fun setSightingStatus(sightingId: String, status: SightingStatus): Result<Unit> =
-      firestoreResult {
-        withContext(Dispatchers.IO) {
-          // Only the status is sent: the rules let the alert owner change nothing else
-          Tasks.await(sightings.document(sightingId).update(STATUS_FIELD, status.name))
-          Unit
-        }
+  override suspend fun setSightingStatus(sightingId: String, status: SightingStatus): Result<Unit> {
+    // Confirming also counts for the reporter's trust: the rules refuse it without the trust write
+    if (status == SightingStatus.CONFIRMED) {
+      return Result.failure(IllegalArgumentException(CONFIRM_HERE_REFUSED))
+    }
+    return firestoreResult {
+      withContext(Dispatchers.IO) {
+        // Only the status is sent: the rules let the alert owner change nothing else
+        Tasks.await(sightings.document(sightingId).update(STATUS_FIELD, status.name))
+        Unit
       }
+    }
+  }
 
   /**
    * Sightings of [alertId], most recent first. Firestore sorts before the limit, so the
@@ -203,5 +208,8 @@ class SightingRepositoryFirestore(
     const val SIGHTINGS_COLLECTION = "sightings"
     const val MAX_RESULTS = 100L
     const val STATUS_FIELD = "status"
+    const val CONFIRM_HERE_REFUSED =
+        "Confirm a sighting with TrustRepository.confirmSighting, which also updates its " +
+            "reporter's trust score"
   }
 }

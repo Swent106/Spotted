@@ -9,14 +9,17 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
+import com.android.spotted.data.trust.TrustRepositoryFirestore
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.estimateLikelyArea
+import com.android.spotted.model.trust.TrustRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,7 @@ class MyAlertViewModel(
     private val alertId: String,
     private val alertRepository: AlertRepository,
     private val sightingRepository: SightingRepository,
+    private val trustRepository: TrustRepository,
     private val authRepository: AuthRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -35,6 +39,7 @@ class MyAlertViewModel(
   val uiState: StateFlow<MyAlertUiState> = _uiState.asStateFlow()
   // Tracks the stream error so a successful snapshot clears only that error, not action errors.
   private var sightingsError: String? = null
+  private var trustLevelsRequestId = 0L
 
   init {
     loadAlert()
@@ -82,14 +87,20 @@ class MyAlertViewModel(
       sightingRepository.observeSightingsForAlert(alert.id).collect { result ->
         result.fold(
             onSuccess = { sightings ->
+              val reporterIds = sightings.mapTo(mutableSetOf()) { it.reporterId }
               _uiState.update {
                 it.copy(
                     sightings = sightings,
+                    reporterTrustLevels =
+                        it.reporterTrustLevels.filterKeys { reporterId ->
+                          reporterId in reporterIds
+                        },
                     likelyArea = estimateLikelyArea(sightings, alert.petSpecies, now()),
                     errorMessage = if (it.errorMessage == sightingsError) null else it.errorMessage,
                 )
               }
               sightingsError = null
+              loadTrustLevels(sightings)
             },
             onFailure = { failure ->
               val message = failure.localizedMessage ?: SIGHTINGS_LOAD_FAILED
@@ -101,31 +112,83 @@ class MyAlertViewModel(
     }
   }
 
+  /** Loads optional trust metadata separately so a failed read never hides its sighting. */
+  private fun loadTrustLevels(sightings: List<Sighting>) {
+    val requestId = ++trustLevelsRequestId
+    sightings
+        .map { it.reporterId }
+        .distinct()
+        .forEach { reporterId ->
+          viewModelScope.launch {
+            trustRepository
+                .getTrust(reporterId)
+                .fold(
+                    onSuccess = { trust ->
+                      _uiState.update { state ->
+                        if (requestId != trustLevelsRequestId) {
+                          state
+                        } else {
+                          val currentReporterIds =
+                              state.sightings.mapTo(mutableSetOf()) { it.reporterId }
+                          if (reporterId !in currentReporterIds) {
+                            state
+                          } else {
+                            state.copy(
+                                reporterTrustLevels =
+                                    state.reporterTrustLevels + (reporterId to trust.level)
+                            )
+                          }
+                        }
+                      }
+                    },
+                    onFailure = {
+                      // Trust is supplementary; leave these sightings visible without a level.
+                    },
+                )
+          }
+        }
+  }
+
   /**
-   * Confirms the sighting [id], allowing it to inform the likely area. If it is newer than the
-   * alert's last seen time, the alert's last seen place moves to it.
+   * Confirms the sighting [id], allowing it to inform the likely area. The first time, it also
+   * counts for the trust score of its reporter (once, even if confirmed again later). If it is
+   * newer than the alert's last seen time, the alert's last seen place moves to it.
    */
   fun confirm(id: String) =
-      setSightingStatus(id, SightingStatus.CONFIRMED, onUpdated = { moveLastSeenTo(id) })
+      review(
+          update = { trustRepository.confirmSighting(id) },
+          failedMessage = CONFIRM_FAILED,
+          onUpdated = { moveLastSeenTo(id) },
+      )
 
-  /** Dismisses the sighting [id], removing it from the likely-area estimate. */
-  fun dismiss(id: String) = setSightingStatus(id, SightingStatus.DISMISSED)
+  /**
+   * Dismisses the sighting [id], removing it from the likely-area estimate. The trust score of its
+   * reporter does not change.
+   */
+  fun dismiss(id: String) =
+      review(
+          update = { sightingRepository.setSightingStatus(id, SightingStatus.DISMISSED) },
+          failedMessage = DISMISS_FAILED,
+      )
 
-  private fun setSightingStatus(
-      id: String,
-      status: SightingStatus,
+  /**
+   * Runs the review [update] of a sighting, then [onUpdated] if it succeeded. If it failed, shows
+   * the error, or [failedMessage] if it has none.
+   */
+  private fun review(
+      update: suspend () -> Result<Unit>,
+      failedMessage: String,
       onUpdated: suspend () -> Unit = {},
   ) {
     if (!canManageAlert()) return
     _uiState.update { it.copy(errorMessage = null) }
     viewModelScope.launch {
-      sightingRepository
-          .setSightingStatus(id, status)
+      update()
           .fold(
               onSuccess = { onUpdated() },
               onFailure = { failure ->
                 _uiState.update {
-                  it.copy(errorMessage = failure.localizedMessage ?: STATUS_UPDATE_FAILED)
+                  it.copy(errorMessage = failure.localizedMessage ?: failedMessage)
                 }
               },
           )
@@ -196,7 +259,9 @@ class MyAlertViewModel(
     const val ALERT_NOT_FOUND = "Alert not found."
     const val LOAD_FAILED = "Couldn't load the alert. Please try again."
     const val SIGHTINGS_LOAD_FAILED = "Couldn't load sightings. Please try again."
-    const val STATUS_UPDATE_FAILED = "Couldn't update the sighting. Please try again."
+    const val CONFIRM_FAILED =
+        "Couldn't confirm the sighting or update the reporter's trust. Please try again."
+    const val DISMISS_FAILED = "Couldn't dismiss the sighting. Please try again."
     const val LAST_SEEN_UPDATE_FAILED = "Couldn't update the last seen place. Please try again."
     const val CLOSE_FAILED = "Couldn't mark the alert as found. Please try again."
 
@@ -207,6 +272,7 @@ class MyAlertViewModel(
               alertId = alertId,
               alertRepository = AlertRepositoryFirestore(),
               sightingRepository = SightingRepositoryFirestore(),
+              trustRepository = TrustRepositoryFirestore(),
               authRepository = AuthRepositoryProvider.authRepository,
           )
         }

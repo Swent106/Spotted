@@ -4,9 +4,12 @@ package com.android.spotted.ui.report
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
@@ -264,6 +267,9 @@ class ReportMissingViewModelTest {
                 petPhotoUrl = LUNA.photoUrl,
                 petAllergies = LUNA.allergies,
                 petBehaviors = LUNA.behaviors,
+                petBirthYear = LUNA.birthYear,
+                petSex = LUNA.sex,
+                petSize = LUNA.size,
             )
         assertEquals(listOf(expected), alertRepository.publishedAlerts)
         val state = viewModel.uiState.value
@@ -597,6 +603,10 @@ class ReportMissingViewModelTest {
             photoUrl = "https://example.com/luna.jpg",
             allergies = listOf("chicken"),
             behaviors = setOf(Behavior.FEARFUL_OF_STRANGERS),
+            birthYear = 2019,
+            sex = Sex.FEMALE,
+            size = PetSize.SMALL,
+            lifestyle = Lifestyle.INDOOR_ONLY,
         )
     val MILO = pet(id = "milo", name = "Milo")
   }

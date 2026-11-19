@@ -11,10 +11,13 @@ service cloud.firestore {
     // phone and homeArea may be empty; all fields have size limits below.
     // The document ID and uid field identify the authenticated profile owner.
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
-    // behaviors, and note; existing pet authorization rules are unchanged.
+    // behaviors, and note; optional birthYear, breedId, sex, neutered, size,
+    // lifestyle and microchipped, checked by validPetDetails when present.
     // sightings/{sightingId}: id, reporterId, location, seenAtMillis, species,
     // and optional photoUrl, alertId, status and headingDegrees (null or 0..359);
     // only the reporter may change or delete them until the alert owner reviews it.
+    // trustVerdict (CONFIRMED or FALSE) is set once, when the sighting moves its
+    // reporter's trust score (see trust/{uid}).
 
     function isAuthenticated() {
       return request.auth != null;
@@ -81,13 +84,31 @@ service cloud.firestore {
     }
 
     match /pets/{petId} {
+      // Optional details (#388): absent in older pets, else one of the allowed values. The birth
+      // year can't be in the future; null means "not given" for it and for the breed id.
+      function validPetDetails(d) {
+        return (d.get('birthYear', null) == null
+              || (d.birthYear is int && d.birthYear >= 1950
+                  && d.birthYear <= request.time.year()))
+          && (d.get('breedId', null) == null
+              || (d.breedId is string && d.breedId.size() > 0 && d.breedId.size() <= 100))
+          && (!('sex' in d) || d.sex in ['MALE', 'FEMALE', 'UNKNOWN'])
+          && (!('neutered' in d) || d.neutered in ['YES', 'NO', 'UNKNOWN'])
+          && (!('size' in d) || d.size in ['SMALL', 'MEDIUM', 'LARGE', 'UNKNOWN'])
+          && (!('lifestyle' in d) || d.lifestyle in [
+                'INDOOR_ONLY', 'INDOOR_AND_OUTDOOR', 'OUTDOOR_ONLY', 'UNKNOWN'])
+          && (!('microchipped' in d) || d.microchipped in ['YES', 'NO', 'UNKNOWN']);
+      }
+
       allow create: if request.auth != null
-          && request.resource.data.ownerId == request.auth.uid;
+          && request.resource.data.ownerId == request.auth.uid
+          && validPetDetails(request.resource.data);
       allow read, delete: if request.auth != null
           && resource.data.ownerId == request.auth.uid;
       allow update: if request.auth != null
           && resource.data.ownerId == request.auth.uid
-          && request.resource.data.ownerId == request.auth.uid;
+          && request.resource.data.ownerId == request.auth.uid
+          && validPetDetails(request.resource.data);
     }
 
     match /alerts/{alertId} {
@@ -112,7 +133,8 @@ service cloud.firestore {
           && d.keys().hasOnly([
                 'id', 'petId', 'ownerId', 'lastKnownLocation', 'lostAtMillis', 'closedAtMillis',
                 'status', 'petName', 'petSpecies', 'petPhotoUrl', 'petAllergies', 'petBehaviors',
-                'lastSeenAtMillis', 'lossCause', 'lossEnvironment'])
+                'lastSeenAtMillis', 'lossCause', 'lossEnvironment', 'petBirthYear', 'petSex',
+                'petSize'])
           && d.id == alertId
           && d.petId is string && d.petId.size() > 0
           && d.ownerId is string
@@ -145,7 +167,14 @@ service cloud.firestore {
                 'ESCAPED_FROM_HOME', 'DURING_A_WALK', 'SCARED_BY_NOISE', 'DURING_MOVE_OR_TRIP',
                 'STOLEN', 'UNKNOWN'])
           && (!('lossEnvironment' in d) || d.lossEnvironment in [
-                'CITY_CENTRE', 'SUBURB', 'VILLAGE_OR_RURAL', 'FOREST_OR_MOUNTAIN', 'UNKNOWN']);
+                'CITY_CENTRE', 'SUBURB', 'VILLAGE_OR_RURAL', 'FOREST_OR_MOUNTAIN', 'UNKNOWN'])
+          // Copied from the pet when the alert is published (older alerts don't have them), so
+          // finders can read them: same values as the pet's, not in the fields an update may change
+          && (d.get('petBirthYear', null) == null
+              || (d.petBirthYear is int && d.petBirthYear >= 1950
+                  && d.petBirthYear <= request.time.year()))
+          && (!('petSex' in d) || d.petSex in ['MALE', 'FEMALE', 'UNKNOWN'])
+          && (!('petSize' in d) || d.petSize in ['SMALL', 'MEDIUM', 'LARGE', 'UNKNOWN']);
       }
 
       // The last seen time only moves forward: an older sighting can't move the pet back
@@ -276,8 +305,9 @@ service cloud.firestore {
           && d.keys().hasOnly([
                 'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
                 'status', 'headingDegrees', 'activities', 'conditions', 'reactions', 'placeType',
-                'collar'])
+                'collar', 'trustVerdict'])
           && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED']
+          && d.get('trustVerdict', 'CONFIRMED') in ['CONFIRMED', 'FALSE']
           && validSightingDetails(d)
           && d.id == sightingId
           && d.reporterId is string
@@ -329,10 +359,16 @@ service cloud.firestore {
               && get(alertPath).data.ownerId != request.auth.uid);
       }
 
+      // True if the sighting was judged for the trust score of its reporter
+      function isJudged(d) {
+        return 'trustVerdict' in d;
+      }
+
       allow create: if request.auth != null
           && validSighting(request.resource.data, null)
           && request.resource.data.reporterId == request.auth.uid
           && statusOf(request.resource.data) == 'PENDING'
+          && !isJudged(request.resource.data)
           && notInTheFuture(request.resource.data)
           && canBeLinkedTo(request.resource.data);
 
@@ -353,9 +389,12 @@ service cloud.firestore {
       // The author may change their sighting until the alert owner reviews it. It stays theirs,
       // on the same alert, and they cannot review it themselves. It gets the same plausibility
       // checks as on create, so they cannot be bypassed by creating first and editing after.
+      // A judged sighting is frozen, even if still pending, so it cannot be counted again.
       allow update: if request.auth != null
           && resource.data.reporterId == request.auth.uid
           && statusOf(resource.data) == 'PENDING'
+          && !isJudged(resource.data)
+          && !isJudged(request.resource.data)
           && validSighting(
               request.resource.data, resource.data.get('headingDegrees', null))
           && request.resource.data.reporterId == resource.data.reporterId
@@ -366,17 +405,41 @@ service cloud.firestore {
 
       // The owner of the linked alert may confirm or dismiss it, and change nothing else.
       // The status stays explicit once reviewed (it cannot be deleted).
+      // The first confirmation must judge the sighting too (next rule), so it moves the trust
+      // score of its reporter. Once judged, the status alone may change again.
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
               request.resource.data, resource.data.get('headingDegrees', null))
           && 'status' in request.resource.data
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && (request.resource.data.status != 'CONFIRMED' || isJudged(resource.data));
+
+      // The owner of the linked alert may judge the sighting for the trust score of its reporter:
+      // once, and only in the same write as the trust update it causes (see trust/{uid}).
+      // In S6 only a confirmation judges (TrustRepositoryFirestore.confirmSighting): the write
+      // must confirm the sighting with a confirmed verdict. So one owner, even a new account,
+      // cannot lower a reporter's score, nor credit a dismissed sighting. FALSE verdicts come
+      // with the votes of US-T2 (#385).
+      allow update: if request.auth != null
+          && ownsLinkedAlert()
+          && validSighting(
+              request.resource.data, resource.data.get('headingDegrees', null))
+          && !isJudged(resource.data)
+          && isJudged(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['trustVerdict', 'status'])
+          && request.resource.data.status == 'CONFIRMED'
+          && request.resource.data.trustVerdict == 'CONFIRMED'
+          && getAfter(/databases/$(database)/documents/trust/$(resource.data.reporterId))
+               .data.get('lastSightingId', null) == sightingId;
 
       // Once reviewed, the sighting is evidence the owner relies on, so it cannot be deleted.
+      // A judged one cannot either: created again with the same id, it would be counted twice.
       allow delete: if request.auth != null
           && resource.data.reporterId == request.auth.uid
-          && statusOf(resource.data) == 'PENDING';
+          && statusOf(resource.data) == 'PENDING'
+          && !isJudged(resource.data);
     }
 
     // Photos of pets and sightings, saved in base64 by PhotoRepositoryFirestore (no Storage).
@@ -445,6 +508,71 @@ service cloud.firestore {
           && ownsPet(request.resource.data.petId);
       allow delete: if isAuthenticated()
           && resource.data.ownerId == request.auth.uid;
+    }
+
+    // trust/{uid}: score (0..1) and judged (count of judged sightings) of a user, and
+    // lastSightingId, the sighting judged last. Kept apart from users/{uid}, which holds private
+    // contact details, so any signed-in user can see how reliable a helper is.
+    // Only TrustRepositoryFirestore (applyVerdict, confirmSighting) writes it: in one transaction,
+    // the owner of an alert judges a sighting linked to it (its trustVerdict) and applies that
+    // verdict to the trust of its reporter. The constants match TrustRules in model/trust/TrustScore.kt.
+    match /trust/{uid} {
+      function judgedSightingPath() {
+        return /databases/$(database)/documents/sightings/$(request.resource.data.lastSightingId);
+      }
+
+      // Score and judged count before this verdict: a user without a document starts at the
+      // initial score (TrustRules.INITIAL_SCORE) with nothing judged
+      function scoreBefore() {
+        return resource == null ? 0.3 : resource.data.score;
+      }
+
+      function judgedBefore() {
+        return resource == null ? 0 : resource.data.judged;
+      }
+
+      // TrustScore.after: a confirmed sighting closes 10% of the gap to 1, a false one halves it.
+      // Same operations in the same order as in Kotlin, so the doubles are equal.
+      function scoreAfter(verdict) {
+        return verdict == 'CONFIRMED'
+          ? scoreBefore() + 0.1 * (1 - scoreBefore())
+          : scoreBefore() * 0.5;
+      }
+
+      function validTrust(d) {
+        return d.keys().hasAll(['score', 'judged', 'lastSightingId'])
+          && d.keys().hasOnly(['score', 'judged', 'lastSightingId'])
+          && d.score is number && d.score >= 0 && d.score <= 1
+          && d.judged is int
+          && d.lastSightingId is string
+          && d.lastSightingId.size() > 0 && d.lastSightingId.size() <= 128;
+      }
+
+      // The sighting named by lastSightingId: reported by this user, linked to an alert of the
+      // signed-in user, not judged before this write and judged by it.
+      function judgesSightingNow() {
+        let before = get(judgedSightingPath()).data;
+        let alertPath = /databases/$(database)/documents/alerts/$(before.get('alertId', ''));
+        return before.reporterId == uid
+          && !('trustVerdict' in before)
+          && exists(alertPath)
+          && get(alertPath).data.ownerId == request.auth.uid
+          && 'trustVerdict' in getAfter(judgedSightingPath()).data;
+      }
+
+      // One verdict at a time: judged goes up by one and the score is the one it gives
+      function appliesOneVerdict() {
+        return request.resource.data.judged == judgedBefore() + 1
+          && request.resource.data.score
+               == scoreAfter(getAfter(judgedSightingPath()).data.trustVerdict);
+      }
+
+      allow get: if isAuthenticated();
+      allow create, update: if isAuthenticated()
+          && validTrust(request.resource.data)
+          && exists(judgedSightingPath())
+          && judgesSightingNow()
+          && appliesOneVerdict();
     }
 
     match /{document=**} {

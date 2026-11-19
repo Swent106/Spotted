@@ -5,6 +5,11 @@ package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
+import com.android.spotted.model.sighting.PlaceType
 
 data class NearbyAlertOption(
     val alertId: String,
@@ -38,6 +43,11 @@ data class ReportSightingUiState(
     val errorMessage: String? = null,
     val submitted: Boolean = false,
     val photoCheck: PhotoCheck = PhotoCheck.NONE,
+    val activities: Set<AnimalActivity> = emptySet(),
+    val conditions: Set<AnimalCondition> = emptySet(),
+    val reactions: Set<AnimalReaction> = emptySet(),
+    val placeType: PlaceType = PlaceType.UNKNOWN,
+    val collar: CollarStatus = CollarStatus.UNKNOWN,
 ) {
   val canSubmit: Boolean
     get() =
