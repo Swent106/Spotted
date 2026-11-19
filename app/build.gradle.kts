@@ -197,7 +197,7 @@ dependencies {
 
   // ----------       Robolectric     ------------
   testImplementation(libs.robolectric)
-  testImplementation(libs.work.testing)
+  globalTestImplementation(libs.work.testing)
 
   // ------------- Credentials ------------------
   implementation("androidx.credentials:credentials:1.3.0")
