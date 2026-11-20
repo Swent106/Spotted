@@ -12,6 +12,7 @@ import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
+import com.android.spotted.data.sighting.PendingSightingRepositoryProvider
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
@@ -25,12 +26,16 @@ import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.AddressRepository
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.PhotoRepository
+import com.android.spotted.model.sighting.PendingSighting
+import com.android.spotted.model.sighting.PendingSightingRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
+import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -61,6 +66,8 @@ import kotlinx.coroutines.launch
  * @property photoRepository gives where the profile photo is; null leaves the avatar empty.
  * @property locationRepository gives the device position, for "600 m away"; null measures from the
  *   home.
+ * @property pendingSightingRepository the sightings made offline and waiting to be sent; null shows
+ *   none.
  */
 class HomeViewModel(
     private val authRepository: AuthRepository,
@@ -73,6 +80,7 @@ class HomeViewModel(
     private val addressRepository: AddressRepository? = null,
     private val photoRepository: PhotoRepository? = null,
     private val locationRepository: LocationRepository? = null,
+    private val pendingSightingRepository: PendingSightingRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HomeUiState())
@@ -84,8 +92,24 @@ class HomeViewModel(
   /** Uid of the user whose data is in [uiState], or null. */
   private var shownUid: String? = null
 
+  /** Every queued sighting, of any user, with who reported it, as last listed. */
+  private var queued: List<Pair<String, WaitingSighting>> = emptyList()
+
+  /** Waiting sightings the user deleted: when they leave the queue, they were not sent. */
+  private val deletingIds = mutableSetOf<String>()
+
+  /** Rows whose pet name and place were found, so they are not looked up again. */
+  private val rowCache = mutableMapOf<String, WaitingSighting>()
+
   init {
     viewModelScope.launch { authRepository.currentUser.collect { user -> load(user) } }
+    pendingSightingRepository?.let { repository ->
+      viewModelScope.launch {
+        repository.observeCount().collectLatest { count ->
+          if (count.isSuccess) reloadWaiting(repository)
+        }
+      }
+    }
   }
 
   /** Reloads the profile, the pets and the lost pets nearby of the signed-in user. */
@@ -119,10 +143,12 @@ class HomeViewModel(
     val start = if (uid == shownUid) _uiState.value else HomeUiState()
     shownUid = uid
     _uiState.value =
-        start.copy(
-            errorMessage = null,
-            pets = start.pets.copy(isLoading = true, errorMessage = null),
-            lostPetsNearby = start.lostPetsNearby.copy(isLoading = true, errorMessage = null),
+        withWaiting(
+            start.copy(
+                errorMessage = null,
+                pets = start.pets.copy(isLoading = true, errorMessage = null),
+                lostPetsNearby = start.lostPetsNearby.copy(isLoading = true, errorMessage = null),
+            )
         )
 
     loadJob = viewModelScope.launch {
@@ -230,6 +256,106 @@ class HomeViewModel(
     updateFor(uid) { it.copy(ownLostPets = own) }
   }
 
+  /** Opens the "Waiting to send" sheet, if a sighting is waiting. */
+  fun openWaitingSheet() {
+    _uiState.update { it.copy(isWaitingSheetOpen = it.waitingSightings.isNotEmpty()) }
+  }
+
+  fun closeWaitingSheet() {
+    _uiState.update { it.copy(isWaitingSheetOpen = false, waitingDeleteId = null) }
+  }
+
+  /** Asks to confirm the deletion of the waiting sighting [sightingId]. */
+  fun askToDeleteWaiting(sightingId: String) {
+    _uiState.update { state ->
+      if (state.waitingSightings.none { it.id == sightingId }) state
+      else state.copy(waitingDeleteId = sightingId)
+    }
+  }
+
+  fun cancelDeleteWaiting() {
+    _uiState.update { it.copy(waitingDeleteId = null) }
+  }
+
+  /**
+   * Deletes the waiting sighting being confirmed, with its photo: it is never sent. Its row goes
+   * away when the queue says it is gone.
+   */
+  fun confirmDeleteWaiting() {
+    val repository = pendingSightingRepository ?: return
+    val sightingId = _uiState.value.waitingDeleteId ?: return
+    deletingIds += sightingId
+    _uiState.update { it.copy(waitingDeleteId = null) }
+    viewModelScope.launch {
+      repository.delete(sightingId).onFailure {
+        deletingIds -= sightingId
+        _uiState.update { it.copy(errorMessage = WAITING_DELETE_FAILED) }
+      }
+    }
+  }
+
+  /** The "was sent" snackbar was shown. */
+  fun sentSightingShown() {
+    _uiState.update { it.copy(sentSighting = null) }
+  }
+
+  /**
+   * Lists the queue again. A sighting that left it without being deleted by the user was sent: the
+   * last one of the user shown is told with [HomeUiState.sentSighting].
+   */
+  private suspend fun reloadWaiting(repository: PendingSightingRepository) {
+    val pending = repository.list().getOrNull() ?: return
+    val rows = pending.map { it.sighting.reporterId to waitingRowOf(it) }
+    val ids = rows.mapTo(mutableSetOf()) { it.second.id }
+    val sent = queued.lastOrNull { (reporterId, row) ->
+      reporterId == shownUid && row.id !in ids && row.id !in deletingIds
+    }
+    deletingIds.retainAll(ids)
+    rowCache.keys.retainAll(ids)
+    queued = rows
+    _uiState.update { state ->
+      withWaiting(state).copy(sentSighting = sent?.second ?: state.sentSighting)
+    }
+  }
+
+  /** [state] with the waiting sightings of the user shown; the sheet closes once none is left. */
+  private fun withWaiting(state: HomeUiState): HomeUiState {
+    val mine = queued.filter { it.first == shownUid }.map { it.second }
+    return state.copy(
+        waitingSightings = mine,
+        isWaitingSheetOpen = state.isWaitingSheetOpen && mine.isNotEmpty(),
+        waitingDeleteId = state.waitingDeleteId?.takeIf { id -> mine.any { it.id == id } },
+    )
+  }
+
+  /**
+   * The row of [pending]: its alert's pet name and its area name, when they can be found (offline,
+   * they often can't: then the species and the coordinates).
+   */
+  private suspend fun waitingRowOf(pending: PendingSighting): WaitingSighting {
+    val sighting = pending.sighting
+    rowCache[sighting.id]?.let {
+      return it
+    }
+    val petName = sighting.alertId?.let { alertRepository.getAlertById(it).getOrNull()?.petName }
+    val area = addressRepository?.areaName(sighting.location)?.getOrNull()
+    val row =
+        WaitingSighting(
+            id = sighting.id,
+            petName = petName,
+            species = sighting.species,
+            photoUri = pending.photoUri,
+            savedAtMillis = sighting.seenAtMillis,
+            place =
+                area
+                    ?: "%.4f, %.4f"
+                        .format(Locale.US, sighting.location.latitude, sighting.location.longitude),
+        )
+    val complete = area != null && (sighting.alertId == null || petName != null)
+    if (complete) rowCache[sighting.id] = row
+    return row
+  }
+
   /** Applies [transform] only if [uid] is still the user shown, so a late result is dropped. */
   private fun updateFor(uid: String, transform: (HomeUiState) -> HomeUiState) {
     if (uid != shownUid) return
@@ -248,6 +374,7 @@ class HomeViewModel(
     const val PETS_LOAD_FAILED = "Couldn't load your pets. Please try again."
     const val LOST_PETS_LOAD_FAILED = "Couldn't load the lost pets near you. Please try again."
     const val SIGN_OUT_FAILED = "Couldn't sign out. Please try again."
+    const val WAITING_DELETE_FAILED = "Couldn't delete this sighting. Please try again."
     private const val OFFLINE_ALERTS_LIMIT = 5
 
     /** Geneva city centre: used when the home area can't be found. */
@@ -267,6 +394,7 @@ class HomeViewModel(
             addressRepository = AddressRepositoryGeocoder(application),
             photoRepository = photoRepository,
             locationRepository = LocationRepositoryProvider.create(application),
+            pendingSightingRepository = PendingSightingRepositoryProvider.get(application),
         )
       }
     }

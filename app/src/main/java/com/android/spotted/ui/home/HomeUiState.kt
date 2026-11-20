@@ -2,6 +2,7 @@
 package com.android.spotted.ui.home
 
 import com.android.spotted.model.Pet.Pet
+import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.user.UserProfile
 
@@ -24,6 +25,26 @@ data class HomeSection<T>(
 }
 
 /**
+ * A sighting made offline and kept on the phone until it can be sent ("Waiting to send" sheet).
+ *
+ * @property id id of the sighting.
+ * @property petName name of the pet of the sighting's alert, or null without an alert (or when the
+ *   alert can't be loaded): the row then shows [species].
+ * @property species species of the animal seen.
+ * @property photoUri local URI of its photo, if it has one.
+ * @property savedAtMillis when the animal was seen, i.e. when the sighting was saved.
+ * @property place where it was seen: the area name, or the coordinates when it can't be found.
+ */
+data class WaitingSighting(
+    val id: String,
+    val petName: String?,
+    val species: Species,
+    val photoUri: String?,
+    val savedAtMillis: Long,
+    val place: String,
+)
+
+/**
  * UI state of the Home screen.
  *
  * @property userName name of the signed-in user, from their profile.
@@ -35,6 +56,10 @@ data class HomeSection<T>(
  * @property distanceTexts "600 m away" of each alert of [lostPetsNearby], by alert id: from the
  *   device position, else from the home. An alert without one shows no distance.
  * @property errorMessage screen-wide error (e.g. not signed in), or null.
+ * @property waitingSightings the signed-in user's sightings waiting to be sent, oldest first.
+ * @property isWaitingSheetOpen true while the "Waiting to send" sheet is shown.
+ * @property waitingDeleteId the waiting sighting whose deletion is being confirmed, or null.
+ * @property sentSighting a waiting sighting that was just sent, for the "was sent" snackbar.
  */
 data class HomeUiState(
     val userName: String = "",
@@ -51,6 +76,10 @@ data class HomeUiState(
     val distanceTexts: Map<String, String> = emptyMap(),
     val isOffline: Boolean = false,
     val errorMessage: String? = null,
+    val waitingSightings: List<WaitingSighting> = emptyList(),
+    val isWaitingSheetOpen: Boolean = false,
+    val waitingDeleteId: String? = null,
+    val sentSighting: WaitingSighting? = null,
 ) {
   /** The open alert of each missing pet, by pet id: those are missing, the others are safe. */
   val alertByPetId: Map<String, Alert>
