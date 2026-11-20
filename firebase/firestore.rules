@@ -83,6 +83,18 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
+    // users/{uid}/blocks/{blockedUid}: the users {uid} blocked, written by BlockRepositoryFirestore.
+    // Private to its owner: nobody else can read it, and the blocked user isn't told. One document
+    // per blocked user, holding only its uid; blocking yourself is refused.
+    match /users/{userId}/blocks/{blockedUid} {
+      allow read, delete: if isOwner(userId);
+      // Blocking someone already blocked writes the same document again, so update is allowed too
+      allow create, update: if isOwner(userId)
+          && blockedUid != userId
+          && request.resource.data.keys().hasOnly(['blockedUid'])
+          && request.resource.data.blockedUid == blockedUid;
+    }
+
     match /pets/{petId} {
       // Optional details (#388): absent in older pets, else one of the allowed values. The birth
       // year can't be in the future; null means "not given" for it and for the breed id.
