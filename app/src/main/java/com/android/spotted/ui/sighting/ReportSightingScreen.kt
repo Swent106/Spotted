@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
@@ -75,7 +77,9 @@ object ReportSightingScreenTestTags {
   const val PHOTO_CHECKING = "sighting_photoChecking"
   const val PHOTO_WARNING = "sighting_photoWarning"
   const val PHOTO_REQUIRED = "sighting_photoRequired"
-  const val SAVED_OFFLINE = "sighting_savedOffline"
+  const val OFFLINE_BANNER = "reportSighting_offlineBanner"
+  const val SAVED_DIALOG = "reportSighting_savedDialog"
+  const val BACK_HOME = "reportSighting_backHome"
 }
 
 @Composable
@@ -88,6 +92,7 @@ fun ReportSightingContent(
     onDirectionSelected: (Double?) -> Unit = {},
     onSubmitClick: () -> Unit = {},
     onBack: (() -> Unit)? = null,
+    onSavedOfflineDone: () -> Unit = {},
 ) {
   val photoPickerActions =
       rememberPhotoPickerActions(onPhotoSelected = onPhotoSelected, onCameraUnavailable = {})
@@ -363,39 +368,13 @@ fun ReportSightingContent(
           onDirectionSelected = onDirectionSelected,
       )
 
-      // Offline Banner, replaced by the saved message once the sighting is queued
-      if (state.isOffline && !state.savedOffline) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier.fillMaxWidth()
-                    .background(SpottedTheme.colors.warningTint, RoundedCornerShape(12.dp))
-                    .padding(14.dp),
-        ) {
-          Text("⚠", style = jakarta(18, 22f, 700, SpottedTheme.colors.warning))
-          Spacer(Modifier.width(10.dp))
-          Column {
-            Text("You are offline", style = jakarta(13, 18f, 700, SpottedTheme.colors.warning))
-            Text(
-                "Saved on your phone, sent when signal is back",
-                style = jakarta(11, 15f, 500, SpottedTheme.colors.warning),
-            )
-          }
-        }
+      // Offline banner: stays under the "Saved on your phone" dialog, as in the Figma
+      if (state.isOffline) {
+        OfflineBanner()
       }
 
-      // Saved offline message, loader or Submit Button
-      if (state.savedOffline) {
-        Text(
-            stringResource(R.string.sighting_saved_offline),
-            modifier =
-                Modifier.fillMaxWidth()
-                    .background(SpottedTheme.colors.surface, RoundedCornerShape(12.dp))
-                    .padding(14.dp)
-                    .testTag(ReportSightingScreenTestTags.SAVED_OFFLINE),
-            style = jakarta(14, 18f, 700, SpottedTheme.colors.ink, TextAlign.Center),
-        )
-      } else if (state.isSubmitting) {
+      // Loader or Submit Button
+      if (state.isSubmitting) {
         Box(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             contentAlignment = Alignment.Center,
@@ -436,6 +415,99 @@ fun ReportSightingContent(
             msg,
             modifier = Modifier.fillMaxWidth().testTag(ReportSightingScreenTestTags.ERROR_MESSAGE),
             style = jakarta(13, 18f, 600, SpottedTheme.colors.error, TextAlign.Center),
+        )
+      }
+    }
+  }
+
+  if (state.savedOffline) {
+    val petName =
+        state.nearbyAlerts
+            .firstOrNull { it.alertId == state.selectedAlertId }
+            ?.petName
+            .takeIf { !state.isNoMatchingAlertSelected }
+    SavedOfflineDialog(petName = petName, onDone = onSavedOfflineDone)
+  }
+}
+
+/** "You are offline" banner, from the Figma frame "10 · Report a sighting". */
+@Composable
+private fun OfflineBanner() {
+  Row(
+      verticalAlignment = Alignment.CenterVertically,
+      modifier =
+          Modifier.fillMaxWidth()
+              .background(SpottedTheme.colors.warningTint, RoundedCornerShape(12.dp))
+              .padding(14.dp)
+              .testTag(ReportSightingScreenTestTags.OFFLINE_BANNER),
+  ) {
+    Icon(
+        painterResource(R.drawable.ic_cloud_off),
+        contentDescription = null,
+        tint = SpottedTheme.colors.warning,
+        modifier = Modifier.size(22.dp),
+    )
+    Spacer(Modifier.width(10.dp))
+    Column {
+      Text(
+          stringResource(R.string.sighting_offline_title),
+          style = jakarta(13, 18f, 700, SpottedTheme.colors.warning),
+      )
+      Text(
+          stringResource(R.string.sighting_offline_text),
+          style = jakarta(11, 15f, 500, SpottedTheme.colors.warning),
+      )
+    }
+  }
+}
+
+/**
+ * "Saved on your phone", from the Figma frame "10c · Report a sighting · Saved offline": shown once
+ * the sighting is queued. [petName] is the pet of the chosen alert, if any. Back to Home, or
+ * dismissing it, calls [onDone].
+ */
+@Composable
+private fun SavedOfflineDialog(petName: String?, onDone: () -> Unit) {
+  Dialog(onDismissRequest = onDone) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier =
+            Modifier.fillMaxWidth()
+                .background(SpottedTheme.colors.surface, RoundedCornerShape(24.dp))
+                .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 18.dp)
+                .testTag(ReportSightingScreenTestTags.SAVED_DIALOG),
+    ) {
+      Box(
+          modifier = Modifier.size(64.dp).background(SpottedTheme.colors.warningTint, CircleShape),
+          contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+            painterResource(R.drawable.ic_cloud_off),
+            contentDescription = null,
+            tint = SpottedTheme.colors.warning,
+            modifier = Modifier.size(30.dp),
+        )
+      }
+      Text(
+          stringResource(R.string.sighting_saved_offline_title),
+          style = jakarta(20, 25f, 800, SpottedTheme.colors.ink, TextAlign.Center),
+      )
+      Text(
+          if (petName != null) stringResource(R.string.sighting_saved_offline_text_pet, petName)
+          else stringResource(R.string.sighting_saved_offline_text),
+          style = jakarta(13, 18f, 500, SpottedTheme.colors.textSecondary, TextAlign.Center),
+      )
+      Button(
+          onClick = onDone,
+          colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
+          shape = RoundedCornerShape(14.dp),
+          modifier =
+              Modifier.fillMaxWidth().height(49.dp).testTag(ReportSightingScreenTestTags.BACK_HOME),
+      ) {
+        Text(
+            stringResource(R.string.sighting_back_home),
+            style = jakarta(15, 19f, 700, SpottedTheme.colors.onAccent),
         )
       }
     }
@@ -565,5 +637,7 @@ fun ReportSightingScreen(
       onDirectionSelected = { degrees -> viewModel.setDirection(degrees?.roundToInt()) },
       onSubmitClick = viewModel::submitSighting,
       onBack = onBack,
+      // The sighting is queued: the form is done, as after an online send
+      onSavedOfflineDone = onSubmitted,
   )
 }

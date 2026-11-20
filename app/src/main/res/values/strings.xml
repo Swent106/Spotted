@@ -93,7 +93,12 @@
     <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
     <string name="sighting_photo_required">Add a photo: with no matching alert, it\'s how the owner will recognise their pet.</string>
     <string name="sighting_no_missing_pet_matches_nearby">No missing pet matches nearby</string>
-    <string name="sighting_saved_offline">Saved, it will be sent when you\'re back online</string>
+    <string name="sighting_offline_title">You are offline</string>
+    <string name="sighting_offline_text">Saved on your phone, sent when signal is back</string>
+    <string name="sighting_saved_offline_title">Saved on your phone</string>
+    <string name="sighting_saved_offline_text_pet">We\'ll send your sighting of %1$s as soon as you\'re back online. You don\'t need to keep the app open.</string>
+    <string name="sighting_saved_offline_text">We\'ll send your sighting as soon as you\'re back online. You don\'t need to keep the app open.</string>
+    <string name="sighting_back_home">Back to Home</string>
     <string name="notification_channel_sightings">Sightings</string>
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
