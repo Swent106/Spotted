@@ -11,9 +11,11 @@ import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeTrustRepository
 import com.android.spotted.model.trust.TrustLevel
+import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -309,6 +311,50 @@ class HelperProfileViewModelTest {
   @Test
   fun trustLevel_withoutTrustRepository_isNull() {
     assertNull(viewModel().uiState.value.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_readSucceedsThenReloadFails_isNull() {
+    val trustRepository = FakeTrustRepository(trusts = mapOf(uid to TrustScore(0.9, 10)))
+    val viewModel = viewModelWith(trustRepository)
+    assertEquals(TrustLevel.VERY_TRUSTED, viewModel.uiState.value.trustLevel)
+
+    trustRepository.failure = IllegalStateException("offline")
+    viewModel.load()
+
+    assertNull(viewModel.uiState.value.trustLevel)
+  }
+
+  @Test
+  fun trustLevel_olderReadFinishingLast_isIgnored() {
+    val trustRepository = ControlledTrustRepository()
+    val viewModel =
+        HelperProfileViewModel(
+            userRepository,
+            authRepository,
+            petRepository,
+            alertRepository,
+            trustRepository = trustRepository,
+        )
+    viewModel.load()
+    viewModel.load()
+    val (older, latest) = trustRepository.pendingReads
+
+    latest.complete(Result.success(TrustScore(0.9, 10)))
+    older.complete(Result.success(TrustScore(0.2, 5)))
+
+    assertEquals(TrustLevel.VERY_TRUSTED, viewModel.uiState.value.trustLevel)
+  }
+
+  /** [TrustRepository] whose reads finish only when the test completes them, in any order. */
+  private class ControlledTrustRepository : TrustRepository {
+    val pendingReads = mutableListOf<CompletableDeferred<Result<TrustScore>>>()
+
+    override suspend fun getTrust(uid: String): Result<TrustScore> =
+        CompletableDeferred<Result<TrustScore>>().also { pendingReads += it }.await()
+
+    override suspend fun confirmSighting(sightingId: String): Result<Unit> =
+        error("Not used by the profile")
   }
 
   private suspend fun addRexAndHisAlert() {

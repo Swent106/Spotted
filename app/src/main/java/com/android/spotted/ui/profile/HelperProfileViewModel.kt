@@ -49,6 +49,9 @@ class HelperProfileViewModel(
   private val _uiState = MutableStateFlow(HelperProfileUiState())
   val uiState: StateFlow<HelperProfileUiState> = _uiState.asStateFlow()
 
+  /** Id of the latest trust read; an older read finishing after it is ignored. */
+  private var trustRequestId = 0L
+
   /**
    * Loads the signed-in user's profile. The screen calls it each time it is shown, so changes made
    * in the profile form appear when coming back.
@@ -83,12 +86,18 @@ class HelperProfileViewModel(
   /**
    * Reads the trust level apart from the profile, so a failed read never hides the profile. The
    * level is extra information: if the read fails, none is shown and no error either.
+   *
+   * Only the latest read updates the state: an older one finishing last (e.g. after another user
+   * signed in) is ignored.
    */
   private fun loadTrustLevel(uid: String) {
     val repository = trustRepository ?: return
+    val requestId = ++trustRequestId
     viewModelScope.launch {
       val level = repository.getTrust(uid).getOrNull()?.level
-      _uiState.update { it.copy(trustLevel = level) }
+      if (requestId == trustRequestId) {
+        _uiState.update { it.copy(trustLevel = level) }
+      }
     }
   }
 
