@@ -94,9 +94,9 @@ class HelperProfileViewModel(
     val repository = trustRepository ?: return
     val requestId = ++trustRequestId
     viewModelScope.launch {
-      val level = repository.getTrust(uid).getOrNull()?.level
+      val trust = repository.getTrust(uid).getOrNull()
       if (requestId == trustRequestId) {
-        _uiState.update { it.copy(trustLevel = level) }
+        _uiState.update { it.copy(trust = trust) }
       }
     }
   }

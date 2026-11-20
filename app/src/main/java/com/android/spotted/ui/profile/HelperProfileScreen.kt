@@ -53,6 +53,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.spotted.R
+import com.android.spotted.model.trust.TrustLevel
+import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.ui.home.TabBar
 import com.android.spotted.ui.home.TabIndex
 import com.android.spotted.ui.theme.SpottedTheme
@@ -68,6 +70,8 @@ object HelperProfileTestTags {
   const val ACCOUNT_BUTTON = "helperProfile_accountButton"
   const val ACCOUNT_BUTTON_VISUAL = "helperProfile_accountButtonVisual"
   const val PETS_BROUGHT_HOME = "helperProfile_petsBroughtHome"
+  const val TRUST_LEVEL = "helperProfile_trustLevel"
+  const val TRUST_JUDGED = "helperProfile_trustJudged"
   const val EDIT_PROFILE = "helperProfile_editProfile"
   const val ERROR = "helperProfile_error"
   const val ACCOUNT_OPTIONS = "helperProfile_accountOptions"
@@ -182,6 +186,7 @@ fun HelperProfileContent(
               modifier = Modifier.testTag(HelperProfileTestTags.ERROR),
           )
         }
+        state.trust?.let { TrustLevelCard(it) }
         PetsBroughtHome(state.petsBroughtHome)
         SectionLabel("BADGES")
         Badges(state)
@@ -289,6 +294,45 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
         )
       }
     }
+  }
+}
+
+/**
+ * Blue card (Figma "13b · Helper profile · Trust level"): the user's trust level, and how many of
+ * their sightings it is based on. Shown only once the trust is loaded.
+ */
+@Composable
+private fun TrustLevelCard(trust: TrustScore) {
+  val label =
+      when (trust.level) {
+        TrustLevel.NEW -> "New"
+        TrustLevel.LOW -> "Low"
+        TrustLevel.TRUSTED -> "Trusted"
+        TrustLevel.VERY_TRUSTED -> "Very trusted"
+      }
+  Column(
+      verticalArrangement = Arrangement.spacedBy(12.dp),
+      modifier =
+          Modifier.fillMaxWidth()
+              .clip(RoundedCornerShape(22.dp))
+              .background(SpottedTheme.colors.blue)
+              .padding(18.dp),
+  ) {
+    Text(
+        "TRUST LEVEL",
+        style = jakarta(11, 14f, FontWeight.Bold, SpottedTheme.colors.textLabel),
+    )
+    Text(
+        "★ $label",
+        style = jakarta(25, 33f, FontWeight.ExtraBold, SpottedTheme.colors.onAccent),
+        modifier = Modifier.testTag(HelperProfileTestTags.TRUST_LEVEL),
+    )
+    Text(
+        if (trust.judged == 1) "Based on 1 judged sighting"
+        else "Based on ${trust.judged} judged sightings",
+        style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.statText),
+        modifier = Modifier.testTag(HelperProfileTestTags.TRUST_JUDGED),
+    )
   }
 }
 
