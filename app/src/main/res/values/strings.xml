@@ -98,6 +98,21 @@
     <string name="sighting_saved_offline_text_pet">We\'ll send your sighting of %1$s as soon as you\'re back online. You don\'t need to keep the app open.</string>
     <string name="sighting_saved_offline_text">We\'ll send your sighting as soon as you\'re back online. You don\'t need to keep the app open.</string>
     <string name="sighting_back_home">Back to Home</string>
+    <plurals name="home_waiting_banner_title">
+        <item quantity="one">%1$d sighting waiting to send</item>
+        <item quantity="other">%1$d sightings waiting to send</item>
+    </plurals>
+    <string name="home_waiting_banner_text">Sends automatically when you\'re back online</string>
+    <string name="home_waiting_sheet_title">Waiting to send</string>
+    <string name="home_waiting_sheet_text">Sent automatically when you\'re back online</string>
+    <string name="home_waiting_saved">Saved %1$s · %2$s</string>
+    <string name="home_waiting_delete">Delete</string>
+    <string name="home_waiting_close">Close</string>
+    <string name="home_waiting_delete_title">Delete this sighting?</string>
+    <string name="home_waiting_delete_text">It won\'t be sent, and its photo is removed from your phone.</string>
+    <string name="home_waiting_keep">Keep it</string>
+    <string name="home_sighting_sent_pet">Your sighting of %1$s was sent</string>
+    <string name="home_sighting_sent">Your sighting was sent</string>
     <string name="notification_channel_sightings">Sightings</string>
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
