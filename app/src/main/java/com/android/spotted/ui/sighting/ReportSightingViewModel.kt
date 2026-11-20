@@ -11,6 +11,7 @@ import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.network.NetworkMonitorAndroid
 import com.android.spotted.data.photo.AnimalDetectorMlKit
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
+import com.android.spotted.data.sighting.PendingSightingRepositoryProvider
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
@@ -486,8 +487,7 @@ class ReportSightingViewModel(
                 authRepository = AuthRepositoryProvider.authRepository,
                 alertRepository = AlertRepositoryFirestore(),
                 animalDetector = AnimalDetectorMlKit(application),
-                // TODO(#444): PendingSightingRepositoryProvider.get(application) once it is merged
-                pendingSightingRepository = null,
+                pendingSightingRepository = PendingSightingRepositoryProvider.get(application),
                 networkMonitor = NetworkMonitorAndroid(application),
             )
                 as T
