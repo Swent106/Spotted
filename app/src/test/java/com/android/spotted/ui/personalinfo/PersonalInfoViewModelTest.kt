@@ -680,6 +680,39 @@ class PersonalInfoViewModelTest {
       }
 
   @Test
+  fun typingAgain_hidesThePreviousSuggestionsUntilTheNewSearchAnswers() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy))
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+        assertEquals(listOf(ouchy), typing.uiState.value.addressSuggestions)
+
+        addresses.suggestions = listOf(flon)
+        typing.onHomeAreaChanged("Flo")
+        runCurrent()
+        assertTrue("old results hidden", typing.uiState.value.addressSuggestions.isEmpty())
+
+        advanceUntilIdle()
+        assertEquals(listOf(flon), typing.uiState.value.addressSuggestions)
+      }
+
+  @Test
+  fun typingAgain_hidesThePreviousNoPlaceFound() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = emptyList())
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Xyzzy")
+        advanceUntilIdle()
+        assertTrue(typing.uiState.value.isNoPlaceFound)
+
+        typing.onHomeAreaChanged("Lausanne")
+        runCurrent()
+
+        assertFalse(typing.uiState.value.isNoPlaceFound)
+      }
+
+  @Test
   fun typingAPlaceThatDoesNotExist_saysNoPlaceIsFound() =
       runTest(testDispatcher) {
         val typing = viewModelWithAddresses(FakeAddressRepository(suggestions = emptyList()))

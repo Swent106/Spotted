@@ -150,11 +150,11 @@ class PersonalInfoViewModel(
   private fun searchSuggestions(query: String) {
     // Each keystroke restarts the wait, so only the last text typed is searched
     suggestionSearch?.cancel()
+    // The previous results belong to the previous text: hide them while the new search runs, so
+    // the user can't pick a place that doesn't match what is typed
+    closeSuggestions()
     val repository = addressRepository
-    if (repository == null || query.length < MIN_SUGGESTION_QUERY_LENGTH) {
-      closeSuggestions()
-      return
-    }
+    if (repository == null || query.length < MIN_SUGGESTION_QUERY_LENGTH) return
     suggestionSearch = viewModelScope.launch {
       delay(SUGGESTION_DEBOUNCE_MS)
       repository
