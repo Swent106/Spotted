@@ -10,12 +10,14 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
+import com.android.spotted.data.trust.TrustRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.photo.PhotoRepository
+import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Helper profile: the signed-in user's name and area, and the account actions.
+ * Helper profile: the signed-in user's name, area and trust level, and the account actions.
  *
  * Signing out or deleting the account clears the signed-in user, so MainViewModel sends the app
  * back to Sign in; this ViewModel does not navigate itself.
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
  * @property authRepository gives the signed-in user, signs out and deletes the account.
  * @property petRepository deletes the user's pets with the account.
  * @property alertRepository deletes the user's alerts with the account.
+ * @property trustRepository reads the user's trust level; without it, no level is shown.
  */
 class HelperProfileViewModel(
     private val userRepository: UserRepository,
@@ -40,10 +43,14 @@ class HelperProfileViewModel(
     private val petRepository: PetRepository,
     private val alertRepository: AlertRepository,
     private val photoRepository: PhotoRepository? = null,
+    private val trustRepository: TrustRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HelperProfileUiState())
   val uiState: StateFlow<HelperProfileUiState> = _uiState.asStateFlow()
+
+  /** Id of the latest trust read; an older read finishing after it is ignored. */
+  private var trustRequestId = 0L
 
   /**
    * Loads the signed-in user's profile. The screen calls it each time it is shown, so changes made
@@ -72,6 +79,25 @@ class HelperProfileViewModel(
                 _uiState.update { it.copy(isLoading = false, errorMessage = LOAD_FAILED) }
               },
           )
+    }
+    loadTrustLevel(user.uid)
+  }
+
+  /**
+   * Reads the trust level apart from the profile, so a failed read never hides the profile. The
+   * level is extra information: if the read fails, none is shown and no error either.
+   *
+   * Only the latest read updates the state: an older one finishing last (e.g. after another user
+   * signed in) is ignored.
+   */
+  private fun loadTrustLevel(uid: String) {
+    val repository = trustRepository ?: return
+    val requestId = ++trustRequestId
+    viewModelScope.launch {
+      val level = repository.getTrust(uid).getOrNull()?.level
+      if (requestId == trustRequestId) {
+        _uiState.update { it.copy(trustLevel = level) }
+      }
     }
   }
 
@@ -156,6 +182,7 @@ class HelperProfileViewModel(
             petRepository = PetRepositoryFirestore(photoRepository = photoRepository),
             alertRepository = AlertRepositoryFirestore(),
             photoRepository = photoRepository,
+            trustRepository = TrustRepositoryFirestore(),
         )
       }
     }
