@@ -51,6 +51,8 @@ data class HomeUiState(
     val distanceTexts: Map<String, String> = emptyMap(),
     val isOffline: Boolean = false,
     val errorMessage: String? = null,
+    /** New sightings waiting for the user's review on their alerts: the badge on the bell. */
+    val pendingSightings: Int = 0,
 ) {
   /** The open alert of each missing pet, by pet id: those are missing, the others are safe. */
   val alertByPetId: Map<String, Alert>
