@@ -50,6 +50,7 @@ class PersonalInfoScreenTest {
 
   private val validState =
       PersonalInfoUiState(
+          username = "rayen",
           firstName = "Rayen",
           lastName = "Ben Ali",
           name = "Rayen Ben Ali",
@@ -99,7 +100,18 @@ class PersonalInfoScreenTest {
             MapPickerTestTags.MAP,
         )
         .forEach { composeTestRule.onNodeWithTag(it).performScrollTo().assertIsDisplayed() }
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.USERNAME_HINT)
+        .assertTextEquals("Choose a username")
     button().assertIsDisplayed().assertIsNotEnabled()
+  }
+
+  @Test
+  fun withAUsername_theHintIsHidden() {
+    setContent(validState)
+
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.USERNAME_HINT).assertDoesNotExist()
+    button().assertIsEnabled()
   }
 
   @Test
@@ -259,6 +271,7 @@ class PersonalInfoScreenTest {
       if (isShown) PersonalInfoScreen(viewModel = viewModel, onSaved = { savedCalls++ })
     }
 
+    viewModel.onUsernameChanged("rayen")
     viewModel.onFirstNameChanged("Rayen")
     viewModel.onHomeAreaChanged("Plainpalais, Geneva")
     button().performClick()
@@ -291,6 +304,11 @@ class PersonalInfoScreenTest {
         .onNodeWithTag(PersonalInfoScreenTestTags.HOME_AREA_INPUT)
         .performScrollTo()
         .performTextInput("Plainpalais, Geneva")
+    button().assertIsNotEnabled()
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.USERNAME_INPUT)
+        .performScrollTo()
+        .performTextInput("rayen")
 
     button().assertIsEnabled()
   }

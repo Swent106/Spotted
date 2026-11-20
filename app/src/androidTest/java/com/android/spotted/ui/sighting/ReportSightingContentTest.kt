@@ -263,6 +263,33 @@ class ReportSightingContentTest {
   }
 
   @Test
+  fun savedOffline_showsTheMessageInsteadOfTheSendButton() {
+    composeTestRule.setContent {
+      ReportSightingContent(state = ReportSightingUiState(savedOffline = true))
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SAVED_OFFLINE)
+        .performScrollTo()
+        .assertIsDisplayed()
+        .assertTextEquals("Saved, it will be sent when you're back online")
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
+  fun savedOffline_hidesTheOfflineBanner() {
+    composeTestRule.setContent {
+      ReportSightingContent(state = ReportSightingUiState(isOffline = true, savedOffline = true))
+    }
+
+    composeTestRule.onNodeWithText("You are offline").assertDoesNotExist()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SAVED_OFFLINE)
+        .performScrollTo()
+        .assertIsDisplayed()
+  }
+
+  @Test
   fun nearbyAlert_withPhotoUrl_and_selectedState_rendersCorrectly() {
     val state =
         ReportSightingUiState(

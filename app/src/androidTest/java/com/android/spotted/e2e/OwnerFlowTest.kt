@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.e2e
 
 import androidx.compose.ui.test.assertIsEnabled
@@ -67,7 +68,7 @@ class OwnerFlowTest : EndToEndTest() {
     // SystemNotifierInstrumentedTest.
     // TODO(#356): once the notifications screen and bell badge land, assert the bell shows a badge
     // of 1 here, open Notifications from the bell, and open My alert from the notification.
-    confirmSightingAndCloseAlert(alertId, sightingId, ownerId)
+    confirmSightingAndCloseAlert(petId, sightingId, ownerId)
     // #376: with the pet home and its alert closed, it can be reported missing again.
     assertReportableAgain(petId)
     signOut()
@@ -85,6 +86,9 @@ class OwnerFlowTest : EndToEndTest() {
     waitFor(PersonalInfoScreenTestTags.SCREEN, "Personal info should open for a new account")
     node(PersonalInfoScreenTestTags.FIRST_NAME_INPUT).performScrollTo().performTextInput(firstName)
     node(PersonalInfoScreenTestTags.LAST_NAME_INPUT).performScrollTo().performTextInput("Tester")
+    node(PersonalInfoScreenTestTags.USERNAME_INPUT)
+        .performScrollTo()
+        .performTextInput(firstName.lowercase())
     node(PersonalInfoScreenTestTags.HOME_AREA_INPUT).performScrollTo().performTextInput("Lausanne")
     // Home searches alerts around the home pin. Without one it geocodes the home area, which
     // fails on emulators. A tap in the middle of the map pins the home where the alert will be
@@ -137,9 +141,20 @@ class OwnerFlowTest : EndToEndTest() {
 
     val alert = documents("alerts", "ownerId", ownerId).single()
     val alertId = alert[DOCUMENT_ID] as String
-    waitFor(HomeScreenTestTags.missingBanner(alertId), "The owner should see their pet as missing")
+    val petId = documents("pets", "ownerId", ownerId).single()[DOCUMENT_ID] as String
+    waitUntil("The owner should see their pet as missing") { showsMissing(petId) }
     return alertId
   }
+
+  /**
+   * True when Home shows the pet's card as missing. The "Missing" chip is merged into the clickable
+   * card, so it is looked up in the unmerged tree.
+   */
+  private fun showsMissing(petId: String): Boolean =
+      composeTestRule
+          .onAllNodes(hasTestTag(HomeScreenTestTags.missingBadge(petId)), useUnmergedTree = true)
+          .fetchSemanticsNodes()
+          .isNotEmpty()
 
   /** The passerby finds the alert on Home and reports seeing the pet. Returns the sighting's id. */
   private fun reportSightingOf(alertId: String, reporterId: String): String {
@@ -177,17 +192,17 @@ class OwnerFlowTest : EndToEndTest() {
   }
 
   /** The owner opens My alert from Home, confirms the sighting and says the pet is home. */
-  private fun confirmSightingAndCloseAlert(alertId: String, sightingId: String, ownerId: String) {
-    val banner = HomeScreenTestTags.missingBanner(alertId)
+  private fun confirmSightingAndCloseAlert(petId: String, sightingId: String, ownerId: String) {
+    val card = HomeScreenTestTags.petCard(petId)
     waitUntil("The owner should see their missing pet on Home") {
       runCatching {
-            node(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(banner))
+            node(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(card))
             true
           }
-          .getOrDefault(false)
+          .getOrDefault(false) && showsMissing(petId)
     }
-    node(banner).scrollToAndClick()
-    waitFor(MyAlertScreenTestTags.SCREEN, "The missing pet banner should open My alert")
+    node(card).scrollToAndClick()
+    waitFor(MyAlertScreenTestTags.SCREEN, "The missing pet's card should open My alert")
 
     val status = MyAlertScreenTestTags.status(sightingId)
     waitFor(MyAlertScreenTestTags.sighting(sightingId), "My alert should list the sighting")
@@ -203,7 +218,7 @@ class OwnerFlowTest : EndToEndTest() {
     waitFor(MyAlertScreenTestTags.PET_HOME_DIALOG, "\"My pet is home\" should ask to confirm")
     node(MyAlertScreenTestTags.PET_HOME_CONFIRM).performClick()
     waitFor(HomeScreenTestTags.SCREEN, "Home should show again once the alert is closed")
-    waitUntil("The missing pet banner should disappear") { !exists(banner) }
+    waitUntil("The pet's card should no longer be missing") { !showsMissing(petId) }
 
     val alert = documents("alerts", "ownerId", ownerId).single()
     assertEquals("The alert should be closed", "CLOSED", alert["status"])

@@ -365,6 +365,34 @@ class AlertDetailViewModelTest {
       }
 
   @Test
+  fun placeName_isWhereThePetWasLastSeen() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("alert-1"))
+        val viewModel =
+            AlertDetailViewModel(alertRepository, addressRepository = FakeAddressRepository())
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertEquals("Ouchy, Lausanne", viewModel.uiState.value.placeName)
+      }
+
+  @Test
+  fun placeName_whenThePlaceCantBeNamed_isNull() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("alert-1"))
+        val addressRepository =
+            FakeAddressRepository().apply { failure = NoSuchElementException("no name") }
+        val viewModel = AlertDetailViewModel(alertRepository, addressRepository = addressRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.placeName)
+        assertEquals("alert-1", viewModel.uiState.value.alert?.id)
+      }
+
+  @Test
   fun factory_createUnsupportedClass_throwsIllegalArgumentException() {
     assertThrows(IllegalArgumentException::class.java) {
       AlertDetailViewModel.Factory.create(OtherViewModel::class.java)

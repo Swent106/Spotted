@@ -63,6 +63,7 @@ import kotlinx.coroutines.launch
 object HelperProfileTestTags {
   const val SCREEN = "helperProfile_screen"
   const val NAME = "helperProfile_name"
+  const val USERNAME = "helperProfile_username"
   const val AREA = "helperProfile_area"
   const val ACCOUNT_BUTTON = "helperProfile_accountButton"
   const val ACCOUNT_BUTTON_VISUAL = "helperProfile_accountButtonVisual"
@@ -241,6 +242,14 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
             maxLines = 1,
             modifier = Modifier.testTag(HelperProfileTestTags.NAME),
         )
+        if (state.username.isNotBlank()) {
+          Text(
+              "@${state.username}",
+              style = jakarta(12, 16f, FontWeight.SemiBold, SpottedTheme.colors.blue),
+              maxLines = 1,
+              modifier = Modifier.testTag(HelperProfileTestTags.USERNAME),
+          )
+        }
         Text(
             if (state.homeArea.isBlank()) "Helping out nearby"
             else "Helping out in ${state.homeArea}",

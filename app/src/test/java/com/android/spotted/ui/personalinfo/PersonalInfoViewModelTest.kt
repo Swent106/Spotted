@@ -80,6 +80,7 @@ class PersonalInfoViewModelTest {
 
   @Test
   fun fieldChanges_areImmediatelyReflectedInState() {
+    viewModel.onUsernameChanged("jamie")
     viewModel.onFirstNameChanged("Jamie")
     viewModel.onHomeAreaChanged("Lausanne")
 
@@ -102,6 +103,7 @@ class PersonalInfoViewModelTest {
 
   @Test
   fun firstNameOnly_isEnoughForName() {
+    viewModel.onUsernameChanged("jamie")
     viewModel.onFirstNameChanged("Rayen")
     viewModel.onHomeAreaChanged("Plainpalais, Geneva")
 
@@ -110,11 +112,37 @@ class PersonalInfoViewModelTest {
   }
 
   @Test
-  fun usernameChange_isReflectedInState() {
+  fun usernameChange_isReflectedInState_andCutToTheMaximumLength() {
     viewModel.onUsernameChanged("@rayen.gva")
-
     assertEquals("@rayen.gva", viewModel.uiState.value.username)
+
+    viewModel.onUsernameChanged("x".repeat(40))
+
+    assertEquals("x".repeat(UserProfile.MAX_USERNAME_LENGTH), viewModel.uiState.value.username)
   }
+
+  @Test
+  fun saveProfile_withoutAUsername_doesNotSave_andASavedOneIsLoadedBackForEditing() =
+      runTest(testDispatcher) {
+        viewModel.onFirstNameChanged("Jamie")
+        viewModel.onHomeAreaChanged("Lausanne")
+        listOf("", "  ", "@", " @ ").forEach { blank ->
+          viewModel.onUsernameChanged(blank)
+          assertFalse("'$blank' is not a username", viewModel.uiState.value.canSave)
+        }
+        viewModel.saveProfile()
+        advanceUntilIdle()
+        assertEquals(0, userRepository.saveCalls)
+
+        viewModel.onUsernameChanged(" @jamie ")
+        viewModel.saveProfile()
+        advanceUntilIdle()
+        assertEquals("jamie", userRepository.getUser("user-1").getOrThrow().username)
+
+        val reopened = viewModelFor(userRepository)
+        advanceUntilIdle()
+        assertEquals("jamie", reopened.uiState.value.username)
+      }
 
   @Test
   fun alertRadius_defaultsToThreeKm_andAcceptsOnlyListedOptions() {
@@ -142,6 +170,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_withMissingHomeArea_doesNotSave() =
       runTest(testDispatcher) {
+        viewModel.onUsernameChanged("jamie")
         viewModel.onFirstNameChanged("Jamie")
 
         viewModel.saveProfile()
@@ -167,6 +196,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_withValidFieldsPersistsTrimmedProfile() =
       runTest(testDispatcher) {
+        viewModel.onUsernameChanged(" @jamie ")
         viewModel.onFirstNameChanged(" Jamie ")
         viewModel.onHomeAreaChanged(" Lausanne ")
 
@@ -174,6 +204,7 @@ class PersonalInfoViewModelTest {
         advanceUntilIdle()
 
         val savedUser = userRepository.getUser("user-1").getOrThrow()
+        assertEquals("jamie", savedUser.username)
         assertEquals("Jamie", savedUser.name)
         assertEquals("Lausanne", savedUser.homeArea)
         assertEquals("jamie@example.com", savedUser.email)
@@ -184,6 +215,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_doubleTapSavesOnlyOnce() =
       runTest(testDispatcher) {
+        viewModel.onUsernameChanged("jamie")
         viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
 
@@ -200,6 +232,7 @@ class PersonalInfoViewModelTest {
       runTest(testDispatcher) {
         // Lets the profile load finish first, so only the save fails
         advanceUntilIdle()
+        viewModel.onUsernameChanged("jamie")
         viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
 
@@ -233,6 +266,7 @@ class PersonalInfoViewModelTest {
 
         // Back online, the user fills the empty form and taps the button
         userRepository.failure = null
+        editViewModel.onUsernameChanged("jamie")
         editViewModel.onFirstNameChanged("Someone")
         editViewModel.onHomeAreaChanged("Elsewhere")
         editViewModel.saveProfile()
@@ -253,6 +287,7 @@ class PersonalInfoViewModelTest {
         val editViewModel = viewModelFor(userRepository)
 
         // Tapped before the load has run: the form is still empty apart from what was typed
+        editViewModel.onUsernameChanged("jamie")
         editViewModel.onFirstNameChanged("Someone")
         editViewModel.onHomeAreaChanged("Elsewhere")
         editViewModel.saveProfile()
@@ -273,6 +308,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun onSavedHandled_resetsSavedFlag() =
       runTest(testDispatcher) {
+        viewModel.onUsernameChanged("jamie")
         viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
         viewModel.saveProfile()
@@ -287,6 +323,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun editingAfterSuccessfulSave_resetsSavedFlag() =
       runTest(testDispatcher) {
+        viewModel.onUsernameChanged("jamie")
         viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
         viewModel.saveProfile()
@@ -302,7 +339,12 @@ class PersonalInfoViewModelTest {
   @Test
   fun canSave_staysTrueWithErrorMessage_soUserCanRetry() {
     val failed =
-        PersonalInfoUiState(name = "Jamie", homeArea = "Lausanne", errorMessage = "Save failed")
+        PersonalInfoUiState(
+            username = "jamie",
+            name = "Jamie",
+            homeArea = "Lausanne",
+            errorMessage = "Save failed",
+        )
 
     assertTrue(failed.canSave)
   }
@@ -316,6 +358,7 @@ class PersonalInfoViewModelTest {
           homeArea = "Ouchy, Lausanne",
           homeLocation = Location(46.507, 6.627),
           alertRadiusKm = 10,
+          username = "jamie",
       )
 
   private fun viewModelFor(userRepository: FakeUserRepository) =
@@ -429,6 +472,7 @@ class PersonalInfoViewModelTest {
                 homeArea = "Ouchy, Lausanne",
                 homeLocation = Location(46.507, 6.627),
                 alertRadiusKm = 10,
+                username = "jamie",
             )
         )
         val editViewModel =
@@ -440,6 +484,7 @@ class PersonalInfoViewModelTest {
 
         val state = editViewModel.uiState.value
         assertTrue(state.isEditing)
+        assertEquals("jamie", state.username)
         assertEquals("Jamie", state.firstName)
         assertEquals("Lee Curtis", state.lastName)
         assertEquals("Ouchy, Lausanne", state.homeArea)
@@ -460,6 +505,7 @@ class PersonalInfoViewModelTest {
   @Test
   fun saveProfile_savesTheHomePinAndTheRadius() =
       runTest(testDispatcher) {
+        viewModel.onUsernameChanged("jamie")
         viewModel.onFirstNameChanged("Jamie")
         viewModel.onHomeAreaChanged("Lausanne")
         viewModel.onHomeLocationChanged(Location(46.52, 6.63))
@@ -493,6 +539,7 @@ class PersonalInfoViewModelTest {
                 userRepository = userRepository,
                 photoRepository = photoRepository,
             )
+        photoViewModel.onUsernameChanged("jamie")
         photoViewModel.onFirstNameChanged("Jamie")
         photoViewModel.onHomeAreaChanged("Lausanne")
         photoViewModel.onPhotoSelected("content://photos/me")
@@ -517,6 +564,7 @@ class PersonalInfoViewModelTest {
                 userRepository = userRepository,
                 photoRepository = photoRepository,
             )
+        photoViewModel.onUsernameChanged("jamie")
         photoViewModel.onFirstNameChanged("Jamie")
         photoViewModel.onHomeAreaChanged("Lausanne")
         photoViewModel.onPhotoSelected("content://photos/me")

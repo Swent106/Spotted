@@ -186,6 +186,7 @@ dependencies {
   androidTestImplementation(libs.androidx.test.runner)
   // androidTestImplementation(libs.androidx.tracing)
   implementation(libs.kotlinx.coroutines.play.services)
+  implementation(libs.work.runtime) // sends queued sightings once online
   globalTestImplementation(libs.kotlinx.coroutines.test) // unit tests and instrumented tests
   // ----------       Mockito       ------------
   testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
@@ -196,6 +197,7 @@ dependencies {
 
   // ----------       Robolectric     ------------
   testImplementation(libs.robolectric)
+  globalTestImplementation(libs.work.testing)
 
   // ------------- Credentials ------------------
   implementation("androidx.credentials:credentials:1.3.0")

@@ -5,6 +5,11 @@ package com.android.spotted.ui.sighting
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
+import com.android.spotted.model.sighting.PlaceType
 
 data class NearbyAlertOption(
     val alertId: String,
@@ -37,7 +42,14 @@ data class ReportSightingUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val submitted: Boolean = false,
+    /** Sent while offline: kept on the phone, and sent automatically once the network is back. */
+    val savedOffline: Boolean = false,
     val photoCheck: PhotoCheck = PhotoCheck.NONE,
+    val activities: Set<AnimalActivity> = emptySet(),
+    val conditions: Set<AnimalCondition> = emptySet(),
+    val reactions: Set<AnimalReaction> = emptySet(),
+    val placeType: PlaceType = PlaceType.UNKNOWN,
+    val collar: CollarStatus = CollarStatus.UNKNOWN,
 ) {
   val canSubmit: Boolean
     get() =
@@ -48,6 +60,7 @@ data class ReportSightingUiState(
             photoCheck != PhotoCheck.NO_ANIMAL &&
             !isSubmitting &&
             !submitted &&
+            !savedOffline &&
             (!isNoMatchingAlertSelected || photoCheck == PhotoCheck.ANIMAL)
 
   /**

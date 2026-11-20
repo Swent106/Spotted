@@ -4,12 +4,17 @@ package com.android.spotted.ui.report
 
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import kotlinx.coroutines.Dispatchers
@@ -262,6 +267,9 @@ class ReportMissingViewModelTest {
                 petPhotoUrl = LUNA.photoUrl,
                 petAllergies = LUNA.allergies,
                 petBehaviors = LUNA.behaviors,
+                petBirthYear = LUNA.birthYear,
+                petSex = LUNA.sex,
+                petSize = LUNA.size,
             )
         assertEquals(listOf(expected), alertRepository.publishedAlerts)
         val state = viewModel.uiState.value
@@ -471,6 +479,112 @@ class ReportMissingViewModelTest {
         assertNull(state.errorMessage)
       }
 
+  // ===================== "What happened?" step =====================
+
+  @Test
+  fun whatHappened_nothingIsPreselected() =
+      runTest(testDispatcher) {
+        val state = loadedViewModel(LUNA).uiState.value
+
+        assertFalse(state.showWhatHappened)
+        assertEquals(LossCause.UNKNOWN, state.cause)
+        assertEquals(LossEnvironment.UNKNOWN, state.environment)
+      }
+
+  @Test
+  fun openWhatHappened_withoutLocation_staysOnTheForm() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+
+        viewModel.openWhatHappened()
+
+        assertFalse(viewModel.uiState.value.showWhatHappened)
+      }
+
+  @Test
+  fun openWhatHappened_thenBackToForm_keepsTheChoices() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+
+        viewModel.openWhatHappened()
+        assertTrue(viewModel.uiState.value.showWhatHappened)
+        viewModel.setCause(LossCause.STOLEN)
+        viewModel.backToForm()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.showWhatHappened)
+        assertEquals(LossCause.STOLEN, state.cause)
+      }
+
+  @Test
+  fun publish_withCauseAndEnvironment_sendsBoth() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setCause(LossCause.DURING_A_WALK)
+        viewModel.setEnvironment(LossEnvironment.SUBURB)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.DURING_A_WALK, alert.lossCause)
+        assertEquals(LossEnvironment.SUBURB, alert.lossEnvironment)
+        assertTrue(viewModel.uiState.value.published)
+      }
+
+  @Test
+  fun publish_withOnlyTheCause_sendsAnUnknownEnvironment() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setCause(LossCause.SCARED_BY_NOISE)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.SCARED_BY_NOISE, alert.lossCause)
+        assertEquals(LossEnvironment.UNKNOWN, alert.lossEnvironment)
+      }
+
+  @Test
+  fun publish_withOnlyTheEnvironment_sendsAnUnknownCause() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setEnvironment(LossEnvironment.FOREST_OR_MOUNTAIN)
+
+        viewModel.publish()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.UNKNOWN, alert.lossCause)
+        assertEquals(LossEnvironment.FOREST_OR_MOUNTAIN, alert.lossEnvironment)
+      }
+
+  @Test
+  fun skipWhatHappened_forgetsTheChoices_andPublishesAsWithoutTheStep() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+        viewModel.setLocation(PARC_BERTRAND)
+        viewModel.openWhatHappened()
+        viewModel.setCause(LossCause.STOLEN)
+        viewModel.setEnvironment(LossEnvironment.CITY_CENTRE)
+
+        viewModel.skipWhatHappened()
+        advanceUntilIdle()
+
+        val alert = alertRepository.publishedAlerts.single()
+        assertEquals(LossCause.UNKNOWN, alert.lossCause)
+        assertEquals(LossEnvironment.UNKNOWN, alert.lossEnvironment)
+        assertTrue(viewModel.uiState.value.published)
+      }
+
   private companion object {
     /** The uid that [FakeAuthRepository] gives to every signed-in user. */
     const val OWNER_ID = "fake_uid_from_token"
@@ -489,6 +603,10 @@ class ReportMissingViewModelTest {
             photoUrl = "https://example.com/luna.jpg",
             allergies = listOf("chicken"),
             behaviors = setOf(Behavior.FEARFUL_OF_STRANGERS),
+            birthYear = 2019,
+            sex = Sex.FEMALE,
+            size = PetSize.SMALL,
+            lifestyle = Lifestyle.INDOOR_ONLY,
         )
     val MILO = pet(id = "milo", name = "Milo")
   }

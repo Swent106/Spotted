@@ -60,6 +60,7 @@ class HelperProfileViewModel(
                 _uiState.update {
                   it.copy(
                       name = profile.name,
+                      username = profile.username,
                       homeArea = profile.homeArea,
                       alertRadiusKm = profile.alertRadiusKm,
                       photoUrl = photoRepository?.profilePhotoUrl(user.uid),
