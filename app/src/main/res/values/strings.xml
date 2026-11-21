@@ -16,6 +16,18 @@
     <string name="add_pets_species_dog">Dog</string>
     <string name="add_pets_species_cat">Cat</string>
     <string name="add_pets_species_other">Other</string>
+
+    <!-- Pet details shown under the name (age, sex, size) -->
+    <string name="pet_sex_male">Male</string>
+    <string name="pet_sex_female">Female</string>
+    <string name="pet_size_small">Small</string>
+    <string name="pet_size_medium">Medium</string>
+    <string name="pet_size_large">Large</string>
+    <string name="pet_age_under_one_year">Under 1 year</string>
+    <plurals name="pet_age_years">
+        <item quantity="one">%d year</item>
+        <item quantity="other">%d years</item>
+    </plurals>
     <string name="add_pets_photo_section">PHOTO</string>
     <string name="add_pets_description_section">DESCRIPTION</string>
     <string name="add_pets_description_placeholder">Colour, size, collar…</string>

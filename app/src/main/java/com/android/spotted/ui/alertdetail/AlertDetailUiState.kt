@@ -9,6 +9,8 @@ import com.android.spotted.model.alert.Alert
  * @property distanceText "600 m away" from the device position, else from the home; null when
  *   neither is known.
  * @property placeName where the pet was last seen, e.g. "Ouchy, Lausanne"; null while unknown.
+ * @property ageYears the pet's age in whole years, from the birth year copied on the alert; null
+ *   when unknown.
  */
 data class AlertDetailUiState(
     val alert: Alert? = null,
@@ -17,4 +19,5 @@ data class AlertDetailUiState(
     val errorMessage: String? = null,
     val distanceText: String? = null,
     val placeName: String? = null,
+    val ageYears: Int? = null,
 )

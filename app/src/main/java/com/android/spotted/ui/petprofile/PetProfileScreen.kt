@@ -54,6 +54,7 @@ import com.android.spotted.ui.addpets.ChipFlow
 import com.android.spotted.ui.addpets.FormCard
 import com.android.spotted.ui.addpets.SectionLabel
 import com.android.spotted.ui.addpets.labelRes
+import com.android.spotted.ui.components.PetDetailsChips
 import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.ui.editpet.PetScreenHeader
 import com.android.spotted.ui.theme.LightSpottedColors
@@ -69,6 +70,8 @@ object PetProfileScreenTestTags {
   const val PHOTO_VIEWER_CLOSE = "pet_profile_photo_viewer_close"
   const val NAME = "pet_profile_name"
   const val SPECIES = "pet_profile_species"
+  /** Prefix of the age, sex and size chips: `pet_profile_age`, `_sex`, `_size`. */
+  const val DETAILS_PREFIX = "pet_profile"
   const val LOADING = "pet_profile_loading"
   const val ERROR = "pet_profile_error"
   const val BACK_BUTTON = "pet_profile_back_button"
@@ -195,6 +198,7 @@ fun PetProfileContent(
           state.pet != null ->
               PetDetails(
                   pet = state.pet,
+                  ageYears = state.ageYears,
                   onPhotoClick = { if (!isPhotoViewerOpen) isPhotoViewerOpen = true },
               )
           state.isLoading ->
@@ -305,7 +309,7 @@ internal fun TexturedBackground() {
 }
 
 @Composable
-private fun PetDetails(pet: Pet, onPhotoClick: () -> Unit) {
+private fun PetDetails(pet: Pet, ageYears: Int?, onPhotoClick: () -> Unit) {
   FormCard(spacing = 12.dp) {
     val photoModifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(18.dp))
     if (pet.photoUrl != null) {
@@ -357,6 +361,12 @@ private fun PetDetails(pet: Pet, onPhotoClick: () -> Unit) {
                     .testTag(PetProfileScreenTestTags.SPECIES),
         )
       }
+      PetDetailsChips(
+          ageYears = ageYears,
+          sex = pet.sex,
+          size = pet.size,
+          testTagPrefix = PetProfileScreenTestTags.DETAILS_PREFIX,
+      )
       if (pet.note.isNotBlank()) {
         Text(pet.note, style = jakarta(13, 16f, 500, SpottedTheme.colors.textSecondary))
       }
