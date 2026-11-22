@@ -1,13 +1,20 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.addpets
 
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
+import com.android.spotted.model.Pet.Microchipped
+import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.photo.FakePhotoRepository
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -24,6 +31,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/** Mid-June 2026, far from New Year in any time zone. */
+private val MID_2026 = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddPetsViewModelTest {
   private val testDispatcher = StandardTestDispatcher()
@@ -37,7 +47,7 @@ class AddPetsViewModelTest {
     Dispatchers.setMain(testDispatcher)
     petRepository = PetRepositoryLocal()
     photoRepository = FakePhotoRepository()
-    viewModel = AddPetsViewModel(user, petRepository, photoRepository)
+    viewModel = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2026 })
   }
 
   @After
@@ -382,6 +392,161 @@ class AddPetsViewModelTest {
         AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error),
         viewModel.uiState.value.errorMessage,
     )
+  }
+
+  @Test
+  fun newFieldChanges_areReflectedInState() {
+    viewModel.onBirthYearChanged(2021)
+    viewModel.onBreedIdChanged("beagle")
+    viewModel.onSexChanged(Sex.FEMALE)
+    viewModel.onNeuteredChanged(Neutered.YES)
+    viewModel.onSizeChanged(PetSize.MEDIUM)
+    viewModel.onLifestyleChanged(Lifestyle.INDOOR_AND_OUTDOOR)
+    viewModel.onMicrochippedChanged(Microchipped.NO)
+
+    val state = viewModel.uiState.value
+    assertEquals(2021, state.birthYear)
+    assertNull(state.birthYearError)
+    assertEquals("beagle", state.breedId)
+    assertEquals(Sex.FEMALE, state.sex)
+    assertEquals(Neutered.YES, state.neutered)
+    assertEquals(PetSize.MEDIUM, state.size)
+    assertEquals(Lifestyle.INDOOR_AND_OUTDOOR, state.lifestyle)
+    assertEquals(Microchipped.NO, state.microchipped)
+  }
+
+  @Test
+  fun eachNewField_countsAsFormInput() {
+    val setters: List<AddPetsViewModel.() -> Unit> =
+        listOf(
+            { onBirthYearChanged(2021) },
+            { onBreedIdChanged("beagle") },
+            { onSexChanged(Sex.MALE) },
+            { onNeuteredChanged(Neutered.NO) },
+            { onSizeChanged(PetSize.LARGE) },
+            { onLifestyleChanged(Lifestyle.OUTDOOR_ONLY) },
+            { onMicrochippedChanged(Microchipped.YES) },
+        )
+    setters.forEach { set ->
+      val fresh = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2026 })
+      fresh.set()
+      assertTrue(fresh.uiState.value.hasFormInput)
+      // Started but without a name and species: the step can't end without losing it
+      assertFalse(fresh.uiState.value.canFinish)
+    }
+  }
+
+  @Test
+  fun savePet_sendsTheNewFieldsAndClearsThem() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onBirthYearChanged(2021)
+    viewModel.onBreedIdChanged("beagle")
+    viewModel.onSexChanged(Sex.MALE)
+    viewModel.onNeuteredChanged(Neutered.YES)
+    viewModel.onSizeChanged(PetSize.LARGE)
+    viewModel.onLifestyleChanged(Lifestyle.INDOOR_ONLY)
+    viewModel.onMicrochippedChanged(Microchipped.YES)
+
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    val saved = savedPets().single()
+    assertEquals(2021, saved.birthYear)
+    assertEquals("beagle", saved.breedId)
+    assertEquals(Sex.MALE, saved.sex)
+    assertEquals(Neutered.YES, saved.neutered)
+    assertEquals(PetSize.LARGE, saved.size)
+    assertEquals(Lifestyle.INDOOR_ONLY, saved.lifestyle)
+    assertEquals(Microchipped.YES, saved.microchipped)
+    val state = viewModel.uiState.value
+    assertNull(state.birthYear)
+    assertNull(state.breedId)
+    assertEquals(Sex.UNKNOWN, state.sex)
+    assertFalse(state.hasFormInput)
+  }
+
+  @Test
+  fun savePet_withNoneOfTheNewFields_savesThemAsUnknown() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    val saved = savedPets().single()
+    assertNull(saved.birthYear)
+    assertNull(saved.breedId)
+    assertEquals(Sex.UNKNOWN, saved.sex)
+    assertEquals(Neutered.UNKNOWN, saved.neutered)
+    assertEquals(PetSize.UNKNOWN, saved.size)
+    assertEquals(Lifestyle.UNKNOWN, saved.lifestyle)
+    assertEquals(Microchipped.UNKNOWN, saved.microchipped)
+  }
+
+  @Test
+  fun birthYear_inTheFuture_isRefusedAndBlocksSaving() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+
+    viewModel.onBirthYearChanged(2027)
+
+    val state = viewModel.uiState.value
+    assertEquals(2027, state.birthYear)
+    assertEquals(
+        AddPetsMessage.Resource(
+            com.android.spotted.R.string.add_pets_birth_year_invalid,
+            listOf(AddPetsViewModel.MIN_BIRTH_YEAR, 2026),
+        ),
+        state.birthYearError,
+    )
+    assertFalse(state.canSave)
+
+    viewModel.savePet()
+    advanceUntilIdle()
+    assertTrue(savedPets().isEmpty())
+  }
+
+  @Test
+  fun birthYear_beforeTheMinimum_isRefused() {
+    viewModel.onBirthYearChanged(AddPetsViewModel.MIN_BIRTH_YEAR - 1)
+
+    assertNotNull(viewModel.uiState.value.birthYearError)
+  }
+
+  @Test
+  fun birthYear_atTheBounds_isAccepted() {
+    viewModel.onBirthYearChanged(AddPetsViewModel.MIN_BIRTH_YEAR)
+    assertNull(viewModel.uiState.value.birthYearError)
+
+    viewModel.onBirthYearChanged(2026)
+    assertNull(viewModel.uiState.value.birthYearError)
+  }
+
+  @Test
+  fun birthYear_fixedOrCleared_removesTheErrorAndAllowsSaving() {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onBirthYearChanged(2030)
+    assertFalse(viewModel.uiState.value.canSave)
+
+    viewModel.onBirthYearChanged(2020)
+    assertNull(viewModel.uiState.value.birthYearError)
+    assertTrue(viewModel.uiState.value.canSave)
+
+    viewModel.onBirthYearChanged(2030)
+    viewModel.onBirthYearChanged(null)
+    assertNull(viewModel.uiState.value.birthYear)
+    assertNull(viewModel.uiState.value.birthYearError)
+    assertTrue(viewModel.uiState.value.canSave)
+  }
+
+  @Test
+  fun changingTheSpecies_clearsThePickedBreed() {
+    viewModel.onSpeciesChanged(Species.DOG)
+    viewModel.onBreedIdChanged("beagle")
+
+    viewModel.onSpeciesChanged(Species.DOG)
+    assertEquals("beagle", viewModel.uiState.value.breedId)
+
+    viewModel.onSpeciesChanged(Species.CAT)
+    assertNull(viewModel.uiState.value.breedId)
   }
 
   private fun fillForm(name: String, species: Species) {

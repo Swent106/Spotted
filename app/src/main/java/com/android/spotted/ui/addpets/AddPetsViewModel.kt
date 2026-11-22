@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.addpets
 
 import androidx.lifecycle.ViewModel
@@ -10,12 +11,19 @@ import com.android.spotted.R
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
+import com.android.spotted.model.Pet.Microchipped
+import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.photo.PhotoRepository
+import java.time.Instant
+import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,11 +34,14 @@ import kotlinx.coroutines.launch
  * Holds the onboarding form for adding pets. Pets are saved one at a time: [savePet] saves the
  * current pet and clears the form for the next one, [finish] saves the current pet (if any) and
  * ends the step, and [skip] ends the step without saving.
+ *
+ * @property now the current time in epoch millis, used to refuse a birth year in the future.
  */
 class AddPetsViewModel(
     private val user: User?,
     private val petRepository: PetRepository,
     private val photoRepository: PhotoRepository,
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(AddPetsUiState())
@@ -40,8 +51,15 @@ class AddPetsViewModel(
     _uiState.update { it.copy(name = name, errorMessage = null) }
   }
 
+  /** A breed picked for the previous species is cleared, so a dog breed is never saved on a cat. */
   fun onSpeciesChanged(species: Species) {
-    _uiState.update { it.copy(species = species, errorMessage = null) }
+    _uiState.update {
+      it.copy(
+          species = species,
+          breedId = if (species == it.species) it.breedId else null,
+          errorMessage = null,
+      )
+    }
   }
 
   fun onBreedChanged(breed: String) {
@@ -68,6 +86,50 @@ class AddPetsViewModel(
 
   fun onAllergiesChanged(allergies: List<String>) {
     _uiState.update { it.copy(allergies = allergies, errorMessage = null) }
+  }
+
+  /**
+   * Sets the birth year, or clears it with null. A year after the current one, or before
+   * [MIN_BIRTH_YEAR], is kept on screen but refused: [AddPetsUiState.birthYearError] says why and
+   * the pet can't be saved until it is fixed.
+   */
+  fun onBirthYearChanged(birthYear: Int?) {
+    val currentYear = Instant.ofEpochMilli(now()).atZone(ZoneId.systemDefault()).year
+    val error =
+        if (birthYear != null && birthYear !in MIN_BIRTH_YEAR..currentYear) {
+          AddPetsMessage.Resource(
+              R.string.add_pets_birth_year_invalid,
+              listOf(MIN_BIRTH_YEAR, currentYear),
+          )
+        } else {
+          null
+        }
+    _uiState.update { it.copy(birthYear = birthYear, birthYearError = error, errorMessage = null) }
+  }
+
+  /** Sets the breed picked from the list, or clears it with null. */
+  fun onBreedIdChanged(breedId: String?) {
+    _uiState.update { it.copy(breedId = breedId, errorMessage = null) }
+  }
+
+  fun onSexChanged(sex: Sex) {
+    _uiState.update { it.copy(sex = sex, errorMessage = null) }
+  }
+
+  fun onNeuteredChanged(neutered: Neutered) {
+    _uiState.update { it.copy(neutered = neutered, errorMessage = null) }
+  }
+
+  fun onSizeChanged(size: PetSize) {
+    _uiState.update { it.copy(size = size, errorMessage = null) }
+  }
+
+  fun onLifestyleChanged(lifestyle: Lifestyle) {
+    _uiState.update { it.copy(lifestyle = lifestyle, errorMessage = null) }
+  }
+
+  fun onMicrochippedChanged(microchipped: Microchipped) {
+    _uiState.update { it.copy(microchipped = microchipped, errorMessage = null) }
   }
 
   fun onBehaviorToggled(behavior: Behavior) {
@@ -157,6 +219,13 @@ class AddPetsViewModel(
               allergies = state.allergies,
               behaviors = state.behaviors,
               note = state.description.trim(),
+              birthYear = state.birthYear,
+              breedId = state.breedId,
+              sex = state.sex,
+              neutered = state.neutered,
+              size = state.size,
+              lifestyle = state.lifestyle,
+              microchipped = state.microchipped,
           )
       petRepository
           .addPet(pet)
@@ -190,6 +259,9 @@ class AddPetsViewModel(
   }
 
   companion object {
+    /** Earliest birth year accepted, the same bound as the Firestore rules. */
+    const val MIN_BIRTH_YEAR = 1950
+
     val Factory: ViewModelProvider.Factory = viewModelFactory {
       initializer {
         val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
