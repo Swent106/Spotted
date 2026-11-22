@@ -1,0 +1,20 @@
+<!-- Portions of this code were generated with the help of Claude (Anthropic). -->
+<!-- "icon/cloud-off" of the Figma offline states (10, 10c, 05b). Tinted in code. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+    <path
+        android:pathData="M6.41667,16.5H15.5833C16.5178,16.5026 17.418,16.1483 18.1001,15.5095C18.7821,14.8707 19.1945,13.9956 19.253,13.0629C19.3115,12.1303 19.0117,11.2105 18.4149,10.4914C17.818,9.77239 16.9691,9.30837 16.0417,9.19417C15.6595,8.07021 14.924,7.10006 13.945,6.42865C12.9659,5.75725 11.7959,5.42064 10.6098,5.46912C9.42364,5.5176 8.28501,5.94856 7.36402,6.69761C6.44304,7.44667 5.78913,8.47361 5.5,9.625C4.58832,9.74656 3.76227,10.2253 3.20356,10.9559C2.64486,11.6865 2.39928,12.6092 2.52083,13.5208C2.64239,14.4325 3.12113,15.2586 3.85174,15.8173C4.58235,16.376 5.50498,16.6216 6.41667,16.5Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M2.75,2.75L19.25,19.25"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
