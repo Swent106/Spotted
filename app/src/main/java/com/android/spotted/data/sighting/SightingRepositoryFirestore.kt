@@ -75,6 +75,10 @@ class SightingRepositoryFirestore(
     if (status == SightingStatus.CONFIRMED) {
       return Result.failure(IllegalArgumentException(CONFIRM_HERE_REFUSED))
     }
+    // Only the votes may hide a sighting as false, not one person (#463)
+    if (status == SightingStatus.VOTED_FALSE) {
+      return Result.failure(IllegalArgumentException(VOTED_FALSE_HERE_REFUSED))
+    }
     return firestoreResult {
       withContext(Dispatchers.IO) {
         // Only the status is sent: the rules let the alert owner change nothing else
@@ -211,5 +215,7 @@ class SightingRepositoryFirestore(
     const val CONFIRM_HERE_REFUSED =
         "Confirm a sighting with TrustRepository.confirmSighting, which also updates its " +
             "reporter's trust score"
+    const val VOTED_FALSE_HERE_REFUSED =
+        "A sighting is marked false only by the votes of other users, not by setting its status"
   }
 }
