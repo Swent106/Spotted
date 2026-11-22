@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.alertShareText
 import com.android.spotted.model.sighting.AnimalActivity
 import com.android.spotted.model.sighting.AnimalCondition
 import com.android.spotted.model.sighting.AnimalReaction
@@ -63,6 +64,7 @@ import com.android.spotted.model.sighting.compassLabel
 import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.components.createMapView
+import com.android.spotted.ui.components.shareText
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
@@ -87,6 +89,7 @@ object MyAlertScreenTestTags {
   const val CONFIRM_PREFIX = "myAlertConfirm_"
   const val DISMISS_PREFIX = "myAlertDismiss_"
   const val PET_HOME_BUTTON = "myAlertPetHomeButton"
+  const val SHARE_BUTTON = "myAlertShareButton"
   const val PET_HOME_DIALOG = "myAlertPetHomeDialog"
   const val PET_HOME_CONFIRM = "myAlertPetHomeConfirm"
   const val PET_HOME_CANCEL = "myAlertPetHomeCancel"
@@ -113,6 +116,7 @@ data class SightingMarker(val number: Int, val location: Location)
 @Composable
 fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
   LaunchedEffect(state.isClosed) { if (state.isClosed) onBack() }
   MyAlertContent(
       state = state,
@@ -120,6 +124,8 @@ fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
       onConfirm = viewModel::confirm,
       onDismiss = viewModel::dismiss,
       onMarkFound = viewModel::markFound,
+      // The system share sheet, launched from the View
+      onShare = { state.alert?.let { context.shareText(alertShareText(it, state.placeName)) } },
   )
 }
 
@@ -137,6 +143,7 @@ fun MyAlertContent(
     onConfirm: (sightingId: String) -> Unit = {},
     onDismiss: (sightingId: String) -> Unit = {},
     onMarkFound: () -> Unit = {},
+    onShare: () -> Unit = {},
     map:
         @Composable
         (
@@ -211,16 +218,26 @@ fun MyAlertContent(
           )
         }
 
-        Button(
-            onClick = { askPetHome = true },
-            colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
-            shape = RoundedCornerShape(16.dp),
-            modifier =
-                Modifier.fillMaxWidth()
-                    .height(56.dp)
-                    .testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
-        ) {
-          Text("My pet is home", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
+        // Figma "20 · My alert": "My pet is home", then "Share" on the same line
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          Button(
+              onClick = { askPetHome = true },
+              colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
+              shape = RoundedCornerShape(16.dp),
+              modifier =
+                  Modifier.weight(1f).height(56.dp).testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
+          ) {
+            Text("My pet is home", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
+          }
+          Button(
+              onClick = onShare,
+              colors =
+                  ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.inputBackground),
+              shape = RoundedCornerShape(16.dp),
+              modifier = Modifier.height(56.dp).testTag(MyAlertScreenTestTags.SHARE_BUTTON),
+          ) {
+            Text("Share", style = jakarta(16, 20f, 700, SpottedTheme.colors.ink))
+          }
         }
       }
     }

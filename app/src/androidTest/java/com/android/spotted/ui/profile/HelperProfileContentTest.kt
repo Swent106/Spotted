@@ -2,6 +2,9 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.profile
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.ui.home.HomeScreenTestTags
 import com.android.spotted.ui.theme.SpottedTheme
 import org.junit.Assert.assertEquals
@@ -64,6 +68,51 @@ class HelperProfileContentTest {
     composeTestRule
         .onNodeWithTag(HelperProfileTestTags.PETS_BROUGHT_HOME)
         .assertTextEquals("4 pets brought home")
+  }
+
+  @Test
+  fun trustLevel_eachLevel_showsItsLabel() {
+    val labels =
+        mapOf(
+            TrustScore(score = 0.9, judged = 2) to "★ New",
+            TrustScore(score = 0.2, judged = 5) to "★ Low",
+            TrustScore(score = 0.5, judged = 5) to "★ Trusted",
+            TrustScore(score = 0.9, judged = 10) to "★ Very trusted",
+        )
+    var trust by mutableStateOf(labels.keys.first())
+    composeTestRule.setContent {
+      HelperProfileContent(state = HelperProfileUiState(name = "Rayen", trust = trust))
+    }
+
+    for ((score, label) in labels) {
+      trust = score
+      composeTestRule.onNodeWithTag(HelperProfileTestTags.TRUST_LEVEL).assertTextEquals(label)
+    }
+  }
+
+  @Test
+  fun trustLevel_showsHowManyJudgedSightingsItIsBasedOn() {
+    var trust by mutableStateOf(TrustScore(score = 0.5, judged = 9))
+    composeTestRule.setContent {
+      HelperProfileContent(state = HelperProfileUiState(name = "Rayen", trust = trust))
+    }
+
+    composeTestRule
+        .onNodeWithTag(HelperProfileTestTags.TRUST_JUDGED)
+        .assertTextEquals("Based on 9 judged sightings")
+    trust = TrustScore(score = 0.37, judged = 1)
+    composeTestRule
+        .onNodeWithTag(HelperProfileTestTags.TRUST_JUDGED)
+        .assertTextEquals("Based on 1 judged sighting")
+  }
+
+  @Test
+  fun trustLevel_notLoaded_showsNoTrustCard() {
+    setContent(HelperProfileUiState(name = "Rayen", petsBroughtHome = 4))
+
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.TRUST_LEVEL).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.TRUST_JUDGED).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(HelperProfileTestTags.PETS_BROUGHT_HOME).assertIsDisplayed()
   }
 
   @Test

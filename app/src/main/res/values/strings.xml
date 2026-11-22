@@ -70,6 +70,7 @@
     <string name="personal_info_home_section">HOME LOCATION</string>
     <string name="personal_info_home_placeholder">Neighbourhood, city</string>
     <string name="personal_info_use_my_location">Use my location</string>
+    <string name="personal_info_no_place_found">No place found</string>
     <string name="personal_info_home_explanation">Used to alert you about pets missing near your home.</string>
     <string name="personal_info_map_hint">Tap the map to place your home</string>
     <string name="personal_info_alerts_within_km">Alerts within %1$d km</string>
