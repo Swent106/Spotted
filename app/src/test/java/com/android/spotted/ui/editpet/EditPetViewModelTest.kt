@@ -187,9 +187,20 @@ class EditPetViewModelTest {
       }
 
   @Test
-  fun save_withoutOptionalFields_keepsThemEmptyOrUnknown() =
+  fun save_withoutOptionalFields_keepsExistingValues() =
       runTest(testDispatcher) {
-        val pet = pet()
+        val pet =
+            pet()
+                .copy(
+                    breed = "Golden Retriever",
+                    breedId = "golden-retriever",
+                    birthYear = 2020,
+                    sex = Sex.FEMALE,
+                    neutered = Neutered.YES,
+                    size = PetSize.LARGE,
+                    lifestyle = Lifestyle.INDOOR_AND_OUTDOOR,
+                    microchipped = Microchipped.YES,
+                )
         val viewModel = loadedViewModel(pet)
         viewModel.onNameChanged("Updated")
 
@@ -197,14 +208,29 @@ class EditPetViewModelTest {
         advanceUntilIdle()
 
         val updated = localPetRepository.getPet(pet.id).getOrThrow()
-        assertEquals("", updated.breed)
-        assertNull(updated.birthYear)
+        assertEquals("Golden Retriever", updated.breed)
+        assertEquals("golden-retriever", updated.breedId)
+        assertEquals(2020, updated.birthYear)
+        assertEquals(Sex.FEMALE, updated.sex)
+        assertEquals(Neutered.YES, updated.neutered)
+        assertEquals(PetSize.LARGE, updated.size)
+        assertEquals(Lifestyle.INDOOR_AND_OUTDOOR, updated.lifestyle)
+        assertEquals(Microchipped.YES, updated.microchipped)
+      }
+
+  @Test
+  fun onBreedChanged_clearsPreviouslySelectedBreedId() =
+      runTest(testDispatcher) {
+        val pet = pet().copy(breed = "Golden Retriever", breedId = "golden-retriever")
+        val viewModel = loadedViewModel(pet)
+
+        viewModel.onBreedChanged("Free-text breed")
+        viewModel.save()
+        advanceUntilIdle()
+
+        val updated = localPetRepository.getPet(pet.id).getOrThrow()
+        assertEquals("Free-text breed", updated.breed)
         assertNull(updated.breedId)
-        assertEquals(Sex.UNKNOWN, updated.sex)
-        assertEquals(Neutered.UNKNOWN, updated.neutered)
-        assertEquals(PetSize.UNKNOWN, updated.size)
-        assertEquals(Lifestyle.UNKNOWN, updated.lifestyle)
-        assertEquals(Microchipped.UNKNOWN, updated.microchipped)
       }
 
   @Test
@@ -232,7 +258,7 @@ class EditPetViewModelTest {
       }
 
   @Test
-  fun birthYearInFuture_isRejectedUsingInjectedClock() =
+  fun onBirthYearChanged_rejectsFutureYearAndAcceptsCurrentOne() =
       runTest(testDispatcher) {
         val viewModel = loadedViewModel(pet())
         viewModel.onBirthYearChanged(2026)
@@ -247,6 +273,25 @@ class EditPetViewModelTest {
 
         assertEquals(2025, viewModel.uiState.value.birthYear)
         assertNull(viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun save_rejectsStoredFutureBirthYearWithoutUpdatingThePet() =
+      runTest(testDispatcher) {
+        val pet = pet().copy(birthYear = 2026)
+        val viewModel = loadedViewModel(pet)
+
+        viewModel.onNameChanged("Updated")
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(
+            R.string.edit_pet_future_birth_year_error,
+            viewModel.uiState.value.errorMessage,
+        )
+        assertFalse(viewModel.uiState.value.saved)
+        assertEquals(0, petRepository.updateCalls)
+        assertEquals(pet, localPetRepository.getPet(pet.id).getOrThrow())
       }
 
   @Test
