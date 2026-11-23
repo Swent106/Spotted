@@ -1,6 +1,9 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.petprofile
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
@@ -17,9 +20,12 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.FakePetRepository
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.ui.components.PetDetailsChipsTestTags
 import com.android.spotted.ui.editpet.EditPetViewModel
 import com.android.spotted.utils.FakeOpenAlertsRepository
 import kotlinx.coroutines.runBlocking
@@ -165,6 +171,28 @@ class PetProfileContentTest {
     composeTestRule.onNodeWithText("ALLERGIES").assertDoesNotExist()
     composeTestRule.onNodeWithText("CHARACTERISTICS").assertDoesNotExist()
   }
+
+  @Test
+  fun ageSexAndSize_areShownUnderTheName_andHiddenWhenUnknown() {
+    var state by
+        mutableStateOf(
+            loaded.copy(pet = luna.copy(sex = Sex.FEMALE, size = PetSize.SMALL), ageYears = 3)
+        )
+    composeTestRule.setContent { PetProfileContent(state) }
+
+    detail(PetDetailsChipsTestTags::age).assertTextEquals("3 years")
+    detail(PetDetailsChipsTestTags::sex).assertTextEquals("Female")
+    detail(PetDetailsChipsTestTags::size).assertTextEquals("Small")
+
+    // Luna as saved before these details existed: unknown values, no age
+    state = loaded
+    detail(PetDetailsChipsTestTags::age).assertDoesNotExist()
+    detail(PetDetailsChipsTestTags::sex).assertDoesNotExist()
+    detail(PetDetailsChipsTestTags::size).assertDoesNotExist()
+  }
+
+  private fun detail(tag: (String) -> String) =
+      composeTestRule.onNodeWithTag(tag(PetProfileScreenTestTags.DETAILS_PREFIX))
 
   // --- Screen wired to its ViewModels ---
 

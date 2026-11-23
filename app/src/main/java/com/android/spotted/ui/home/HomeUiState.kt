@@ -52,7 +52,17 @@ data class HomeUiState(
     val isOffline: Boolean = false,
     val errorMessage: String? = null,
 ) {
-  /** Ids of the user's pets with an open alert: those are missing, the others are safe. */
-  val missingPetIds: Set<String>
-    get() = ownLostPets.mapTo(mutableSetOf()) { it.petId }
+  /** The open alert of each missing pet, by pet id: those are missing, the others are safe. */
+  val alertByPetId: Map<String, Alert>
+    get() = ownLostPets.associateBy { it.petId }
+
+  /**
+   * Open alerts whose pet is not in [pets] (its profile failed to load or is gone): Home still
+   * shows them, so the owner can always reach their alert.
+   */
+  val lostPetsNotListed: List<Alert>
+    get() {
+      val listed = pets.items.mapTo(mutableSetOf()) { it.id }
+      return ownLostPets.filterNot { it.petId in listed }
+    }
 }

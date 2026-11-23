@@ -1,3 +1,4 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.e2e
 
 import android.app.Activity
@@ -94,6 +95,7 @@ class MainUserFlowTest : EndToEndTest() {
   }
 
   private fun completeProfile() {
+    node(PersonalInfoScreenTestTags.USERNAME_INPUT).performScrollTo().performTextInput("e2e")
     node(PersonalInfoScreenTestTags.FIRST_NAME_INPUT).performScrollTo().performTextInput("E2E")
     node(PersonalInfoScreenTestTags.LAST_NAME_INPUT).performScrollTo().performTextInput("Tester")
     node(PersonalInfoScreenTestTags.HOME_AREA_INPUT).performScrollTo().performTextInput("Lausanne")
@@ -121,11 +123,17 @@ class MainUserFlowTest : EndToEndTest() {
     waitFor(HomeScreenTestTags.SCREEN, "Home should open after the last pet is saved")
   }
 
+  /**
+   * The pets are in a horizontal carousel that only composes the cards on screen: Home is scrolled
+   * down to the carousel, then the carousel sideways to each pet.
+   */
   private fun assertPetsOnHome() {
     pets.forEach { pet ->
       waitUntil("\"${pet.name}\" should be in \"Your pets\" on Home") {
         runCatching {
-              node(HomeScreenTestTags.BODY).performScrollToNode(hasText(pet.name))
+              node(HomeScreenTestTags.BODY)
+                  .performScrollToNode(hasTestTag(HomeScreenTestTags.PETS_CAROUSEL))
+              node(HomeScreenTestTags.PETS_CAROUSEL).performScrollToNode(hasText(pet.name))
               true
             }
             .getOrDefault(false)

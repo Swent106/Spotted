@@ -18,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.Route
 import com.android.spotted.homeDestinations
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import org.junit.Assert.assertEquals
@@ -43,7 +44,11 @@ class MyAlertNavigationTest {
             navController,
             homeContent = { navigation ->
               HomeScreenContent(
-                  state = HomeUiState(ownLostPets = listOf(ALERT)),
+                  state =
+                      HomeUiState(
+                          pets = HomeSection(items = listOf(MILO)),
+                          ownLostPets = listOf(ALERT),
+                      ),
                   onMissingPetClick = navigation.onMissingPetClick,
               )
             },
@@ -63,8 +68,8 @@ class MyAlertNavigationTest {
   }
 
   @Test
-  fun missingPetBanner_opensMyAlert_andBackReturnsHome() {
-    composeTestRule.onNodeWithTag(HomeScreenTestTags.missingBanner(ALERT.id)).performClick()
+  fun missingPetCard_opensMyAlert_andBackReturnsHome() {
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(MILO.id)).performClick()
     composeTestRule.waitForIdle()
 
     composeTestRule.onNodeWithText("My alert ${ALERT.id}").assertIsDisplayed()
@@ -74,16 +79,17 @@ class MyAlertNavigationTest {
     composeTestRule.waitForIdle()
 
     assertEquals(Route.HOME, navController.currentDestination?.route)
-    composeTestRule.onNodeWithTag(HomeScreenTestTags.missingBanner(ALERT.id)).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(HomeScreenTestTags.petCard(MILO.id)).assertIsDisplayed()
   }
 
   private companion object {
     const val MY_ALERT_SCREEN = "test_myAlertScreen"
     const val MY_ALERT_BACK = "test_myAlertBack"
+    val MILO = Pet(id = "milo", ownerId = "me", name = "Milo", species = Species.CAT)
     val ALERT =
         Alert(
             id = "alert-milo",
-            petId = "milo",
+            petId = MILO.id,
             ownerId = "me",
             lastKnownLocation = Location(46.2, 6.1),
             lostAtMillis = 1_700_000_000_000L,

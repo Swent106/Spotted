@@ -13,11 +13,13 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.location.AddressRepository
+import com.android.spotted.model.location.AddressSuggestion
 import com.android.spotted.model.location.LocationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +41,7 @@ class PersonalInfoViewModel(
   val uiState: StateFlow<PersonalInfoUiState> = _uiState.asStateFlow()
 
   private var profileLoad: Job? = null
+  private var suggestionSearch: Job? = null
 
   init {
     loadExistingProfile()
@@ -68,6 +71,7 @@ class PersonalInfoViewModel(
       val lastName = profile.name.substringAfter(' ', missingDelimiterValue = "")
       _uiState.update {
         it.copy(
+            username = profile.username,
             firstName = firstName,
             lastName = lastName,
             name = profile.name,
@@ -83,8 +87,15 @@ class PersonalInfoViewModel(
     }
   }
 
+  /** Longer input is cut, so the saved username always fits the Firestore rules. */
   fun onUsernameChanged(username: String) {
-    _uiState.update { it.copy(username = username, isSaved = false, errorMessage = null) }
+    _uiState.update {
+      it.copy(
+          username = username.take(UserProfile.MAX_USERNAME_LENGTH),
+          isSaved = false,
+          errorMessage = null,
+      )
+    }
   }
 
   /** First and last name are edited separately but saved together as [PersonalInfoUiState.name]. */
@@ -118,16 +129,85 @@ class PersonalInfoViewModel(
   private fun fullName(firstName: String, lastName: String): String =
       listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
+  /**
+   * Updates the home area as typed and, once the user stops typing for [SUGGESTION_DEBOUNCE_MS],
+   * looks for matching places to show under the field. Under [MIN_SUGGESTION_QUERY_LENGTH]
+   * characters, nothing is proposed.
+   */
   fun onHomeAreaChanged(homeArea: String) {
     _uiState.update { it.copy(homeArea = homeArea, isSaved = false, errorMessage = null) }
+    searchSuggestions(homeArea.trim())
+  }
+
+  /**
+   * Fills the home area with the picked [suggestion], moves the pin there and closes the
+   * suggestions.
+   */
+  fun onSuggestionPicked(suggestion: AddressSuggestion) {
+    fillHomeArea(suggestion.label, suggestion.location)
+  }
+
+  private fun searchSuggestions(query: String) {
+    // Each keystroke restarts the wait, so only the last text typed is searched
+    suggestionSearch?.cancel()
+    // The previous results belong to the previous text: hide them while the new search runs, so
+    // the user can't pick a place that doesn't match what is typed
+    closeSuggestions()
+    val repository = addressRepository
+    if (repository == null || query.length < MIN_SUGGESTION_QUERY_LENGTH) return
+    suggestionSearch = viewModelScope.launch {
+      delay(SUGGESTION_DEBOUNCE_MS)
+      repository
+          .suggest(query, near = _uiState.value.homeLocation)
+          .fold(
+              onSuccess = { places ->
+                _uiState.update {
+                  it.copy(addressSuggestions = places, isNoPlaceFound = places.isEmpty())
+                }
+              },
+              // Offline or geocoder error: the user can still type the area and tap the map
+              onFailure = { closeSuggestions() },
+          )
+    }
+  }
+
+  private fun closeSuggestions() {
+    _uiState.update { it.copy(addressSuggestions = emptyList(), isNoPlaceFound = false) }
+  }
+
+  /**
+   * Writes [homeArea] in the field without proposing places for it, and moves the pin to [location]
+   * when given.
+   */
+  private fun fillHomeArea(homeArea: String, location: Location? = null) {
+    suggestionSearch?.cancel()
+    _uiState.update {
+      it.copy(
+          homeArea = homeArea,
+          homeLocation = location ?: it.homeLocation,
+          addressSuggestions = emptyList(),
+          isNoPlaceFound = false,
+          isSaved = false,
+          errorMessage = null,
+      )
+    }
   }
 
   /**
    * Places the home pin at [location], as tapped on the map picker. Saved with the profile: lost
-   * pets are searched around it.
+   * pets are searched around it. Placing the pin by hand also closes the address suggestions and
+   * cancels a pending search, so the map does not move under the user's finger.
    */
   fun onHomeLocationChanged(location: Location) {
-    _uiState.update { it.copy(homeLocation = location, isSaved = false) }
+    suggestionSearch?.cancel()
+    _uiState.update {
+      it.copy(
+          homeLocation = location,
+          addressSuggestions = emptyList(),
+          isNoPlaceFound = false,
+          isSaved = false,
+      )
+    }
   }
 
   /** Shows the photo the user picked or took ([uri]), or removes it when null. */
@@ -151,7 +231,7 @@ class PersonalInfoViewModel(
             return@launch
           }
       onHomeLocationChanged(location)
-      addressRepository?.areaName(location)?.onSuccess { name -> onHomeAreaChanged(name) }
+      addressRepository?.areaName(location)?.onSuccess { name -> fillHomeArea(name) }
     }
   }
 
@@ -191,6 +271,7 @@ class PersonalInfoViewModel(
               homeArea = currentState.homeArea.trim(),
               homeLocation = currentState.homeLocation,
               alertRadiusKm = currentState.alertRadiusKm,
+              username = currentState.cleanUsername,
           )
 
       // A photo just picked or taken is a local URI: upload it before saving the profile
@@ -232,6 +313,8 @@ class PersonalInfoViewModel(
   }
 
   companion object {
+    const val MIN_SUGGESTION_QUERY_LENGTH = 3
+    const val SUGGESTION_DEBOUNCE_MS = 300L
     const val PROFILE_LOAD_FAILED =
         "Couldn't load your profile. Check your connection, then tap the button to try again."
     const val SAVE_FAILED = "Couldn't save your profile. Please try again."

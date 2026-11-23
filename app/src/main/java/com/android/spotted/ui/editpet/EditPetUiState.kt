@@ -4,14 +4,26 @@ package com.android.spotted.ui.editpet
 
 import androidx.annotation.StringRes
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
+import com.android.spotted.model.Pet.Microchipped
+import com.android.spotted.model.Pet.Neutered
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 
 data class EditPetUiState(
     val name: String = "",
     val species: Species? = null,
     val breed: String = "",
+    val breedId: String? = null,
     val photoUri: String? = null,
     val description: String = "",
+    val birthYear: Int? = null,
+    val sex: Sex = Sex.UNKNOWN,
+    val neutered: Neutered = Neutered.UNKNOWN,
+    val size: PetSize = PetSize.UNKNOWN,
+    val lifestyle: Lifestyle = Lifestyle.UNKNOWN,
+    val microchipped: Microchipped = Microchipped.UNKNOWN,
     val allergies: List<String> = emptyList(),
     val behaviors: Set<Behavior> = emptySet(),
     val isLoading: Boolean = true,

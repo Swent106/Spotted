@@ -43,17 +43,28 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.Species
+import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.alertShareText
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.LikelyArea
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.sighting.compassLabel
+import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.ui.components.SpottedTopBar
 import com.android.spotted.ui.components.createMapView
+import com.android.spotted.ui.components.shareText
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
@@ -72,16 +83,20 @@ object MyAlertScreenTestTags {
   const val LOADING = "myAlertLoading"
   const val ERROR = "myAlertError"
   const val NO_SIGHTINGS = "myAlertNoSightings"
+  const val DETAIL_PREFIX = "myAlertDetail_"
   const val SIGHTING_PREFIX = "myAlertSighting_"
   const val STATUS_PREFIX = "myAlertStatus_"
   const val CONFIRM_PREFIX = "myAlertConfirm_"
   const val DISMISS_PREFIX = "myAlertDismiss_"
   const val PET_HOME_BUTTON = "myAlertPetHomeButton"
+  const val SHARE_BUTTON = "myAlertShareButton"
   const val PET_HOME_DIALOG = "myAlertPetHomeDialog"
   const val PET_HOME_CONFIRM = "myAlertPetHomeConfirm"
   const val PET_HOME_CANCEL = "myAlertPetHomeCancel"
 
   fun sighting(id: String) = "$SIGHTING_PREFIX$id"
+
+  fun detail(id: String, kind: String) = "$DETAIL_PREFIX${id}_$kind"
 
   fun status(id: String) = "$STATUS_PREFIX$id"
 
@@ -101,6 +116,7 @@ data class SightingMarker(val number: Int, val location: Location)
 @Composable
 fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
   LaunchedEffect(state.isClosed) { if (state.isClosed) onBack() }
   MyAlertContent(
       state = state,
@@ -108,6 +124,8 @@ fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
       onConfirm = viewModel::confirm,
       onDismiss = viewModel::dismiss,
       onMarkFound = viewModel::markFound,
+      // The system share sheet, launched from the View
+      onShare = { state.alert?.let { context.shareText(alertShareText(it, state.placeName)) } },
   )
 }
 
@@ -125,6 +143,7 @@ fun MyAlertContent(
     onConfirm: (sightingId: String) -> Unit = {},
     onDismiss: (sightingId: String) -> Unit = {},
     onMarkFound: () -> Unit = {},
+    onShare: () -> Unit = {},
     map:
         @Composable
         (
@@ -193,21 +212,32 @@ fun MyAlertContent(
           SightingRow(
               number = numbers.getValue(sighting.id),
               sighting = sighting,
+              trustLevel = state.reporterTrustLevels[sighting.reporterId],
               onConfirm = { onConfirm(sighting.id) },
               onDismiss = { onDismiss(sighting.id) },
           )
         }
 
-        Button(
-            onClick = { askPetHome = true },
-            colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
-            shape = RoundedCornerShape(16.dp),
-            modifier =
-                Modifier.fillMaxWidth()
-                    .height(56.dp)
-                    .testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
-        ) {
-          Text("My pet is home", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
+        // Figma "20 · My alert": "My pet is home", then "Share" on the same line
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          Button(
+              onClick = { askPetHome = true },
+              colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
+              shape = RoundedCornerShape(16.dp),
+              modifier =
+                  Modifier.weight(1f).height(56.dp).testTag(MyAlertScreenTestTags.PET_HOME_BUTTON),
+          ) {
+            Text("My pet is home", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
+          }
+          Button(
+              onClick = onShare,
+              colors =
+                  ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.inputBackground),
+              shape = RoundedCornerShape(16.dp),
+              modifier = Modifier.height(56.dp).testTag(MyAlertScreenTestTags.SHARE_BUTTON),
+          ) {
+            Text("Share", style = jakarta(16, 20f, 700, SpottedTheme.colors.ink))
+          }
         }
       }
     }
@@ -257,6 +287,7 @@ private fun ErrorMessage(message: String) {
 private fun SightingRow(
     number: Int,
     sighting: Sighting,
+    trustLevel: TrustLevel?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -323,6 +354,8 @@ private fun SightingRow(
       }
       StatusChip(sighting)
     }
+    trustLevel?.let { TrustBadge(it) }
+    SightingDetails(sighting)
     if (sighting.status == SightingStatus.PENDING) {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
@@ -344,12 +377,121 @@ private fun SightingRow(
 }
 
 @Composable
+private fun TrustBadge(level: TrustLevel) {
+  val label =
+      when (level) {
+        TrustLevel.NEW -> "New"
+        TrustLevel.LOW -> "Low"
+        TrustLevel.TRUSTED -> "Trusted"
+        TrustLevel.VERY_TRUSTED -> "Very trusted"
+      }
+
+  Row(
+      modifier =
+          Modifier.clip(CircleShape)
+              .background(SpottedTheme.colors.badgeEarned)
+              .padding(horizontal = 10.dp, vertical = 4.dp)
+              .testTag("myalert_trustBadge"),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+  ) {
+    Text("★", style = jakarta(14, 18f, 700, SpottedTheme.colors.rankYou))
+    Text(label, style = jakarta(12, 16f, 700, SpottedTheme.colors.rankYou))
+  }
+}
+
+@Composable
+private fun SightingDetails(sighting: Sighting) {
+  val activities = sighting.activities.takeIf { it.isNotEmpty() }
+  val conditions = sighting.conditions.takeIf { it.isNotEmpty() }
+  val reactions = sighting.reactions.takeIf { it.isNotEmpty() }
+  val placeType = sighting.placeType.takeIf { it != PlaceType.UNKNOWN }
+  val collar = sighting.collar.takeIf { it != CollarStatus.UNKNOWN }
+
+  if (
+      activities == null &&
+          conditions == null &&
+          reactions == null &&
+          placeType == null &&
+          collar == null
+  ) {
+    return
+  }
+
+  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    activities?.let {
+      SightingDetail(
+          sighting.id,
+          "activity",
+          "Activity",
+          it.displayNames(),
+      )
+    }
+    conditions?.let {
+      SightingDetail(
+          sighting.id,
+          "conditions",
+          "Condition",
+          it.displayNames(),
+          highlighted = it.any(AnimalCondition::isInjury),
+      )
+    }
+    reactions?.let {
+      SightingDetail(
+          sighting.id,
+          "reactions",
+          "Reaction",
+          it.displayNames(),
+      )
+    }
+    placeType?.let { SightingDetail(sighting.id, "place", "Place", it.displayName()) }
+    collar?.let { SightingDetail(sighting.id, "collar", "Collar", it.displayName()) }
+  }
+}
+
+@Composable
+private fun SightingDetail(
+    sightingId: String,
+    kind: String,
+    label: String,
+    value: String,
+    highlighted: Boolean = false,
+) {
+  val color = if (highlighted) SpottedTheme.colors.error else SpottedTheme.colors.textSecondary
+  Text(
+      "$label: $value",
+      style = jakarta(12, 16f, if (highlighted) 700 else 500, color),
+      modifier =
+          Modifier.then(
+                  if (highlighted) {
+                    Modifier.background(color.copy(alpha = 0.12f), RoundedCornerShape(100.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                  } else {
+                    Modifier
+                  }
+              )
+              .testTag(MyAlertScreenTestTags.detail(sightingId, kind)),
+  )
+}
+
+internal fun <T : Enum<T>> T.displayName(): String =
+    name.lowercase(Locale.ROOT).split('_').joinToString(" ") { word ->
+      word.replaceFirstChar { it.uppercase(Locale.ROOT) }
+    }
+
+private fun <T : Enum<T>> Iterable<T>.displayNames(): String = sortedBy {
+  it.ordinal
+}
+    .joinToString(", ") { it.displayName() }
+
+@Composable
 private fun StatusChip(sighting: Sighting) {
   val (label, color) =
       when (sighting.status) {
         SightingStatus.PENDING -> "To review" to SpottedTheme.colors.blue
         SightingStatus.CONFIRMED -> "Confirmed" to SpottedTheme.colors.success
         SightingStatus.DISMISSED -> "Dismissed" to SpottedTheme.colors.error
+        SightingStatus.VOTED_FALSE -> "Hidden" to SpottedTheme.colors.textSecondary
       }
   Text(
       label,
@@ -438,3 +580,45 @@ private fun formatPlace(location: Location): String =
 
 private const val MAP_ZOOM = 15.0
 private const val DISMISSED_ALPHA = 0.45f
+
+@Preview(showBackground = true, name = "My alert · injured sighting", widthDp = 390, heightDp = 844)
+@Composable
+private fun MyAlertScreenPreview() {
+  val alert =
+      Alert(
+          id = "preview-alert",
+          petId = "preview-pet",
+          ownerId = "preview-owner",
+          lastKnownLocation = Location(46.5197, 6.6323),
+          lostAtMillis = 1_700_000_000_000L,
+          petName = "Milo",
+          petSpecies = Species.CAT,
+      )
+  val sighting =
+      Sighting(
+          id = "preview-sighting",
+          reporterId = "preview-helper",
+          location = Location(46.5200, 6.6330),
+          seenAtMillis = 1_700_000_300_000L,
+          species = Species.CAT,
+          alertId = alert.id,
+          activities = setOf(AnimalActivity.WALKING, AnimalActivity.EATING),
+          conditions = setOf(AnimalCondition.INJURED),
+          reactions = setOf(AnimalReaction.CAME_CLOSER),
+          placeType = PlaceType.PARK,
+          collar = CollarStatus.WORE_COLLAR,
+      )
+
+  SpottedTheme {
+    MyAlertContent(
+        state =
+            MyAlertUiState(
+                alert = alert,
+                sightings = listOf(sighting),
+                reporterTrustLevels = mapOf(sighting.reporterId to TrustLevel.VERY_TRUSTED),
+                isLoading = false,
+            ),
+        map = { _, _, _, modifier -> Box(modifier) },
+    )
+  }
+}

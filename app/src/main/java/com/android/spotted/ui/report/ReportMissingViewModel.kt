@@ -15,6 +15,8 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertAlreadyOpenException
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -121,13 +123,47 @@ class ReportMissingViewModel(
     _uiState.update { it.copy(location = location) }
   }
 
+  /**
+   * Shows the optional "What happened?" step. Does nothing unless [ReportMissingUiState.canPublish]
+   * is true: the pet and the location come first.
+   */
+  fun openWhatHappened() {
+    if (!_uiState.value.canPublish) return
+    _uiState.update { it.copy(showWhatHappened = true) }
+  }
+
+  /** Goes back from the "What happened?" step to the form. The choices made there are kept. */
+  fun backToForm() {
+    _uiState.update { it.copy(showWhatHappened = false) }
+  }
+
+  /** Sets how the pet got lost. */
+  fun setCause(cause: LossCause) {
+    _uiState.update { it.copy(cause = cause) }
+  }
+
+  /** Sets the kind of place where the pet got lost. */
+  fun setEnvironment(environment: LossEnvironment) {
+    _uiState.update { it.copy(environment = environment) }
+  }
+
+  /**
+   * Skips the "What happened?" step: forgets any choice made there and publishes, exactly as
+   * without the step.
+   */
+  fun skipWhatHappened() {
+    _uiState.update { it.copy(cause = LossCause.UNKNOWN, environment = LossEnvironment.UNKNOWN) }
+    publish()
+  }
+
   /** Clears the error message in the UI state. */
   fun clearErrorMsg() {
     _uiState.update { it.copy(errorMessage = null) }
   }
 
   /**
-   * Publishes an alert for the selected pet at the chosen location, timestamped with [now].
+   * Publishes an alert for the selected pet at the chosen location, timestamped with [now], with
+   * the cause and the environment chosen in the "What happened?" step.
    *
    * Does nothing unless [ReportMissingUiState.canPublish] is true. On failure, the form is kept so
    * that the owner can try again.
@@ -158,6 +194,11 @@ class ReportMissingViewModel(
               petPhotoUrl = pet.photoUrl,
               petAllergies = pet.allergies,
               petBehaviors = pet.behaviors,
+              petBirthYear = pet.birthYear,
+              petSex = pet.sex,
+              petSize = pet.size,
+              lossCause = state.cause,
+              lossEnvironment = state.environment,
           )
       alertRepository
           .publishAlert(alert)

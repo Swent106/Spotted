@@ -3,8 +3,13 @@
 package com.android.spotted.data.Pet
 
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
+import com.android.spotted.model.Pet.Microchipped
+import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.photo.PhotoRepository
 import com.google.android.gms.tasks.Tasks
@@ -101,6 +106,14 @@ class PetRepositoryFirestore(
     var allergies: List<String> = emptyList()
     var behaviors: List<String> = emptyList()
     var note: String = ""
+    // Optional details (#388): missing in pets saved before they existed
+    var birthYear: Int? = null
+    var breedId: String? = null
+    var sex: String = Sex.UNKNOWN.name
+    var neutered: String = Neutered.UNKNOWN.name
+    var size: String = PetSize.UNKNOWN.name
+    var lifestyle: String = Lifestyle.UNKNOWN.name
+    var microchipped: String = Microchipped.UNKNOWN.name
 
     // The rules don't check species and behaviors, so a value this version doesn't know (e.g.
     // added by a newer app) is read as OTHER or skipped: it must not hide all of the owner's pets
@@ -118,6 +131,13 @@ class PetRepositoryFirestore(
                   Behavior.entries.firstOrNull { it.name == name }
                 },
             note = note,
+            birthYear = birthYear,
+            breedId = breedId,
+            sex = sex.toEnumOr(Sex.entries, Sex.UNKNOWN),
+            neutered = neutered.toEnumOr(Neutered.entries, Neutered.UNKNOWN),
+            size = size.toEnumOr(PetSize.entries, PetSize.UNKNOWN),
+            lifestyle = lifestyle.toEnumOr(Lifestyle.entries, Lifestyle.UNKNOWN),
+            microchipped = microchipped.toEnumOr(Microchipped.entries, Microchipped.UNKNOWN),
         )
 
     fun toUpdateMap(): Map<String, Any> =
@@ -130,6 +150,13 @@ class PetRepositoryFirestore(
             "allergies" to allergies,
             "behaviors" to behaviors,
             "note" to note,
+            "birthYear" to (birthYear ?: FieldValue.delete()),
+            "breedId" to (breedId ?: FieldValue.delete()),
+            "sex" to sex,
+            "neutered" to neutered,
+            "size" to size,
+            "lifestyle" to lifestyle,
+            "microchipped" to microchipped,
         )
 
     companion object {
@@ -143,6 +170,13 @@ class PetRepositoryFirestore(
             allergies = pet.allergies
             behaviors = pet.behaviors.map(Behavior::name)
             note = pet.note
+            birthYear = pet.birthYear
+            breedId = pet.breedId
+            sex = pet.sex.name
+            neutered = pet.neutered.name
+            size = pet.size.name
+            lifestyle = pet.lifestyle.name
+            microchipped = pet.microchipped.name
           }
     }
   }
@@ -151,3 +185,7 @@ class PetRepositoryFirestore(
     const val PETS_COLLECTION = "pets"
   }
 }
+
+/** The value with this name, or [default] if this version does not know the name. */
+private fun <E : Enum<E>> String.toEnumOr(entries: List<E>, default: E): E =
+    entries.firstOrNull { it.name == this } ?: default

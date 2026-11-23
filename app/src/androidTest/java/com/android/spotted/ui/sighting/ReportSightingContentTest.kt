@@ -25,7 +25,10 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.network.NetworkMonitor
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.model.sighting.PendingSighting
+import com.android.spotted.model.sighting.PendingSightingRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
@@ -259,7 +262,87 @@ class ReportSightingContentTest {
 
     composeTestRule.setContent { ReportSightingContent(state = state) }
 
-    composeTestRule.onNodeWithText("You are offline").performScrollTo().assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.OFFLINE_BANNER)
+        .performScrollTo()
+        .assertIsDisplayed()
+    composeTestRule.onNodeWithText("You are offline").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Saved on your phone, sent when signal is back").assertExists()
+  }
+
+  @Test
+  fun offlineBanner_hiddenWhenOnline() {
+    composeTestRule.setContent { ReportSightingContent(state = ReportSightingUiState()) }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.OFFLINE_BANNER).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SAVED_DIALOG).assertDoesNotExist()
+  }
+
+  @Test
+  fun savedOffline_showsTheConfirmationWithThePetName_overTheOfflineBanner() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state =
+              ReportSightingUiState(
+                  isOffline = true,
+                  savedOffline = true,
+                  selectedAlertId = "alert_1",
+                  nearbyAlerts = listOf(NearbyAlertOption("alert_1", "Milo", "Cat")),
+              )
+      )
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SAVED_DIALOG).assertIsDisplayed()
+    composeTestRule.onNodeWithText("Saved on your phone").assertIsDisplayed()
+    composeTestRule
+        .onNodeWithText(
+            "We'll send your sighting of Milo as soon as you're back online. " +
+                "You don't need to keep the app open."
+        )
+        .assertIsDisplayed()
+    // As in the Figma, the banner stays under the dialog, and Send can't be pressed again
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.OFFLINE_BANNER).assertExists()
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON).assertIsNotEnabled()
+  }
+
+  @Test
+  fun savedOffline_withoutAnAlert_namesNoPet() {
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state =
+              ReportSightingUiState(
+                  savedOffline = true,
+                  isNoMatchingAlertSelected = true,
+                  selectedAlertId = "alert_1",
+                  nearbyAlerts = listOf(NearbyAlertOption("alert_1", "Milo", "Cat")),
+              )
+      )
+    }
+
+    composeTestRule
+        .onNodeWithText(
+            "We'll send your sighting as soon as you're back online. " +
+                "You don't need to keep the app open."
+        )
+        .assertIsDisplayed()
+  }
+
+  @Test
+  fun savedOffline_backToHome_callsDone() {
+    var done = 0
+    composeTestRule.setContent {
+      ReportSightingContent(
+          state = ReportSightingUiState(savedOffline = true),
+          onSavedOfflineDone = { done++ },
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.BACK_HOME)
+        .assertTextEquals("Back to Home")
+        .performClick()
+
+    assertEquals(1, done)
   }
 
   @Test
@@ -502,6 +585,67 @@ class ReportSightingContentTest {
     }
 
     composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.PHOTO_REQUIRED).assertDoesNotExist()
+  }
+
+  @Test
+  fun reportSightingScreen_offlineSend_showsTheConfirmation_andBackToHomeCallsOnSubmitted() {
+    grantLocationPermission()
+    val queued = mutableListOf<String>()
+    val authRepository = FakeAuthRepository()
+    runBlocking { authRepository.signInWithGoogle("token") }
+    val viewModel =
+        ReportSightingViewModel(
+            sightingRepository = InMemorySightingRepository(),
+            photoRepository = FakePhotoRepository(),
+            locationRepository =
+                object : LocationRepository {
+                  override suspend fun getCurrentLocation() = Result.success(GPS_LOCATION)
+                },
+            authRepository = authRepository,
+            pendingSightingRepository =
+                object : PendingSightingRepository {
+                  override suspend fun add(sighting: Sighting, photoUri: String?): Result<Unit> {
+                    queued += sighting.id
+                    return Result.success(Unit)
+                  }
+
+                  override suspend fun list() = Result.success(emptyList<PendingSighting>())
+
+                  override suspend fun delete(sightingId: String) = Result.success(Unit)
+
+                  override fun observeCount() = flowOf(Result.success(queued.size))
+                },
+            networkMonitor =
+                object : NetworkMonitor {
+                  override fun isOnline() = false
+                },
+        )
+    viewModel.setPhotoUri(PHOTO)
+    var submittedCalled = false
+
+    composeTestRule.setContent {
+      ReportSightingScreen(viewModel = viewModel, onSubmitted = { submittedCalled = true })
+    }
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.LOCATION_CARD).performClick()
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { viewModel.uiState.value.location != null }
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.NO_MATCH_OPTION)
+        .performScrollTo()
+        .performClick()
+    composeTestRule
+        .onNodeWithTag(ReportSightingScreenTestTags.SUBMIT_BUTTON)
+        .performScrollTo()
+        .performClick()
+
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) { viewModel.uiState.value.savedOffline }
+    assertEquals(1, queued.size)
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.SAVED_DIALOG).assertIsDisplayed()
+    assertTrue(!submittedCalled)
+
+    composeTestRule.onNodeWithTag(ReportSightingScreenTestTags.BACK_HOME).performClick()
+
+    assertTrue(submittedCalled)
   }
 
   private fun grantLocationPermission() {

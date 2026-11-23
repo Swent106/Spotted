@@ -6,6 +6,7 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.trust.TrustLevel
 
 /**
  * State of the owner's "My alert" screen: one of their alerts, the sightings reported on it, and
@@ -17,10 +18,13 @@ import com.android.spotted.model.sighting.SightingStatus
  * @property isLoading True while the alert is being loaded; the screen starts loading.
  * @property errorMessage Message to show, or null. Set with an [alert] when an action on it failed.
  * @property isClosed True once the owner said the pet is home; the screen then navigates away.
+ * @property placeName Where the pet was last seen, e.g. "Ouchy, Lausanne"; null while unknown.
  */
 data class MyAlertUiState(
     val alert: Alert? = null,
     val sightings: List<Sighting> = emptyList(),
+    /** Available reporter trust levels, keyed by reporter ID; absent when the read fails. */
+    val reporterTrustLevels: Map<String, TrustLevel> = emptyMap(),
     val likelyArea: LikelyArea? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
@@ -28,8 +32,16 @@ data class MyAlertUiState(
      * Navigation flag set when the alert is closed on load or after [MyAlertViewModel.markFound].
      */
     val isClosed: Boolean = false,
+    val placeName: String? = null,
 ) {
-  /** Sightings drawn on the map: dismissed ones are hidden there, but stay greyed in the list. */
+  /**
+   * Sightings drawn on the map: dismissed ones and those voted false are hidden there, but stay in
+   * the list (greyed, or labelled "Hidden").
+   */
   val mapSightings: List<Sighting>
-    get() = sightings.filter { it.status != SightingStatus.DISMISSED }
+    get() = sightings.filter { it.status !in HIDDEN_FROM_MAP }
+
+  private companion object {
+    val HIDDEN_FROM_MAP = setOf(SightingStatus.DISMISSED, SightingStatus.VOTED_FALSE)
+  }
 }

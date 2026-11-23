@@ -10,6 +10,7 @@ import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.ageInYears
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
@@ -29,15 +30,17 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel of the alert detail screen.
  *
- * Once the alert is loaded, shows how far it is from the device; when the position can't be read
- * (permission denied, no fix), from the signed-in user's home pin, else from the place their home
- * area names. Without any of them, no distance is shown.
+ * Once the alert is loaded, names the place the pet was last seen and shows how far it is from the
+ * device; when the position can't be read (permission denied, no fix), from the signed-in user's
+ * home pin, else from the place their home area names. Without any of them, no distance is shown.
  *
  * @property alertRepository gives the alert.
  * @property locationRepository gives the device position; null measures from the home.
  * @property authRepository gives the signed-in user, whose home is the fallback; null: no fallback.
  * @property userRepository gives the signed-in user's profile; null: no fallback.
- * @property addressRepository finds the position of the home area; null uses only the home pin.
+ * @property addressRepository names the place the pet was last seen and finds the position of the
+ *   home area; null: no place name, and only the home pin.
+ * @property now the current time in epoch millis, used to compute the pet's age.
  */
 class AlertDetailViewModel(
     private val alertRepository: AlertRepository,
@@ -45,6 +48,7 @@ class AlertDetailViewModel(
     private val authRepository: AuthRepository? = null,
     private val userRepository: UserRepository? = null,
     private val addressRepository: AddressRepository? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(AlertDetailUiState())
@@ -62,9 +66,17 @@ class AlertDetailViewModel(
           .fold(
               onSuccess = { alert ->
                 _uiState.update {
-                  it.copy(alert = alert, isLoading = false, notFound = alert == null)
+                  it.copy(
+                      alert = alert,
+                      isLoading = false,
+                      notFound = alert == null,
+                      ageYears = alert?.let { found -> ageInYears(found.petBirthYear, now()) },
+                  )
                 }
-                if (alert != null) loadDistance(alert)
+                if (alert != null) {
+                  loadDistance(alert)
+                  loadPlaceName(alert)
+                }
               },
               onFailure = { failure ->
                 _uiState.update {
@@ -83,6 +95,11 @@ class AlertDetailViewModel(
     _uiState.update {
       it.copy(distanceText = formatDistance(origin.distanceKm(alert.lastKnownLocation)))
     }
+  }
+
+  private suspend fun loadPlaceName(alert: Alert) {
+    val name = addressRepository?.areaName(alert.lastKnownLocation)?.getOrNull() ?: return
+    _uiState.update { it.copy(placeName = name) }
   }
 
   /** The signed-in user's home pin; else the place their home area names; else null. */

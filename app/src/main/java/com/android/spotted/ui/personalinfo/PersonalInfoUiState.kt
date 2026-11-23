@@ -2,6 +2,7 @@
 package com.android.spotted.ui.personalinfo
 
 import com.android.spotted.model.Location
+import com.android.spotted.model.location.AddressSuggestion
 import com.android.spotted.model.user.UserProfile
 
 data class PersonalInfoUiState(
@@ -15,6 +16,10 @@ data class PersonalInfoUiState(
     val homeArea: String = "",
     /** Home pin placed on the map picker; lost pets are searched around it. */
     val homeLocation: Location? = null,
+    /** Places matching the home area being typed, shown under the field; empty hides them. */
+    val addressSuggestions: List<AddressSuggestion> = emptyList(),
+    /** True when the home area being typed matches no place: the View says so under the field. */
+    val isNoPlaceFound: Boolean = false,
     /** Profile photo: the saved one, or one just picked or taken, uploaded when saving. */
     val photoUri: String? = null,
     /** True when the user already has a profile: the form then edits it instead of creating it. */
@@ -27,10 +32,15 @@ data class PersonalInfoUiState(
     val isSignedOut: Boolean = false,
     val errorMessage: String? = null,
 ) {
+  /** [username] as it is saved: without spaces around it or the "@" typed in front of it. */
+  val cleanUsername: String
+    get() = username.trim().removePrefix("@").trim()
+
   /** Whether the button can be tapped: to save the form, or to read the profile again. */
   val canSave: Boolean
     get() =
-        (isProfileLoadFailed || (name.isNotBlank() && homeArea.isNotBlank())) &&
+        (isProfileLoadFailed ||
+            (cleanUsername.isNotEmpty() && name.isNotBlank() && homeArea.isNotBlank())) &&
             !isSaving &&
             !isSignedOut
 

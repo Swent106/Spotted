@@ -11,10 +11,17 @@ import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeAnimalDetector
 import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.fakes.FakeNetworkMonitor
+import com.android.spotted.model.fakes.FakePendingSightingRepository
 import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.photo.AnimalDetection
 import com.android.spotted.model.photo.AnimalDetector
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.model.sighting.AnimalActivity
+import com.android.spotted.model.sighting.AnimalCondition
+import com.android.spotted.model.sighting.AnimalReaction
+import com.android.spotted.model.sighting.CollarStatus
+import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
 import com.android.spotted.model.sighting.SightingStatus
@@ -1012,6 +1019,449 @@ class ReportSightingViewModelTest {
 
     assertEquals(ReportSightingViewModel.ALERT_NOT_LOADED, viewModel.uiState.value.errorMessage)
     assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  // ===================== Optional animal details =====================
+
+  @Test
+  fun submitSighting_withAllDetails_sendsThem() = runTest {
+    val vm = viewModelOnAlert(alertOwnedBy("someone-else"))
+    vm.toggleActivity(AnimalActivity.EATING)
+    vm.toggleActivity(AnimalActivity.HIDING)
+    vm.toggleCondition(AnimalCondition.LIMPING)
+    vm.toggleCondition(AnimalCondition.THIN)
+    vm.toggleReaction(AnimalReaction.KEPT_ITS_DISTANCE)
+    vm.selectPlaceType(PlaceType.PARK)
+    vm.selectCollar(CollarStatus.NO_COLLAR)
+
+    vm.submitSighting()
+
+    val sent = sightingRepository.reportedSightings.single()
+    assertEquals(setOf(AnimalActivity.EATING, AnimalActivity.HIDING), sent.activities)
+    assertEquals(setOf(AnimalCondition.LIMPING, AnimalCondition.THIN), sent.conditions)
+    assertEquals(setOf(AnimalReaction.KEPT_ITS_DISTANCE), sent.reactions)
+    assertEquals(PlaceType.PARK, sent.placeType)
+    assertEquals(CollarStatus.NO_COLLAR, sent.collar)
+  }
+
+  @Test
+  fun submitSighting_withSomeDetails_sendsOnlyThose() = runTest {
+    val vm = viewModelOnAlert(alertOwnedBy("someone-else"))
+    vm.toggleCondition(AnimalCondition.INJURED)
+    vm.selectPlaceType(PlaceType.STREET)
+
+    vm.submitSighting()
+
+    val sent = sightingRepository.reportedSightings.single()
+    assertEquals(setOf(AnimalCondition.INJURED), sent.conditions)
+    assertEquals(PlaceType.STREET, sent.placeType)
+    assertEquals(emptySet<AnimalActivity>(), sent.activities)
+    assertEquals(emptySet<AnimalReaction>(), sent.reactions)
+    assertEquals(CollarStatus.UNKNOWN, sent.collar)
+  }
+
+  @Test
+  fun submitSighting_withoutDetails_isSentWithEmptySetsAndUnknown() = runTest {
+    val vm = viewModelOnAlert(alertOwnedBy("someone-else"))
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
+    val sent = sightingRepository.reportedSightings.single()
+    assertEquals(emptySet<AnimalActivity>(), sent.activities)
+    assertEquals(emptySet<AnimalCondition>(), sent.conditions)
+    assertEquals(emptySet<AnimalReaction>(), sent.reactions)
+    assertEquals(PlaceType.UNKNOWN, sent.placeType)
+    assertEquals(CollarStatus.UNKNOWN, sent.collar)
+  }
+
+  @Test
+  fun submitSighting_refused_keepsTheChosenDetails() = runTest {
+    val vm = viewModelOnAlert(alertOwnedBy(signedInUid()))
+    vm.toggleActivity(AnimalActivity.RUNNING)
+    vm.selectCollar(CollarStatus.WORE_COLLAR)
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertEquals(ReportSightingViewModel.OWN_ALERT_MESSAGE, state.errorMessage)
+    assertEquals(setOf(AnimalActivity.RUNNING), state.activities)
+    assertEquals(CollarStatus.WORE_COLLAR, state.collar)
+  }
+
+  @Test
+  fun toggleActivity_addsThenRemoves() {
+    viewModel.toggleActivity(AnimalActivity.EATING)
+    viewModel.toggleActivity(AnimalActivity.HIDING)
+    assertEquals(
+        setOf(AnimalActivity.EATING, AnimalActivity.HIDING),
+        viewModel.uiState.value.activities,
+    )
+
+    viewModel.toggleActivity(AnimalActivity.EATING)
+    assertEquals(setOf(AnimalActivity.HIDING), viewModel.uiState.value.activities)
+  }
+
+  @Test
+  fun toggleReaction_addsThenRemoves() {
+    viewModel.toggleReaction(AnimalReaction.ACCEPTED_FOOD)
+    viewModel.toggleReaction(AnimalReaction.RAN_AWAY)
+    assertEquals(
+        setOf(AnimalReaction.ACCEPTED_FOOD, AnimalReaction.RAN_AWAY),
+        viewModel.uiState.value.reactions,
+    )
+
+    viewModel.toggleReaction(AnimalReaction.ACCEPTED_FOOD)
+    assertEquals(setOf(AnimalReaction.RAN_AWAY), viewModel.uiState.value.reactions)
+  }
+
+  @Test
+  fun toggleCondition_addsThenRemoves() {
+    viewModel.toggleCondition(AnimalCondition.LIMPING)
+    viewModel.toggleCondition(AnimalCondition.WET)
+    assertEquals(
+        setOf(AnimalCondition.LIMPING, AnimalCondition.WET),
+        viewModel.uiState.value.conditions,
+    )
+
+    viewModel.toggleCondition(AnimalCondition.LIMPING)
+    assertEquals(setOf(AnimalCondition.WET), viewModel.uiState.value.conditions)
+  }
+
+  @Test
+  fun toggleCondition_looksFine_clearsTheOtherConditions() {
+    viewModel.toggleCondition(AnimalCondition.LIMPING)
+    viewModel.toggleCondition(AnimalCondition.THIN)
+
+    viewModel.toggleCondition(AnimalCondition.LOOKS_FINE)
+
+    assertEquals(setOf(AnimalCondition.LOOKS_FINE), viewModel.uiState.value.conditions)
+  }
+
+  @Test
+  fun toggleCondition_anotherCondition_removesLooksFine() {
+    viewModel.toggleCondition(AnimalCondition.LOOKS_FINE)
+
+    viewModel.toggleCondition(AnimalCondition.BLEEDING)
+
+    assertEquals(setOf(AnimalCondition.BLEEDING), viewModel.uiState.value.conditions)
+  }
+
+  @Test
+  fun toggleCondition_looksFineAgain_clearsIt() {
+    viewModel.toggleCondition(AnimalCondition.LOOKS_FINE)
+
+    viewModel.toggleCondition(AnimalCondition.LOOKS_FINE)
+
+    assertEquals(emptySet<AnimalCondition>(), viewModel.uiState.value.conditions)
+  }
+
+  @Test
+  fun selectPlaceType_choosesChangesAndClears() {
+    viewModel.selectPlaceType(PlaceType.PARK)
+    assertEquals(PlaceType.PARK, viewModel.uiState.value.placeType)
+
+    viewModel.selectPlaceType(PlaceType.FOREST)
+    assertEquals(PlaceType.FOREST, viewModel.uiState.value.placeType)
+
+    // Choosing the chosen one again clears it
+    viewModel.selectPlaceType(PlaceType.FOREST)
+    assertEquals(PlaceType.UNKNOWN, viewModel.uiState.value.placeType)
+  }
+
+  @Test
+  fun selectCollar_choosesChangesAndClears() {
+    viewModel.selectCollar(CollarStatus.WORE_COLLAR)
+    assertEquals(CollarStatus.WORE_COLLAR, viewModel.uiState.value.collar)
+
+    viewModel.selectCollar(CollarStatus.NO_COLLAR)
+    assertEquals(CollarStatus.NO_COLLAR, viewModel.uiState.value.collar)
+
+    // Choosing the chosen one again clears it
+    viewModel.selectCollar(CollarStatus.NO_COLLAR)
+    assertEquals(CollarStatus.UNKNOWN, viewModel.uiState.value.collar)
+  }
+
+  @Test
+  fun details_doNotChangeWhetherTheFormCanBeSubmitted() {
+    val incomplete = ReportSightingUiState(selectedSpecies = Species.DOG)
+    val complete = validNoMatchState().copy(photoUri = PHOTO, photoCheck = PhotoCheck.ANIMAL)
+
+    fun ReportSightingUiState.withDetails() =
+        copy(
+            activities = setOf(AnimalActivity.EATING),
+            conditions = setOf(AnimalCondition.INJURED),
+            reactions = setOf(AnimalReaction.HID),
+            placeType = PlaceType.GARDEN,
+            collar = CollarStatus.WORE_COLLAR,
+        )
+
+    assertFalse(incomplete.withDetails().canSubmit)
+    assertTrue(complete.canSubmit)
+    assertTrue(complete.withDetails().canSubmit)
+  }
+
+  // ===================== Sending while offline =====================
+
+  @Test
+  fun submitSighting_offline_queuesTheSightingWithItsLocalPhotoAndSendsNothing() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    vm.setDirection(90)
+    vm.toggleCondition(AnimalCondition.LIMPING)
+
+    vm.submitSighting()
+
+    val queued = pendingSightings.pending.single()
+    assertEquals(PHOTO, queued.photoUri)
+    with(queued.sighting) {
+      assertEquals("sighting-1", id)
+      assertEquals(signedInUid(), reporterId)
+      assertEquals(Location(46.5, 6.6), location)
+      assertEquals(fixedTimestamp, seenAtMillis)
+      assertEquals(Species.DOG, species)
+      assertNull(alertId)
+      assertNull("The photo is uploaded when the sighting is sent", photoUrl)
+      assertEquals(90, headingDegrees)
+      assertEquals(setOf(AnimalCondition.LIMPING), conditions)
+    }
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+    assertTrue(photoRepository.uploadedPhotos.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offline_showsSavedOfflineAndCantBeSentAgain() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertTrue(state.savedOffline)
+    assertFalse("Saved, not sent: the screen stays open", state.submitted)
+    assertFalse(state.isSubmitting)
+    assertNull(state.errorMessage)
+    assertFalse(state.canSubmit)
+
+    vm.submitSighting()
+
+    assertEquals(1, pendingSightings.addCount)
+  }
+
+  @Test
+  fun submitSighting_offlineOnAPlausibleAlert_queuesItWithTheAlert() = runTest {
+    val alerts = FakeAlertRepository().apply { publishAlert(alertOwnedBy("someone-else")) }
+    val vm = offlineViewModel(alerts).onAlert()
+
+    vm.submitSighting()
+
+    assertEquals(ALERT_ID, pendingSightings.pending.single().sighting.alertId)
+    assertNull(pendingSightings.pending.single().photoUri)
+    assertTrue(vm.uiState.value.savedOffline)
+  }
+
+  @Test
+  fun submitSighting_offlineOnAnAlertThatCantBeLoaded_isStillQueued() = runTest {
+    val alerts = FakeAlertRepository().apply { failure = Exception("Offline") }
+    val vm = offlineViewModel(alerts).onAlert()
+
+    vm.submitSighting()
+
+    assertEquals(ALERT_ID, pendingSightings.pending.single().sighting.alertId)
+    assertTrue(vm.uiState.value.savedOffline)
+  }
+
+  @Test
+  fun submitSighting_offlineOnOwnAlert_isRefusedAndNotQueued() = runTest {
+    val alerts = FakeAlertRepository().apply { publishAlert(alertOwnedBy(signedInUid())) }
+    val vm = offlineViewModel(alerts).onAlert()
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.OWN_ALERT_MESSAGE, vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineWhenTheQueueFails_showsAnErrorAndKeepsTheFormToRetry() = runTest {
+    pendingSightings.addFailure = Exception("Disk full")
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    val state = vm.uiState.value
+    assertEquals(ReportSightingViewModel.OFFLINE_SAVE_FAILED, state.errorMessage)
+    assertFalse(state.savedOffline)
+    assertFalse(state.isSubmitting)
+    assertTrue(state.canSubmit)
+    assertTrue(pendingSightings.pending.isEmpty())
+
+    pendingSightings.addFailure = null
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.savedOffline)
+    assertNull(vm.uiState.value.errorMessage)
+    assertEquals(1, pendingSightings.pending.size)
+  }
+
+  @Test
+  fun submitSighting_offlineWithoutAQueue_showsAnError() = runTest {
+    val vm =
+        ReportSightingViewModel(
+                sightingRepository = sightingRepository,
+                photoRepository = photoRepository,
+                authRepository = authRepository,
+                now = { fixedTimestamp },
+                networkMonitor = FakeNetworkMonitor(online = false),
+            )
+            .withAValidForm()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.OFFLINE_SAVE_FAILED, vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineAndSignedOut_isRefusedAndNotQueued() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    authRepository.signOut()
+
+    vm.submitSighting()
+
+    assertEquals("You must be signed in to submit a sighting", vm.uiState.value.errorMessage)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineWithoutALocation_isRefusedAndNotQueued() = runTest {
+    val vm = offlineViewModel()
+    vm.setSpecies(Species.DOG)
+    vm.selectNoMatchingAlert()
+    vm.setPhotoUri(PHOTO)
+
+    vm.submitSighting()
+
+    assertEquals("Species and position are required", vm.uiState.value.errorMessage)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_offlineWithNoMatchingAlertAndNoPhoto_isRefusedAndNotQueued() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+
+    vm.submitSighting()
+
+    assertNotNull(vm.uiState.value.errorMessage)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_online_isSentAsBeforeAndNothingIsQueued() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    network.online = true
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.submitted)
+    assertFalse(vm.uiState.value.savedOffline)
+    assertNotNull(sightingRepository.reportedSightings.single().photoUrl)
+    assertEquals(PHOTO, photoRepository.uploadedPhotos.values.single())
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun submitSighting_onlineOnAnAlertThatCantBeLoaded_isStillRefused() = runTest {
+    val alerts = FakeAlertRepository().apply { failure = Exception("Server down") }
+    val vm = offlineViewModel(alerts).onAlert()
+    network.online = true
+
+    vm.submitSighting()
+
+    assertEquals(ReportSightingViewModel.ALERT_NOT_LOADED, vm.uiState.value.errorMessage)
+    assertTrue(pendingSightings.pending.isEmpty())
+    assertTrue(sightingRepository.reportedSightings.isEmpty())
+  }
+
+  @Test
+  fun isOffline_isTrueWhenTheFormOpensOffline() {
+    assertTrue(offlineViewModel().uiState.value.isOffline)
+  }
+
+  @Test
+  fun isOffline_isFalseWhenTheFormOpensOnline() {
+    network.online = true
+
+    assertFalse(offlineViewModel().uiState.value.isOffline)
+  }
+
+  @Test
+  fun isOffline_isFalseWithoutANetworkMonitor() {
+    assertFalse(viewModel.uiState.value.isOffline)
+  }
+
+  @Test
+  fun submitSighting_whenTheNetworkWasLostAfterOpening_showsOfflineAndQueues() = runTest {
+    network.online = true
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    network.online = false
+
+    vm.submitSighting()
+
+    assertTrue(vm.uiState.value.isOffline)
+    assertTrue(vm.uiState.value.savedOffline)
+    assertEquals(1, pendingSightings.pending.size)
+  }
+
+  @Test
+  fun submitSighting_whenTheNetworkCameBackAfterOpening_clearsOfflineAndSends() = runTest {
+    val vm = offlineViewModel().withAValidForm()
+    vm.setPhotoUri(PHOTO)
+    network.online = true
+
+    vm.submitSighting()
+
+    assertFalse(vm.uiState.value.isOffline)
+    assertTrue(vm.uiState.value.submitted)
+    assertTrue(pendingSightings.pending.isEmpty())
+  }
+
+  @Test
+  fun canSubmit_isFalseOnceSavedOffline() {
+    val state = validNoMatchState().copy(photoUri = PHOTO, photoCheck = PhotoCheck.ANIMAL)
+
+    assertTrue(state.canSubmit)
+    assertFalse(state.copy(savedOffline = true).canSubmit)
+  }
+
+  private val pendingSightings = FakePendingSightingRepository()
+  private val network = FakeNetworkMonitor(online = false)
+
+  /** A view model that is offline (see [network]) and queues in [pendingSightings]. */
+  private fun offlineViewModel(alertRepository: FakeAlertRepository? = null) =
+      ReportSightingViewModel(
+          sightingRepository = sightingRepository,
+          photoRepository = photoRepository,
+          authRepository = authRepository,
+          now = { fixedTimestamp },
+          alertRepository = alertRepository,
+          pendingSightingRepository = pendingSightings,
+          networkMonitor = network,
+      )
+
+  /** Fills the form for a sighting at [ALERT_PLACE] on [ALERT_ID], without a photo. */
+  private fun ReportSightingViewModel.onAlert() = apply {
+    setSpecies(Species.DOG)
+    setLocation(ALERT_PLACE)
+    selectAlert(ALERT_ID)
   }
 
   private fun signedInUid() = authRepository.currentUser.value!!.uid

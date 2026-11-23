@@ -272,8 +272,8 @@ class SightingRepositoryFirestoreTest {
       seedBypassingRules(otherAlert)
       seedBypassingRules(sameTime)
       updates.awaitSightings(listOf(sameTime, first))
-      repository.setSightingStatus(first.id, SightingStatus.CONFIRMED).getOrThrow()
-      updates.awaitSightings(listOf(sameTime, first.copy(status = SightingStatus.CONFIRMED)))
+      repository.setSightingStatus(first.id, SightingStatus.DISMISSED).getOrThrow()
+      updates.awaitSightings(listOf(sameTime, first.copy(status = SightingStatus.DISMISSED)))
 
       updates.cancel()
     }
@@ -355,15 +355,30 @@ class SightingRepositoryFirestoreTest {
     repository.reportSighting(notMyAlert).getOrThrow()
     repository.reportSighting(noAlert).getOrThrow()
 
-    assertTrue(repository.setSightingStatus(notMyAlert.id, SightingStatus.CONFIRMED).isFailure)
-    assertTrue(repository.setSightingStatus(noAlert.id, SightingStatus.CONFIRMED).isFailure)
+    assertTrue(repository.setSightingStatus(notMyAlert.id, SightingStatus.DISMISSED).isFailure)
+    assertTrue(repository.setSightingStatus(noAlert.id, SightingStatus.DISMISSED).isFailure)
     assertTrue(
-        repository.setSightingStatus(repository.getNewId(), SightingStatus.CONFIRMED).isFailure
+        repository.setSightingStatus(repository.getNewId(), SightingStatus.DISMISSED).isFailure
     )
     assertEquals(
         SightingStatus.PENDING,
         repository.getSightingsForAlert(someoneElsesAlert).getOrThrow().single().status,
     )
+  }
+
+  @Test
+  fun setSightingStatus_votedFalse_failsAndChangesNothing() = runTest {
+    // Even the alert owner cannot hide a sighting as false: only the votes can (#463)
+    val alertId = seedAlertBypassingRules(ownerId = currentUserId())
+    val sighting =
+        sighting(id = repository.getNewId(), reporterId = OTHER_REPORTER, alertId = alertId)
+    seedBypassingRules(sighting)
+
+    val error =
+        repository.setSightingStatus(sighting.id, SightingStatus.VOTED_FALSE).exceptionOrNull()
+
+    assertTrue(error is IllegalArgumentException)
+    assertEquals(listOf(sighting), repository.getSightingsForAlert(alertId).getOrThrow())
   }
 
   private fun currentUserId(): String =
