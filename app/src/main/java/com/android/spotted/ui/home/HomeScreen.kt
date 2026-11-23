@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -67,6 +68,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -94,6 +96,7 @@ object HomeScreenTestTags {
   const val SETTINGS_BUTTON = "home_settingsButton"
   const val SNACKBAR = "home_snackbar"
   const val NOTIFICATIONS_BUTTON = "home_notificationsButton"
+  const val NOTIFICATIONS_BADGE = "home_notificationsBadge"
   const val ERROR_MESSAGE = "home_errorMessage"
   const val PETS_TITLE = "home_petsTitle"
   const val PETS_LOADER = "home_petsLoader"
@@ -304,7 +307,13 @@ private fun HomeList(
   ) {
     item(key = "header") {
       Column {
-        Header(state.userName, state.userPhotoUrl, onSettingsClick, onNotificationsClick)
+        Header(
+            state.userName,
+            state.userPhotoUrl,
+            state.pendingSightings,
+            onSettingsClick,
+            onNotificationsClick,
+        )
         state.errorMessage?.let { message ->
           Spacer(Modifier.height(8.dp))
           Text(
@@ -367,6 +376,7 @@ private fun HomeList(
 private fun Header(
     userName: String,
     photoUrl: String?,
+    pendingSightings: Int,
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
 ) {
@@ -400,11 +410,15 @@ private fun Header(
         21.dp,
         onNotificationsClick,
         HomeScreenTestTags.NOTIFICATIONS_BUTTON,
+        badgeCount = pendingSightings,
     )
   }
 }
 
-/** A 32 dp white circle as in Figma, inside a 48 dp touch target. */
+/**
+ * A 32 dp white circle as in Figma, inside a 48 dp touch target, with a red badge when [badgeCount]
+ * is above 0 ("9+" above 9).
+ */
 @Composable
 private fun HeaderButton(
     icon: Int,
@@ -412,6 +426,7 @@ private fun HeaderButton(
     iconSize: Dp,
     onClick: () -> Unit,
     tag: String,
+    badgeCount: Int = 0,
 ) {
   Box(
       contentAlignment = Alignment.Center,
@@ -434,6 +449,21 @@ private fun HeaderButton(
           description,
           Modifier.size(iconSize),
           colorFilter = ColorFilter.tint(SpottedTheme.colors.ink),
+      )
+    }
+    if (badgeCount > 0) {
+      Text(
+          if (badgeCount > 9) "9+" else "$badgeCount",
+          style = jakarta(10, 12f, FontWeight.Bold, SpottedTheme.colors.onAccent),
+          textAlign = TextAlign.Center,
+          modifier =
+              Modifier.align(Alignment.TopEnd)
+                  .padding(top = 4.dp, end = 4.dp)
+                  .defaultMinSize(minWidth = 16.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .background(SpottedTheme.colors.error)
+                  .padding(horizontal = 4.dp, vertical = 2.dp)
+                  .testTag(HomeScreenTestTags.NOTIFICATIONS_BADGE),
       )
     }
   }

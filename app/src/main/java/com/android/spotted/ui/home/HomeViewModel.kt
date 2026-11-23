@@ -11,8 +11,10 @@ import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.location.LocationRepositoryProvider
+import com.android.spotted.data.notification.NotificationRepositoryDefault
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.sighting.PendingSightingRepositoryProvider
+import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.PetRepository
@@ -25,6 +27,7 @@ import com.android.spotted.model.distanceKm
 import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.AddressRepository
 import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.notification.NotificationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.sighting.PendingSighting
 import com.android.spotted.model.sighting.PendingSightingRepository
@@ -68,6 +71,7 @@ import kotlinx.coroutines.launch
  *   home.
  * @property pendingSightingRepository the sightings made offline and waiting to be sent; null shows
  *   none.
+ * @property notificationRepository counts the new sightings for the bell's badge; null shows none.
  */
 class HomeViewModel(
     private val authRepository: AuthRepository,
@@ -81,6 +85,7 @@ class HomeViewModel(
     private val photoRepository: PhotoRepository? = null,
     private val locationRepository: LocationRepository? = null,
     private val pendingSightingRepository: PendingSightingRepository? = null,
+    private val notificationRepository: NotificationRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HomeUiState())
@@ -155,6 +160,7 @@ class HomeViewModel(
     loadJob = viewModelScope.launch {
       launch { loadPets(uid) }
       launch { loadOwnLostPets(uid) }
+      launch { observePendingSightings(uid) }
       launch {
         // The lost pets are searched around the user's home, so the profile comes first
         val profile = loadProfile(uid)
@@ -357,6 +363,14 @@ class HomeViewModel(
   }
 
   /** Applies [transform] only if [uid] is still the user shown, so a late result is dropped. */
+  /** Keeps the bell's badge up to date; a failure keeps the last count. */
+  private suspend fun observePendingSightings(uid: String) {
+    val repository = notificationRepository ?: return
+    repository.observePendingSightings(uid).collect { result ->
+      result.onSuccess { pending -> updateFor(uid) { it.copy(pendingSightings = pending.size) } }
+    }
+  }
+
   private fun updateFor(uid: String, transform: (HomeUiState) -> HomeUiState) {
     if (uid != shownUid) return
     _uiState.update(transform)
@@ -386,15 +400,18 @@ class HomeViewModel(
         val application =
             requireNotNull(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
         val photoRepository = PhotoRepositoryFirestore(application)
+        val alertRepository = AlertRepositoryFirestore()
         HomeViewModel(
             authRepository = AuthRepositoryProvider.authRepository,
             userRepository = UserRepositoryFirestore(),
             petRepository = PetRepositoryFirestore(photoRepository = photoRepository),
-            alertRepository = AlertRepositoryFirestore(),
+            alertRepository = alertRepository,
             addressRepository = AddressRepositoryGeocoder(application),
             photoRepository = photoRepository,
             locationRepository = LocationRepositoryProvider.create(application),
             pendingSightingRepository = PendingSightingRepositoryProvider.get(application),
+            notificationRepository =
+                NotificationRepositoryDefault(alertRepository, SightingRepositoryFirestore()),
         )
       }
     }
