@@ -491,6 +491,7 @@ private fun StatusChip(sighting: Sighting) {
         SightingStatus.PENDING -> "To review" to SpottedTheme.colors.blue
         SightingStatus.CONFIRMED -> "Confirmed" to SpottedTheme.colors.success
         SightingStatus.DISMISSED -> "Dismissed" to SpottedTheme.colors.error
+        SightingStatus.VOTED_FALSE -> "Hidden" to SpottedTheme.colors.textSecondary
       }
   Text(
       label,

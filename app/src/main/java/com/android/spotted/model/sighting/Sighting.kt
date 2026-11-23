@@ -61,6 +61,14 @@ enum class SightingStatus {
 
   /** The owner says it is not their pet: the sighting is ignored. */
   DISMISSED,
+
+  /**
+   * Enough users voted that the sighting is false, so it is hidden from the owner's map. It stays
+   * in the owner's list, labelled "Hidden", so they can restore it (#464). Only the vote threshold
+   * sets it (#463), never [SightingRepository.setSightingStatus]: one person alone cannot mark a
+   * sighting false.
+   */
+  VOTED_FALSE,
 }
 
 /**
