@@ -31,8 +31,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** Mid-June 2026, far from New Year in any time zone. */
-private val MID_2026 = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
+/**
+ * Mid-June 2035: a year far from the real one, so the tests fail if the ViewModel reads the system
+ * clock instead of `now`. Mid-June is also far from New Year in any time zone.
+ */
+private val MID_2035 = Instant.parse("2035-06-15T12:00:00Z").toEpochMilli()
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddPetsViewModelTest {
@@ -47,7 +50,7 @@ class AddPetsViewModelTest {
     Dispatchers.setMain(testDispatcher)
     petRepository = PetRepositoryLocal()
     photoRepository = FakePhotoRepository()
-    viewModel = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2026 })
+    viewModel = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2035 })
   }
 
   @After
@@ -380,6 +383,19 @@ class AddPetsViewModelTest {
   }
 
   @Test
+  fun finish_withRefusedBirthYear_staysAndSavesNothing() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onBirthYearChanged(2036)
+    assertFalse(viewModel.uiState.value.canFinish)
+
+    viewModel.finish()
+    advanceUntilIdle()
+
+    assertFalse(viewModel.uiState.value.isDone)
+    assertTrue(savedPets().isEmpty())
+  }
+
+  @Test
   fun finish_whenSaveFails_staysOnStep() = runTest {
     viewModel = viewModelWithFailingSave(IllegalStateException("Denied"))
     fillForm(name = "Rex", species = Species.DOG)
@@ -416,7 +432,7 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun eachNewField_countsAsFormInput() {
+  fun eachNewField_countsAsFormInput_andBlocksFinishWithoutNameAndSpecies() {
     val setters: List<AddPetsViewModel.() -> Unit> =
         listOf(
             { onBirthYearChanged(2021) },
@@ -428,7 +444,7 @@ class AddPetsViewModelTest {
             { onMicrochippedChanged(Microchipped.YES) },
         )
     setters.forEach { set ->
-      val fresh = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2026 })
+      val fresh = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2035 })
       fresh.set()
       assertTrue(fresh.uiState.value.hasFormInput)
       // Started but without a name and species: the step can't end without losing it
@@ -486,14 +502,14 @@ class AddPetsViewModelTest {
   fun birthYear_inTheFuture_isRefusedAndBlocksSaving() = runTest {
     fillForm(name = "Rex", species = Species.DOG)
 
-    viewModel.onBirthYearChanged(2027)
+    viewModel.onBirthYearChanged(2036)
 
     val state = viewModel.uiState.value
-    assertEquals(2027, state.birthYear)
+    assertEquals(2036, state.birthYear)
     assertEquals(
         AddPetsMessage.Resource(
             com.android.spotted.R.string.add_pets_birth_year_invalid,
-            listOf(AddPetsViewModel.MIN_BIRTH_YEAR, 2026),
+            listOf(AddPetsViewModel.MIN_BIRTH_YEAR, 2035),
         ),
         state.birthYearError,
     )
@@ -506,9 +522,12 @@ class AddPetsViewModelTest {
 
   @Test
   fun birthYear_beforeTheMinimum_isRefused() {
+    fillForm(name = "Rex", species = Species.DOG)
+
     viewModel.onBirthYearChanged(AddPetsViewModel.MIN_BIRTH_YEAR - 1)
 
     assertNotNull(viewModel.uiState.value.birthYearError)
+    assertFalse(viewModel.uiState.value.canSave)
   }
 
   @Test
@@ -516,21 +535,21 @@ class AddPetsViewModelTest {
     viewModel.onBirthYearChanged(AddPetsViewModel.MIN_BIRTH_YEAR)
     assertNull(viewModel.uiState.value.birthYearError)
 
-    viewModel.onBirthYearChanged(2026)
+    viewModel.onBirthYearChanged(2035)
     assertNull(viewModel.uiState.value.birthYearError)
   }
 
   @Test
   fun birthYear_fixedOrCleared_removesTheErrorAndAllowsSaving() {
     fillForm(name = "Rex", species = Species.DOG)
-    viewModel.onBirthYearChanged(2030)
+    viewModel.onBirthYearChanged(2040)
     assertFalse(viewModel.uiState.value.canSave)
 
     viewModel.onBirthYearChanged(2020)
     assertNull(viewModel.uiState.value.birthYearError)
     assertTrue(viewModel.uiState.value.canSave)
 
-    viewModel.onBirthYearChanged(2030)
+    viewModel.onBirthYearChanged(2040)
     viewModel.onBirthYearChanged(null)
     assertNull(viewModel.uiState.value.birthYear)
     assertNull(viewModel.uiState.value.birthYearError)
@@ -538,7 +557,7 @@ class AddPetsViewModelTest {
   }
 
   @Test
-  fun changingTheSpecies_clearsThePickedBreed() {
+  fun changingTheSpecies_clearsBreed_sameSpeciesKeepsIt() {
     viewModel.onSpeciesChanged(Species.DOG)
     viewModel.onBreedIdChanged("beagle")
 
