@@ -107,6 +107,28 @@ service cloud.firestore {
           && request.resource.data.blockedUid == blockedUid;
     }
 
+    // reports/{reportId}: a user reported to the moderators, written by ReportRepositoryFirestore.
+    // A signed-in user can only create a report as themselves, about someone else. Reports are for
+    // the moderators (Firebase console): nobody can read, change or delete one from the app.
+    match /reports/{reportId} {
+      function validReport(d) {
+        return d.keys().hasOnly(['reporterId', 'reportedUserId', 'targetId', 'reason', 'createdAtMillis'])
+            && d.keys().hasAll(['reporterId', 'reportedUserId', 'targetId', 'reason', 'createdAtMillis'])
+            && d.reporterId == request.auth.uid
+            && d.reportedUserId is string && d.reportedUserId.size() > 0
+            && d.reportedUserId.size() <= 128
+            && d.reportedUserId != request.auth.uid
+            && d.targetId is string && d.targetId.size() > 0 && d.targetId.size() <= 128
+            && d.reason in ['FAKE_SIGHTING', 'SPAM', 'INAPPROPRIATE', 'OTHER']
+            // At most 5 minutes in the future (clocks are not always in sync)
+            && d.createdAtMillis is int && d.createdAtMillis > 0
+            && d.createdAtMillis <= request.time.toMillis() + 300000;
+      }
+
+      allow create: if isAuthenticated() && validReport(request.resource.data);
+      allow read, update, delete: if false;
+    }
+
     match /pets/{petId} {
       // Optional details (#388): absent in older pets, else one of the allowed values. The birth
       // year can't be in the future; null means "not given" for it and for the breed id.
