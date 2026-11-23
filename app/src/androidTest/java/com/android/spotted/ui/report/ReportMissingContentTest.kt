@@ -7,6 +7,8 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Pet
@@ -24,11 +27,14 @@ import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.ui.components.MapPickerTestTags
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -130,27 +136,71 @@ class ReportMissingContentTest {
 
   @Test
   fun screen_publishesThroughTheViewModelAndCallsOnPublished() {
-    val auth = FakeAuthRepository()
-    val owner = runBlocking { auth.signInWithGoogle("fake-token").getOrThrow() }
-    val pets = PetRepositoryLocal()
-    runBlocking { pets.addPet(milo.copy(ownerId = owner.uid)) }
-    val alerts = InMemoryAlertRepository()
-    val viewModel = ReportMissingViewModel(alerts, pets, auth, now = { 1_000L })
+    val (viewModel, alerts) = readyScreenViewModel()
     var published = false
     composeTestRule.setContent {
       ReportMissingScreen(onBack = {}, onPublished = { published = true }, viewModel = viewModel)
     }
+    openWhatHappenedFromTheForm(viewModel)
 
-    // The owner's only pet is preselected once loaded; the location comes from the map.
-    composeTestRule.waitUntil(5_000) { viewModel.uiState.value.selectedPetId == "milo" }
-    composeTestRule.runOnIdle { viewModel.setLocation(parcBertrand) }
-    composeTestRule
-        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON)
-        .performScrollTo()
-        .performClick()
+    tap(ReportMissingScreenTestTags.WHAT_HAPPENED_PUBLISH)
 
     composeTestRule.waitUntil(5_000) { published }
     assertEquals(listOf("milo"), alerts.published.map { it.petId })
+  }
+
+  @Test
+  fun screen_pickCauseAndPlace_thenPublish_sendsThemWithTheAlert() {
+    val (viewModel, alerts) = readyScreenViewModel()
+    var published = false
+    composeTestRule.setContent {
+      ReportMissingScreen(onBack = {}, onPublished = { published = true }, viewModel = viewModel)
+    }
+    openWhatHappenedFromTheForm(viewModel)
+
+    tap(ReportMissingScreenTestTags.causeChip(LossCause.DURING_A_WALK))
+    tap(ReportMissingScreenTestTags.environmentChip(LossEnvironment.SUBURB))
+    tap(ReportMissingScreenTestTags.WHAT_HAPPENED_PUBLISH)
+
+    composeTestRule.waitUntil(5_000) { published }
+    val alert = alerts.published.single()
+    assertEquals(LossCause.DURING_A_WALK, alert.lossCause)
+    assertEquals(LossEnvironment.SUBURB, alert.lossEnvironment)
+  }
+
+  @Test
+  fun screen_skip_publishesWithoutCauseOrPlace() {
+    val (viewModel, alerts) = readyScreenViewModel()
+    var published = false
+    composeTestRule.setContent {
+      ReportMissingScreen(onBack = {}, onPublished = { published = true }, viewModel = viewModel)
+    }
+    openWhatHappenedFromTheForm(viewModel)
+
+    // A choice made before skipping is forgotten
+    tap(ReportMissingScreenTestTags.causeChip(LossCause.STOLEN))
+    tap(ReportMissingScreenTestTags.SKIP)
+
+    composeTestRule.waitUntil(5_000) { published }
+    val alert = alerts.published.single()
+    assertEquals(LossCause.UNKNOWN, alert.lossCause)
+    assertEquals(LossEnvironment.UNKNOWN, alert.lossEnvironment)
+  }
+
+  @Test
+  fun screen_backFromWhatHappened_showsTheFormAgain_andKeepsTheChoice() {
+    val (viewModel, _) = readyScreenViewModel()
+    composeTestRule.setContent {
+      ReportMissingScreen(onBack = {}, onPublished = {}, viewModel = viewModel)
+    }
+    openWhatHappenedFromTheForm(viewModel)
+    tap(ReportMissingScreenTestTags.causeChip(LossCause.SCARED_BY_NOISE))
+
+    tap(ReportMissingScreenTestTags.WHAT_HAPPENED_BACK)
+
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON).assertExists()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED).assertDoesNotExist()
+    assertEquals(LossCause.SCARED_BY_NOISE, viewModel.uiState.value.cause)
   }
 
   @Test
@@ -200,10 +250,15 @@ class ReportMissingContentTest {
   }
 
   @Test
-  fun petAndLocationChosen_publishIsEnabledAndReportsTheTap() {
+  fun petAndLocationChosen_publishIsEnabledAndOpensWhatHappened() {
+    var opened = false
     var published = false
     composeTestRule.setContent {
-      ReportMissingContent(state = ready, onPublish = { published = true })
+      ReportMissingContent(
+          state = ready,
+          onOpenWhatHappened = { opened = true },
+          onPublish = { published = true },
+      )
     }
 
     composeTestRule
@@ -212,7 +267,9 @@ class ReportMissingContentTest {
         .assertIsEnabled()
         .performClick()
 
-    assertTrue(published)
+    assertTrue(opened)
+    // The alert is published from the "What happened?" step, not from the form
+    assertFalse(published)
   }
 
   @Test
@@ -365,5 +422,139 @@ class ReportMissingContentTest {
     composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.BACK_BUTTON).performClick()
 
     assertTrue(back)
+  }
+
+  @Test
+  fun whatHappened_showsEveryCauseAndPlace_butNotUnknown_andHidesTheForm() {
+    composeTestRule.setContent { ReportMissingContent(state = whatHappened) }
+
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON).assertDoesNotExist()
+    LossCause.entries.forEach { cause ->
+      val chip = composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.causeChip(cause))
+      if (cause == LossCause.UNKNOWN) chip.assertDoesNotExist()
+      else chip.performScrollTo().assertIsNotSelected()
+    }
+    LossEnvironment.entries.forEach { environment ->
+      val chip =
+          composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.environmentChip(environment))
+      if (environment == LossEnvironment.UNKNOWN) chip.assertDoesNotExist()
+      else chip.performScrollTo().assertIsNotSelected()
+    }
+  }
+
+  @Test
+  fun whatHappened_tappingAChip_reportsIt_andTappingTheChosenOne_unselectsIt() {
+    val causes = mutableListOf<LossCause>()
+    val environments = mutableListOf<LossEnvironment>()
+    composeTestRule.setContent {
+      ReportMissingContent(
+          state =
+              whatHappened.copy(
+                  cause = LossCause.STOLEN,
+                  environment = LossEnvironment.CITY_CENTRE,
+              ),
+          onCauseSelected = { causes += it },
+          onEnvironmentSelected = { environments += it },
+      )
+    }
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.causeChip(LossCause.STOLEN))
+        .assertIsSelected()
+
+    tap(ReportMissingScreenTestTags.causeChip(LossCause.DURING_A_WALK))
+    tap(ReportMissingScreenTestTags.causeChip(LossCause.STOLEN))
+    tap(ReportMissingScreenTestTags.environmentChip(LossEnvironment.FOREST_OR_MOUNTAIN))
+    tap(ReportMissingScreenTestTags.environmentChip(LossEnvironment.CITY_CENTRE))
+
+    assertEquals(listOf(LossCause.DURING_A_WALK, LossCause.UNKNOWN), causes)
+    assertEquals(listOf(LossEnvironment.FOREST_OR_MOUNTAIN, LossEnvironment.UNKNOWN), environments)
+  }
+
+  @Test
+  fun whatHappened_publishSkipAndBack_reportTheTaps() {
+    var published = false
+    var skipped = false
+    var back = 0
+    composeTestRule.setContent {
+      ReportMissingContent(
+          state = whatHappened,
+          onPublish = { published = true },
+          onSkip = { skipped = true },
+          onBackToForm = { back++ },
+      )
+    }
+
+    tap(ReportMissingScreenTestTags.WHAT_HAPPENED_PUBLISH)
+    tap(ReportMissingScreenTestTags.SKIP)
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED_BACK).performClick()
+    Espresso.pressBack()
+
+    assertTrue(published)
+    assertTrue(skipped)
+    composeTestRule.runOnIdle { assertEquals("The arrow and the system back go back", 2, back) }
+  }
+
+  @Test
+  fun whatHappened_whilePublishing_disablesPublishAndSkip() {
+    composeTestRule.setContent {
+      ReportMissingContent(state = whatHappened.copy(isPublishing = true))
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED_PUBLISH)
+        .performScrollTo()
+        .assertIsNotEnabled()
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_LOADER, useUnmergedTree = true)
+        .assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.SKIP)
+        .performScrollTo()
+        .assertIsNotEnabled()
+  }
+
+  @Test
+  fun whatHappened_publishError_isShownOnTheStep() {
+    var dismissed = false
+    composeTestRule.setContent {
+      ReportMissingContent(
+          state = whatHappened.copy(errorMessage = "Could not publish"),
+          onDismissError = { dismissed = true },
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(ReportMissingScreenTestTags.ERROR_MESSAGE)
+        .performScrollTo()
+        .assertIsDisplayed()
+    composeTestRule.onNodeWithText("OK").performClick()
+
+    assertTrue(dismissed)
+  }
+
+  private val whatHappened
+    get() = ready.copy(showWhatHappened = true)
+
+  private fun tap(tag: String) {
+    composeTestRule.onNodeWithTag(tag).performScrollTo().performClick()
+  }
+
+  /** A real view model whose owner has only [milo], with the alerts it publishes. */
+  private fun readyScreenViewModel(): Pair<ReportMissingViewModel, InMemoryAlertRepository> {
+    val auth = FakeAuthRepository()
+    val owner = runBlocking { auth.signInWithGoogle("fake-token").getOrThrow() }
+    val pets = PetRepositoryLocal()
+    runBlocking { pets.addPet(milo.copy(ownerId = owner.uid)) }
+    val alerts = InMemoryAlertRepository()
+    return ReportMissingViewModel(alerts, pets, auth, now = { 1_000L }) to alerts
+  }
+
+  /** Waits for [milo] to be preselected, sets the location and taps the form's publish button. */
+  private fun openWhatHappenedFromTheForm(viewModel: ReportMissingViewModel) {
+    composeTestRule.waitUntil(5_000) { viewModel.uiState.value.selectedPetId == "milo" }
+    composeTestRule.runOnIdle { viewModel.setLocation(parcBertrand) }
+    tap(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED).assertIsDisplayed()
   }
 }

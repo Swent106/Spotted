@@ -1,3 +1,4 @@
+<!-- Portions of this code were generated with the help of Claude (Anthropic). -->
 <resources>
     <string name="app_name">Spotted</string>
     <string name="title_activity_main">@string/app_name</string>
@@ -143,4 +144,21 @@
     <string name="link_tag_nfc_disabled">NFC is turned off. Turn it on to link the tag.</string>
     <string name="link_tag_nfc_unsupported">This phone can\'t write NFC tags.</string>
     <string name="link_tag_open_nfc_settings">Open NFC settings</string>
+
+    <!-- Report missing: the optional "What happened?" step -->
+    <string name="report_missing_what_happened_title">What happened?</string>
+    <string name="report_missing_what_happened_subtitle">Optional · it helps finders know where to look</string>
+    <string name="report_missing_cause_section">How did it get lost?</string>
+    <string name="report_missing_environment_section">Where did it happen?</string>
+    <string name="report_missing_cause_escaped_from_home">Escaped from home</string>
+    <string name="report_missing_cause_during_a_walk">During a walk</string>
+    <string name="report_missing_cause_scared_by_noise">Scared by a noise</string>
+    <string name="report_missing_cause_during_move_or_trip">During a move or trip</string>
+    <string name="report_missing_cause_stolen">Stolen</string>
+    <string name="report_missing_environment_city_centre">City centre</string>
+    <string name="report_missing_environment_suburb">Suburb</string>
+    <string name="report_missing_environment_village_or_rural">Village or countryside</string>
+    <string name="report_missing_environment_forest_or_mountain">Forest or mountain</string>
+    <string name="report_missing_unknown">Unknown</string>
+    <string name="report_missing_skip">Skip and publish</string>
 </resources>

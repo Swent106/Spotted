@@ -137,6 +137,9 @@ class OwnerFlowTest : EndToEndTest() {
         .performScrollTo()
         .assertIsEnabled()
         .performClick()
+    // The optional "What happened?" step: skipped here
+    waitFor(ReportMissingScreenTestTags.SKIP, "Publishing should ask what happened first")
+    node(ReportMissingScreenTestTags.SKIP).performScrollTo().performClick()
     waitFor(HomeScreenTestTags.SCREEN, "Home should show again once the alert is published")
 
     val alert = documents("alerts", "ownerId", ownerId).single()
