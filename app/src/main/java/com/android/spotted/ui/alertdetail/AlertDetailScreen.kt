@@ -144,6 +144,7 @@ fun AlertDetailContent(
             distanceText = state.distanceText,
             placeName = state.placeName,
             ageYears = state.ageYears,
+            canReportSighting = state.canReportSighting,
             onReportSighting = onReportSighting,
             onBack = onBack,
             onShare = { onShare(state.alert) },
@@ -181,6 +182,7 @@ private fun AlertDetails(
     distanceText: String?,
     placeName: String?,
     ageYears: Int?,
+    canReportSighting: Boolean,
     onReportSighting: () -> Unit,
     onBack: () -> Unit,
     onShare: () -> Unit,
@@ -216,7 +218,7 @@ private fun AlertDetails(
       LastSeenArea(alert.lastKnownLocation, placeName)
     }
     BottomActions(
-        canReportSighting = alert.status == AlertStatus.OPEN,
+        canReportSighting = canReportSighting,
         onReportSighting = onReportSighting,
         onShare = onShare,
     )

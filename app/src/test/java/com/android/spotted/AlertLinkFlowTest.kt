@@ -5,6 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
@@ -21,6 +24,7 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.alert.buildAlertLink
+import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.ui.StartDestination
 import com.android.spotted.ui.alertdetail.AlertDetailScreen
@@ -44,36 +48,46 @@ class AlertLinkFlowTest {
 
   private lateinit var navController: NavHostController
 
-  /** Opens the app on Home, signed in, as Android does when [link] is tapped. */
-  private fun openLink(link: String) {
+  /** The route MainActivity reads from the intent; cleared once opened, as in [SpottedApp]. */
+  private var route by mutableStateOf<String?>(null)
+
+  /**
+   * Starts the app signed in, on Home, as Android does when [link] is tapped (null: opened from the
+   * launcher). The signed-in user owns [OWN_ALERT_ID].
+   */
+  private fun startApp(link: String?) {
+    val auth = FakeAuthRepository()
     val alerts = FakeAlertRepository()
     runBlocking {
+      val user = auth.signInWithGoogle("token").getOrThrow()
       alerts.publishAlert(OPEN_ALERT)
       alerts.publishAlert(CLOSED_ALERT)
+      alerts.publishAlert(OPEN_ALERT.copy(id = OWN_ALERT_ID, petId = "rex", ownerId = user.uid))
     }
-    val route = routeOf(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+    route = link?.let(::routeOfLink)
+    // Each test opens at most one alert, so one ViewModel is enough
+    val alertDetail = AlertDetailViewModel(alerts, authRepository = auth)
     composeTestRule.setContent {
       navController = rememberNavController()
       StartRouting(StartDestination.HOME, navController)
-      NotificationRouting(route, StartDestination.HOME, navController) {}
+      NotificationRouting(route, StartDestination.HOME, navController) { route = null }
       NavHost(navController = navController, startDestination = Route.SIGNIN) {
         composable(Route.SIGNIN) { Text("sign in") }
         homeDestinations(
             navController,
             homeContent = { Text("home", Modifier.testTag(HOME)) },
             alertDetailContent = { alertId, onReportSighting, onBack ->
-              AlertDetailScreen(
-                  AlertDetailViewModel(alerts),
-                  alertId,
-                  onReportSighting,
-                  onBack = onBack,
-              )
+              AlertDetailScreen(alertDetail, alertId, onReportSighting, onBack = onBack)
             },
         )
       }
     }
     composeTestRule.waitForIdle()
   }
+
+  private fun openLink(link: String) = startApp(link)
+
+  private fun routeOfLink(link: String) = routeOf(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
 
   private fun linkTo(alertId: String) = buildAlertLink(alertId).getOrThrow()
 
@@ -122,8 +136,32 @@ class AlertLinkFlowTest {
     assertShown(HOME)
   }
 
+  @Test
+  fun aLinkTappedWhileTheAppIsOpen_opensThatAlert_thenBackGoesHome() {
+    startApp(link = null)
+    assertShown(HOME)
+
+    // What MainActivity.onNewIntent does when the app is already running
+    composeTestRule.runOnIdle { route = routeOfLink(linkTo(OPEN_ALERT.id)) }
+    composeTestRule.waitForIdle()
+    assertShown(AlertDetailTestTags.NAME)
+
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.BACK).performClick()
+    composeTestRule.waitForIdle()
+    assertShown(HOME)
+  }
+
+  @Test
+  fun theOwnerOpeningTheirOwnLink_cannotReportASighting() {
+    openLink(linkTo(OWN_ALERT_ID))
+
+    assertShown(AlertDetailTestTags.NAME)
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.REPORT_SIGHTING).assertDoesNotExist()
+  }
+
   private companion object {
     const val HOME = "test_home"
+    const val OWN_ALERT_ID = "alert-own"
 
     val OPEN_ALERT =
         Alert(
