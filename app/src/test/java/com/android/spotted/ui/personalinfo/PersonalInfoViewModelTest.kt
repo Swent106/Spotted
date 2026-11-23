@@ -5,6 +5,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.location.AddressSuggestion
 import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.user.FakeUserRepository
@@ -13,8 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -611,6 +614,226 @@ class PersonalInfoViewModelTest {
         assertFalse(state.isSaved)
         assertFalse(state.isSaving)
         assertEquals("the profile is not saved", savesBefore, userRepository.saveCalls)
+      }
+
+  private val ouchy = AddressSuggestion("Ouchy, Lausanne", Location(46.507, 6.627))
+  private val flon = AddressSuggestion("Flon, Lausanne", Location(46.521, 6.629))
+
+  private fun viewModelWithAddresses(addressRepository: FakeAddressRepository) =
+      PersonalInfoViewModel(
+          user = User(uid = "user-1", email = "jamie@example.com"),
+          userRepository = userRepository,
+          addressRepository = addressRepository,
+      )
+
+  @Test
+  fun typingTheHomeArea_proposesMatchingPlacesAfterTheDebounce() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy, flon))
+        val typing = viewModelWithAddresses(addresses)
+        advanceUntilIdle()
+
+        typing.onHomeAreaChanged("Lau")
+        advanceTimeBy(PersonalInfoViewModel.SUGGESTION_DEBOUNCE_MS - 1)
+        runCurrent()
+        assertTrue("no search before the debounce", addresses.suggestQueries.isEmpty())
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(listOf("Lau"), addresses.suggestQueries)
+        assertEquals(listOf(ouchy, flon), typing.uiState.value.addressSuggestions)
+        assertFalse(typing.uiState.value.isNoPlaceFound)
+      }
+
+  @Test
+  fun typingFast_searchesOnlyTheLastText() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy))
+        val typing = viewModelWithAddresses(addresses)
+        advanceUntilIdle()
+
+        typing.onHomeAreaChanged("Lau")
+        advanceTimeBy(100)
+        typing.onHomeAreaChanged("Laus")
+        advanceTimeBy(100)
+        typing.onHomeAreaChanged("Lausa")
+        advanceUntilIdle()
+
+        assertEquals(listOf("Lausa"), addresses.suggestQueries)
+      }
+
+  @Test
+  fun typingUnderThreeCharacters_proposesNothingAndClosesTheSuggestions() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy))
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+        assertEquals(listOf(ouchy), typing.uiState.value.addressSuggestions)
+
+        typing.onHomeAreaChanged("La ")
+        advanceUntilIdle()
+
+        assertEquals(listOf("Lau"), addresses.suggestQueries)
+        assertTrue(typing.uiState.value.addressSuggestions.isEmpty())
+        assertFalse(typing.uiState.value.isNoPlaceFound)
+      }
+
+  @Test
+  fun typingAgain_hidesThePreviousSuggestionsUntilTheNewSearchAnswers() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy))
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+        assertEquals(listOf(ouchy), typing.uiState.value.addressSuggestions)
+
+        addresses.suggestions = listOf(flon)
+        typing.onHomeAreaChanged("Flo")
+        runCurrent()
+        assertTrue("old results hidden", typing.uiState.value.addressSuggestions.isEmpty())
+
+        advanceUntilIdle()
+        assertEquals(listOf(flon), typing.uiState.value.addressSuggestions)
+      }
+
+  @Test
+  fun typingAgain_hidesThePreviousNoPlaceFound() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = emptyList())
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Xyzzy")
+        advanceUntilIdle()
+        assertTrue(typing.uiState.value.isNoPlaceFound)
+
+        typing.onHomeAreaChanged("Lausanne")
+        runCurrent()
+
+        assertFalse(typing.uiState.value.isNoPlaceFound)
+      }
+
+  @Test
+  fun typingAPlaceThatDoesNotExist_saysNoPlaceIsFound() =
+      runTest(testDispatcher) {
+        val typing = viewModelWithAddresses(FakeAddressRepository(suggestions = emptyList()))
+
+        typing.onHomeAreaChanged("Xyzzy")
+        advanceUntilIdle()
+
+        assertTrue(typing.uiState.value.addressSuggestions.isEmpty())
+        assertTrue(typing.uiState.value.isNoPlaceFound)
+      }
+
+  @Test
+  fun typingOffline_closesTheSuggestionsWithoutAnError() =
+      runTest(testDispatcher) {
+        val addresses =
+            FakeAddressRepository(suggestions = listOf(ouchy)).apply {
+              failure = java.io.IOException("offline")
+            }
+        val typing = viewModelWithAddresses(addresses)
+
+        typing.onHomeAreaChanged("Lausanne")
+        advanceUntilIdle()
+
+        val state = typing.uiState.value
+        assertTrue(state.addressSuggestions.isEmpty())
+        assertFalse(state.isNoPlaceFound)
+        assertNull(state.errorMessage)
+        assertEquals("Lausanne", state.homeArea)
+      }
+
+  @Test
+  fun suggestions_areSearchedAroundTheHomePin() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy))
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeLocationChanged(Location(46.52, 6.63))
+
+        typing.onHomeAreaChanged("Flon")
+        advanceUntilIdle()
+
+        assertEquals(Location(46.52, 6.63), addresses.lastSuggestNear)
+      }
+
+  @Test
+  fun pickingASuggestion_fillsTheFieldMovesThePinAndClosesTheSuggestions() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy, flon))
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+
+        typing.onSuggestionPicked(flon)
+        advanceUntilIdle()
+
+        val state = typing.uiState.value
+        assertEquals("Flon, Lausanne", state.homeArea)
+        assertEquals(flon.location, state.homeLocation)
+        assertTrue(state.addressSuggestions.isEmpty())
+        assertEquals("picking does not search again", listOf("Lau"), addresses.suggestQueries)
+      }
+
+  @Test
+  fun pickingASuggestion_beforeThePendingSearchEnds_keepsTheSuggestionsClosed() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = listOf(ouchy, flon))
+        val typing = viewModelWithAddresses(addresses)
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+
+        typing.onHomeAreaChanged("Laus")
+        typing.onSuggestionPicked(ouchy)
+        advanceUntilIdle()
+
+        assertTrue(typing.uiState.value.addressSuggestions.isEmpty())
+        assertEquals(listOf("Lau"), addresses.suggestQueries)
+      }
+
+  @Test
+  fun placingThePinDuringAPendingSearch_keepsTheSuggestionsClosed() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository(suggestions = emptyList())
+        val typing = viewModelWithAddresses(addresses)
+        advanceUntilIdle()
+
+        typing.onHomeAreaChanged("Lausanne")
+        typing.onHomeLocationChanged(Location(46.52, 6.63))
+        advanceUntilIdle()
+
+        val state = typing.uiState.value
+        assertTrue("the pending search is cancelled", addresses.suggestQueries.isEmpty())
+        assertFalse(state.isNoPlaceFound)
+        assertTrue(state.addressSuggestions.isEmpty())
+        assertEquals("Lausanne", state.homeArea)
+      }
+
+  @Test
+  fun placingThePin_closesOpenSuggestions() =
+      runTest(testDispatcher) {
+        val typing = viewModelWithAddresses(FakeAddressRepository(suggestions = listOf(ouchy)))
+        typing.onHomeAreaChanged("Lau")
+        advanceUntilIdle()
+        assertEquals(listOf(ouchy), typing.uiState.value.addressSuggestions)
+
+        typing.onHomeLocationChanged(Location(46.52, 6.63))
+
+        assertTrue(typing.uiState.value.addressSuggestions.isEmpty())
+        assertEquals(Location(46.52, 6.63), typing.uiState.value.homeLocation)
+      }
+
+  @Test
+  fun useCurrentLocation_writesTheAreaWithoutProposingPlaces() =
+      runTest(testDispatcher) {
+        val addresses = FakeAddressRepository("Ouchy, Lausanne", suggestions = listOf(flon))
+        val gpsViewModel = viewModelWithLocation(FakeLocationRepository(), addresses)
+
+        gpsViewModel.useCurrentLocation()
+        advanceUntilIdle()
+
+        assertEquals("Ouchy, Lausanne", gpsViewModel.uiState.value.homeArea)
+        assertTrue(gpsViewModel.uiState.value.addressSuggestions.isEmpty())
+        assertTrue(addresses.suggestQueries.isEmpty())
       }
 
   /** A saved profile with a profile photo, loaded in a ViewModel for editing. */

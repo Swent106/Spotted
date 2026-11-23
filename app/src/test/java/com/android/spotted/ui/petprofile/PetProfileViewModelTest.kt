@@ -1,9 +1,11 @@
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.petprofile
 
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
 import com.android.spotted.model.Pet.Species
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -18,6 +20,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+
+/** Mid-June 2026, far from New Year in any time zone. */
+private val MID_2026 = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
 
 /** Pet repository whose [getPet] always returns [result]. */
 private class StubPetRepository(private val result: Result<Pet>) :
@@ -102,5 +107,37 @@ class PetProfileViewModelTest {
 
     assertEquals(rex, viewModel.uiState.value.pet)
     assertNull(viewModel.uiState.value.errorMessage)
+  }
+
+  @Test
+  fun loadPet_computesTheAgeFromTheBirthYear_andNoneWhenUnknown() = runTest {
+    val repository =
+        PetRepositoryLocal().apply {
+          addPet(rex.copy(birthYear = 2021))
+          addPet(rex.copy(id = "pet-2"))
+        }
+    val viewModel = PetProfileViewModel(repository, now = { MID_2026 })
+
+    viewModel.loadPet("pet-1")
+    advanceUntilIdle()
+    assertEquals(5, viewModel.uiState.value.ageYears)
+
+    viewModel.loadPet("pet-2")
+    advanceUntilIdle()
+    assertNull(viewModel.uiState.value.ageYears)
+  }
+
+  @Test
+  fun loadPet_failureAfterASuccess_doesNotKeepThePreviousAge() = runTest {
+    val repository = PetRepositoryLocal().apply { addPet(rex.copy(birthYear = 2021)) }
+    val viewModel = PetProfileViewModel(repository, now = { MID_2026 })
+    viewModel.loadPet("pet-1")
+    advanceUntilIdle()
+
+    viewModel.loadPet("missing")
+    advanceUntilIdle()
+
+    assertNull(viewModel.uiState.value.pet)
+    assertNull(viewModel.uiState.value.ageYears)
   }
 }

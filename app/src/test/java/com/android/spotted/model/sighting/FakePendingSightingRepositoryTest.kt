@@ -6,7 +6,6 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.fakes.FakePendingSightingRepository
 import java.io.IOException
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -60,18 +59,21 @@ class FakePendingSightingRepositoryTest {
   }
 
   @Test
-  fun observeCount_emitsTheCountAfterEachChange() = runTest {
-    val counts = mutableListOf<Result<Int>>()
+  fun observeQueue_emitsTheQueueAfterEachChange() = runTest {
+    val queues = mutableListOf<List<String>>()
     val job =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-          repository.observeCount().toList(counts)
+          repository.observeQueue().collect { queues += it.getOrThrow().map { p -> p.sighting.id } }
         }
 
     repository.add(sighting("s1"))
     repository.add(sighting("s2"))
     repository.delete("s1")
 
-    assertEquals(listOf(0, 1, 2, 1).map { Result.success(it) }, counts)
+    assertEquals(
+        listOf(emptyList(), listOf("s1"), listOf("s1", "s2"), listOf("s2")),
+        queues,
+    )
     job.cancel()
   }
 
@@ -81,12 +83,12 @@ class FakePendingSightingRepositoryTest {
     repository.addFailure = error
     repository.listFailure = error
     repository.deleteFailure = error
-    repository.countFailure = error
+    repository.queueFailure = error
 
     assertSame(error, repository.add(sighting("s1")).exceptionOrNull())
     assertSame(error, repository.list().exceptionOrNull())
     assertSame(error, repository.delete("s1").exceptionOrNull())
-    assertSame(error, repository.observeCount().first().exceptionOrNull())
+    assertSame(error, repository.observeQueue().first().exceptionOrNull())
     assertEquals(emptyList<PendingSighting>(), repository.pending)
     assertEquals(0, repository.addCount)
   }

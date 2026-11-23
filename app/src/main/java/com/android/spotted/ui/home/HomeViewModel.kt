@@ -98,16 +98,17 @@ class HomeViewModel(
   /** Waiting sightings the user deleted: when they leave the queue, they were not sent. */
   private val deletingIds = mutableSetOf<String>()
 
-  /** Rows whose pet name and place were found, so they are not looked up again. */
-  private val rowCache = mutableMapOf<String, WaitingSighting>()
+  /**
+   * Rows whose pet name and place were found, so they are not looked up again. Keyed by the whole
+   * queued sighting, so a sighting replaced under the same id is looked up again.
+   */
+  private val rowCache = mutableMapOf<PendingSighting, WaitingSighting>()
 
   init {
     viewModelScope.launch { authRepository.currentUser.collect { user -> load(user) } }
     pendingSightingRepository?.let { repository ->
       viewModelScope.launch {
-        repository.observeCount().collectLatest { count ->
-          if (count.isSuccess) reloadWaiting(repository)
-        }
+        repository.observeQueue().collectLatest { queue -> queue.onSuccess { reloadWaiting(it) } }
       }
     }
   }
@@ -278,8 +279,8 @@ class HomeViewModel(
   }
 
   /**
-   * Deletes the waiting sighting being confirmed, with its photo: it is never sent. Its row goes
-   * away when the queue says it is gone.
+   * Deletes the waiting sighting being confirmed, with its photo, so it is not sent later. A send
+   * already under way is not stopped. Its row goes away when the queue says it is gone.
    */
   fun confirmDeleteWaiting() {
     val repository = pendingSightingRepository ?: return
@@ -303,15 +304,14 @@ class HomeViewModel(
    * Lists the queue again. A sighting that left it without being deleted by the user was sent: the
    * last one of the user shown is told with [HomeUiState.sentSighting].
    */
-  private suspend fun reloadWaiting(repository: PendingSightingRepository) {
-    val pending = repository.list().getOrNull() ?: return
+  private suspend fun reloadWaiting(pending: List<PendingSighting>) {
     val rows = pending.map { it.sighting.reporterId to waitingRowOf(it) }
     val ids = rows.mapTo(mutableSetOf()) { it.second.id }
     val sent = queued.lastOrNull { (reporterId, row) ->
       reporterId == shownUid && row.id !in ids && row.id !in deletingIds
     }
     deletingIds.retainAll(ids)
-    rowCache.keys.retainAll(ids)
+    rowCache.keys.retainAll(pending.toSet())
     queued = rows
     _uiState.update { state ->
       withWaiting(state).copy(sentSighting = sent?.second ?: state.sentSighting)
@@ -334,7 +334,7 @@ class HomeViewModel(
    */
   private suspend fun waitingRowOf(pending: PendingSighting): WaitingSighting {
     val sighting = pending.sighting
-    rowCache[sighting.id]?.let {
+    rowCache[pending]?.let {
       return it
     }
     val petName = sighting.alertId?.let { alertRepository.getAlertById(it).getOrNull()?.petName }
@@ -352,7 +352,7 @@ class HomeViewModel(
                         .format(Locale.US, sighting.location.latitude, sighting.location.longitude),
         )
     val complete = area != null && (sighting.alertId == null || petName != null)
-    if (complete) rowCache[sighting.id] = row
+    if (complete) rowCache[pending] = row
     return row
   }
 

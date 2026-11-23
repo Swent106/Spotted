@@ -14,7 +14,6 @@ import com.android.spotted.model.sighting.Sighting
 import java.io.File
 import java.io.FileNotFoundException
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -138,17 +137,31 @@ class PendingSightingRepositoryFileTest {
   }
 
   @Test
-  fun observeCount_startsFromWhatIsOnThePhone_thenFollowsChanges() = testScope.runTest {
+  fun observeQueue_startsFromWhatIsOnThePhone_thenFollowsChanges() = testScope.runTest {
     repository.add(sighting("s1"))
     val reopened = openRepository()
-    val counts = mutableListOf<Result<Int>>()
-    backgroundScope.launch { reopened.observeCount().toList(counts) }
+    val queues = mutableListOf<List<String>>()
+    backgroundScope.launch {
+      reopened.observeQueue().collect { queues += it.getOrThrow().map { p -> p.sighting.id } }
+    }
 
     reopened.add(sighting("s2"))
     reopened.delete("s1")
     reopened.delete("s2")
 
-    assertEquals(listOf(1, 2, 1, 0).map { Result.success(it) }, counts)
+    assertEquals(listOf(listOf("s1"), listOf("s1", "s2"), listOf("s2"), emptyList()), queues)
+  }
+
+  @Test
+  fun observeQueue_emits_whenASightingIsReplaced_andTheSizeStaysTheSame() = testScope.runTest {
+    repository.add(sighting("s1"))
+    val queues = mutableListOf<List<PendingSighting>>()
+    backgroundScope.launch { repository.observeQueue().collect { queues += it.getOrThrow() } }
+
+    repository.add(sighting("s1").copy(alertId = "alert"))
+
+    assertEquals(2, queues.size)
+    assertEquals(listOf(null, "alert"), queues.map { it.single().sighting.alertId })
   }
 
   @Test
@@ -159,7 +172,7 @@ class PendingSightingRepositoryFileTest {
     assertTrue(repository.list().isFailure)
     assertTrue(repository.add(sighting("s1")).isFailure)
     assertTrue(repository.delete("s1").isFailure)
-    assertTrue(repository.observeCount().first().isFailure)
+    assertTrue(repository.observeQueue().first().isFailure)
   }
 
   private fun readPhoto(uri: String): ByteArray = File(Uri.parse(uri).path!!).readBytes()

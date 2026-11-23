@@ -17,6 +17,7 @@ import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
+import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,6 +39,9 @@ import org.junit.Before
 import org.junit.Test
 
 private class OtherViewModel : ViewModel()
+
+/** Mid-June 2026, far from New Year in any time zone. */
+private val MID_2026 = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlertDetailViewModelTest {
@@ -143,6 +147,39 @@ class AlertDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(AlertDetailViewModel.LOAD_FAILED, viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun loadAlert_computesTheAgeFromTheBirthYearCopiedOnTheAlert() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("born-2021").copy(petBirthYear = 2021))
+        alertRepository.publishAlert(alert("no-year"))
+        val viewModel = AlertDetailViewModel(alertRepository, now = { MID_2026 })
+
+        viewModel.loadAlert("born-2021")
+        advanceUntilIdle()
+        assertEquals(5, viewModel.uiState.value.ageYears)
+
+        // An older alert, saved before the birth year was copied, shows no age
+        viewModel.loadAlert("no-year")
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.ageYears)
+      }
+
+  @Test
+  fun loadAlert_failureAfterASuccess_doesNotKeepThePreviousAge() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("born-2021").copy(petBirthYear = 2021))
+        val viewModel = AlertDetailViewModel(alertRepository, now = { MID_2026 })
+        viewModel.loadAlert("born-2021")
+        advanceUntilIdle()
+
+        alertRepository.failure = IllegalStateException("offline")
+        viewModel.loadAlert("born-2021")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.alert)
+        assertNull(viewModel.uiState.value.ageYears)
       }
 
   @Test
@@ -362,6 +399,34 @@ class AlertDetailViewModelTest {
             FakeAddressRepository().apply { failure = NoSuchElementException("unknown place") }
 
         assertNull(distanceShownBy(viewModelWithLocation(noFix(), addressRepository)))
+      }
+
+  @Test
+  fun placeName_isWhereThePetWasLastSeen() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("alert-1"))
+        val viewModel =
+            AlertDetailViewModel(alertRepository, addressRepository = FakeAddressRepository())
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertEquals("Ouchy, Lausanne", viewModel.uiState.value.placeName)
+      }
+
+  @Test
+  fun placeName_whenThePlaceCantBeNamed_isNull() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("alert-1"))
+        val addressRepository =
+            FakeAddressRepository().apply { failure = NoSuchElementException("no name") }
+        val viewModel = AlertDetailViewModel(alertRepository, addressRepository = addressRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.placeName)
+        assertEquals("alert-1", viewModel.uiState.value.alert?.id)
       }
 
   @Test

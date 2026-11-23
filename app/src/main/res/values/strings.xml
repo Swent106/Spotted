@@ -16,6 +16,18 @@
     <string name="add_pets_species_dog">Dog</string>
     <string name="add_pets_species_cat">Cat</string>
     <string name="add_pets_species_other">Other</string>
+
+    <!-- Pet details shown under the name (age, sex, size) -->
+    <string name="pet_sex_male">Male</string>
+    <string name="pet_sex_female">Female</string>
+    <string name="pet_size_small">Small</string>
+    <string name="pet_size_medium">Medium</string>
+    <string name="pet_size_large">Large</string>
+    <string name="pet_age_under_one_year">Under 1 year</string>
+    <plurals name="pet_age_years">
+        <item quantity="one">%d year</item>
+        <item quantity="other">%d years</item>
+    </plurals>
     <string name="add_pets_photo_section">PHOTO</string>
     <string name="add_pets_description_section">DESCRIPTION</string>
     <string name="add_pets_description_placeholder">Colour, size, collar…</string>
@@ -36,6 +48,7 @@
     <string name="add_pets_save_error">Unable to save the pet</string>
     <string name="edit_pet_load_error">Unable to load the pet</string>
     <string name="edit_pet_save_error">Unable to save changes to the pet</string>
+    <string name="edit_pet_future_birth_year_error">Birth year cannot be in the future</string>
     <string name="edit_pet_photo_upload_error">Unable to upload the new photo; pet changes were not saved</string>
     <string name="edit_pet_photo_delete_error">Unable to remove the old photo. Save again to retry.</string>
     <string name="edit_pet_delete_error">Unable to delete the pet</string>
@@ -70,6 +83,7 @@
     <string name="personal_info_home_section">HOME LOCATION</string>
     <string name="personal_info_home_placeholder">Neighbourhood, city</string>
     <string name="personal_info_use_my_location">Use my location</string>
+    <string name="personal_info_no_place_found">No place found</string>
     <string name="personal_info_home_explanation">Used to alert you about pets missing near your home.</string>
     <string name="personal_info_map_hint">Tap the map to place your home</string>
     <string name="personal_info_alerts_within_km">Alerts within %1$d km</string>

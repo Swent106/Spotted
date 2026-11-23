@@ -206,16 +206,16 @@ class HomeWaitingSightingsTest {
   fun aQueueThatCantBeRead_listsNothing() =
       runTest(testDispatcher) {
         enqueue(pending("s1"))
-        queue.countFailure = IllegalStateException("count")
+        queue.queueFailure = IllegalStateException("queue")
         val vm = viewModel()
         advanceUntilIdle()
         assertTrue(vm.uiState.value.waitingSightings.isEmpty())
 
-        queue.countFailure = null
-        queue.listFailure = IllegalStateException("list")
+        // Readable again: the next change lists it
+        queue.queueFailure = null
         enqueue(pending("s2"))
         advanceUntilIdle()
-        assertTrue(vm.uiState.value.waitingSightings.isEmpty())
+        assertEquals(listOf("s1", "s2"), vm.uiState.value.waitingSightings.map { it.id })
       }
 
   // ===================== Sheet =====================
@@ -332,6 +332,38 @@ class HomeWaitingSightingsTest {
         assertTrue(vm.uiState.value.waitingSightings.isEmpty())
         vm.sentSightingShown()
         assertNull(vm.uiState.value.sentSighting)
+      }
+
+  @Test
+  fun aSightingReplaced_withTheSameSize_updatesItsRow() =
+      runTest(testDispatcher) {
+        publishMilo()
+        enqueue(pending("s1"))
+        val vm = viewModel()
+        advanceUntilIdle()
+        assertNull(vm.uiState.value.waitingSightings.single().petName)
+
+        enqueue(pending("s1", alertId = MILO_ALERT))
+        advanceUntilIdle()
+
+        assertEquals("Milo", vm.uiState.value.waitingSightings.single().petName)
+      }
+
+  @Test
+  fun oneSent_andAnotherAdded_withTheSameSize_isToldAsSent_andListsTheNewOne() =
+      runTest(testDispatcher) {
+        publishMilo()
+        enqueue(pending("s1", alertId = MILO_ALERT))
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        // Both before Home sees any of them: the size goes back to 1
+        queue.delete("s1")
+        enqueue(pending("s2"))
+        advanceUntilIdle()
+
+        assertEquals("s1", vm.uiState.value.sentSighting?.id)
+        assertEquals(listOf("s2"), vm.uiState.value.waitingSightings.map { it.id })
       }
 
   @Test

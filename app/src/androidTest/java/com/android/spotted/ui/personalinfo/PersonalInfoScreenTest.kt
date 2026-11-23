@@ -26,7 +26,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.R
+import com.android.spotted.model.Location
 import com.android.spotted.model.auth.User
+import com.android.spotted.model.location.AddressSuggestion
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.ui.components.CameraPhotoFile
 import com.android.spotted.ui.components.DefaultMapCenter
@@ -61,9 +63,11 @@ class PersonalInfoScreenTest {
       onFirstNameChange: (String) -> Unit = {},
       onAlertRadiusSelect: (Int) -> Unit = {},
       onCreateProfileClick: () -> Unit = {},
+      onSuggestionPick: (AddressSuggestion) -> Unit = {},
   ) {
     composeTestRule.setContent {
       PersonalInfoContent(
+          onSuggestionPick = onSuggestionPick,
           state = state,
           onBackClick = onBackClick,
           onChangePhotoClick = {},
@@ -470,6 +474,52 @@ class PersonalInfoScreenTest {
     composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.PHOTO_REMOVE).performClick()
 
     assertTrue(removed)
+  }
+
+  @Test
+  fun addressSuggestions_areShownUnderTheHomeAreaField_andPickingOneReportsIt() {
+    val ouchy = AddressSuggestion("Ouchy, Lausanne", Location(46.507, 6.627))
+    val flon = AddressSuggestion("Flon, Lausanne", Location(46.521, 6.629))
+    var picked: AddressSuggestion? = null
+    setContent(
+        validState.copy(homeArea = "Lau", addressSuggestions = listOf(ouchy, flon)),
+        onSuggestionPick = { picked = it },
+    )
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.ADDRESS_SUGGESTIONS)
+        .performScrollTo()
+        .assertIsDisplayed()
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.addressSuggestion(0))
+        .assertTextEquals("Ouchy, Lausanne")
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.addressSuggestion(1))
+        .performScrollTo()
+        .performClick()
+
+    assertEquals(flon, picked)
+    composeTestRule.onNodeWithTag(PersonalInfoScreenTestTags.NO_PLACE_FOUND).assertDoesNotExist()
+  }
+
+  @Test
+  fun addressSuggestions_whenNoPlaceMatches_sayNoPlaceFound() {
+    setContent(validState.copy(homeArea = "Xyzzy", isNoPlaceFound = true))
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.NO_PLACE_FOUND)
+        .performScrollTo()
+        .assertIsDisplayed()
+        .assertTextEquals(context().getString(R.string.personal_info_no_place_found))
+  }
+
+  @Test
+  fun addressSuggestions_areHiddenWhenThereAreNone() {
+    setContent(validState)
+
+    composeTestRule
+        .onNodeWithTag(PersonalInfoScreenTestTags.ADDRESS_SUGGESTIONS)
+        .assertDoesNotExist()
   }
 
   @Test
