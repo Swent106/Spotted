@@ -72,6 +72,7 @@ object AlertDetailTestTags {
   /** Prefix of the age, sex and size chips: `alertDetail_age`, `_sex`, `_size`. */
   const val DETAILS_PREFIX = "alertDetail"
   const val LOST_AT = "alertDetail_lostAt"
+  const val LOSS_SUMMARY = "alertDetail_lossSummary"
   const val MAP = "alertDetail_map"
   const val LOCATION = "alertDetail_location"
   const val PLACE = "alertDetail_place"
@@ -316,6 +317,7 @@ private fun PetSummary(
         style = jakarta(12, 17f, 600, SpottedTheme.colors.lostRed),
         modifier = Modifier.testTag(AlertDetailTestTags.LOST_AT),
     )
+    LossSummaryChips(alert.lossCause, alert.lossEnvironment)
     if (distanceText != null) {
       Text(
           distanceText,

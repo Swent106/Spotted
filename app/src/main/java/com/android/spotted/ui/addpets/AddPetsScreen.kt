@@ -302,11 +302,11 @@ private fun AddPetsMessage.resolve(): String =
     }
 
 @Composable
-internal fun ChipFlow(content: @Composable () -> Unit) {
+internal fun ChipFlow(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
   FlowRow(
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalArrangement = Arrangement.spacedBy(6.dp),
-      modifier = Modifier.fillMaxWidth(),
+      modifier = modifier.fillMaxWidth(),
   ) {
     content()
   }
