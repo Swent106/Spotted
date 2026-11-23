@@ -37,7 +37,7 @@ fun buildAlertLink(alertId: String): Result<String> =
  * port, user info, another path, an extra segment, a query, a fragment, or an id that is empty or
  * has a character outside `[A-Za-z0-9_-]`. The scheme and host are compared without case.
  */
-fun parseLink(uri: String?): Result<String> {
+fun parseAlertLink(uri: String?): Result<String> {
   if (uri == null) return invalid("No link")
   val parsed =
       try {

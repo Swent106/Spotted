@@ -4,8 +4,8 @@ package com.android.spotted.model.sighting
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.fakes.FakePendingSightingRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.io.IOException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch

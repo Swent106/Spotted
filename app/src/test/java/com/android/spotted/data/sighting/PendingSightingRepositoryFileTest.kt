@@ -11,9 +11,9 @@ import com.android.spotted.model.sighting.CollarStatus
 import com.android.spotted.model.sighting.PendingSighting
 import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.io.File
 import java.io.FileNotFoundException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch

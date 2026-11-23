@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
+import com.android.spotted.model.alert.ALERT_LINK_HOST
+import com.android.spotted.model.alert.buildAlertLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,7 +18,7 @@ class RouteOfIntentTest {
 
   @Test
   fun anAlertLink_opensThatAlert() {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://spotted-fd9bf.web.app/alert/a1"))
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(buildAlertLink("a1").getOrThrow()))
 
     assertEquals(Route.alertDetail("a1"), routeOf(intent))
   }
@@ -31,15 +33,13 @@ class RouteOfIntentTest {
   @Test
   fun theLauncherOrAnotherLink_opensNothing() {
     assertNull(routeOf(Intent(Intent.ACTION_MAIN)))
-    assertNull(
-        routeOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://spotted-fd9bf.web.app/pet/a1")))
-    )
+    assertNull(routeOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://$ALERT_LINK_HOST/pet/a1"))))
   }
 
   @Test
   fun aLinkReopenedFromRecents_opensNothing() {
     val intent =
-        Intent(Intent.ACTION_VIEW, Uri.parse("https://spotted-fd9bf.web.app/alert/a1"))
+        Intent(Intent.ACTION_VIEW, Uri.parse(buildAlertLink("a1").getOrThrow()))
             .addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
 
     assertNull(routeOf(intent))
