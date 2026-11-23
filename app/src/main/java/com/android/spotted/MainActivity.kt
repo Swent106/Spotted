@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -176,7 +177,7 @@ class MainActivity : ComponentActivity() {
     content.viewTreeObserver.addOnPreDrawListener(
         object : ViewTreeObserver.OnPreDrawListener {
           override fun onPreDraw(): Boolean {
-            if (mainViewModel.uiState.value == StartDestination.LOADING) return false
+            if (mainViewModel.uiState.value.destination == StartDestination.LOADING) return false
             content.viewTreeObserver.removeOnPreDrawListener(this)
             return true
           }
@@ -213,8 +214,15 @@ fun SpottedApp(
     notificationRoute: String? = null,
     onNotificationRouteOpened: () -> Unit = {},
 ) {
-  val destination by viewModel.uiState.collectAsState()
+  val state by viewModel.uiState.collectAsState()
+  val destination = state.destination
   val navController = rememberNavController()
+
+  // Watch the connection only while the app is in the foreground (started)
+  LifecycleStartEffect(viewModel) {
+    viewModel.startWatchingNetwork()
+    onStopOrDispose { viewModel.stopWatchingNetwork() }
+  }
 
   StartRouting(destination, navController)
   NotificationRouting(notificationRoute, destination, navController, onNotificationRouteOpened)
