@@ -4,6 +4,7 @@ package com.android.spotted.model.sighting
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.fakes.FakePendingSightingRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.io.IOException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
@@ -59,6 +60,7 @@ class FakePendingSightingRepositoryTest {
     assertEquals(listOf("s2"), repository.pending.map { it.sighting.id })
   }
 
+  @OptIn(ExperimentalCoroutinesApi::class)
   @Test
   fun observeCount_emitsTheCountAfterEachChange() = runTest {
     val counts = mutableListOf<Result<Int>>()
