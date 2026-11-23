@@ -16,6 +16,18 @@
     <string name="add_pets_species_dog">Dog</string>
     <string name="add_pets_species_cat">Cat</string>
     <string name="add_pets_species_other">Other</string>
+
+    <!-- Pet details shown under the name (age, sex, size) -->
+    <string name="pet_sex_male">Male</string>
+    <string name="pet_sex_female">Female</string>
+    <string name="pet_size_small">Small</string>
+    <string name="pet_size_medium">Medium</string>
+    <string name="pet_size_large">Large</string>
+    <string name="pet_age_under_one_year">Under 1 year</string>
+    <plurals name="pet_age_years">
+        <item quantity="one">%d year</item>
+        <item quantity="other">%d years</item>
+    </plurals>
     <string name="add_pets_photo_section">PHOTO</string>
     <string name="add_pets_description_section">DESCRIPTION</string>
     <string name="add_pets_description_placeholder">Colour, size, collar…</string>
@@ -36,6 +48,7 @@
     <string name="add_pets_save_error">Unable to save the pet</string>
     <string name="edit_pet_load_error">Unable to load the pet</string>
     <string name="edit_pet_save_error">Unable to save changes to the pet</string>
+    <string name="edit_pet_future_birth_year_error">Birth year cannot be in the future</string>
     <string name="edit_pet_photo_upload_error">Unable to upload the new photo; pet changes were not saved</string>
     <string name="edit_pet_photo_delete_error">Unable to remove the old photo. Save again to retry.</string>
     <string name="edit_pet_delete_error">Unable to delete the pet</string>
@@ -148,4 +161,13 @@
     <string name="link_tag_nfc_disabled">NFC is turned off. Turn it on to link the tag.</string>
     <string name="link_tag_nfc_unsupported">This phone can\'t write NFC tags.</string>
     <string name="link_tag_open_nfc_settings">Open NFC settings</string>
+
+    <!-- Breed picker -->
+    <string name="breed_mixed">Mixed</string>
+    <string name="breed_unknown">Unknown</string>
+    <string name="breed_picker_label">Breed</string>
+    <string name="breed_picker_placeholder">Select a breed</string>
+    <string name="breed_picker_title">Choose a breed</string>
+    <string name="breed_picker_search_placeholder">Labrador</string>
+    <string name="breed_picker_no_match">No breed matches \"%1$s\"</string>
 </resources>
