@@ -1,4 +1,5 @@
 // Portions of this code were generated with the help of GitHub Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.alertdetail
 
 import androidx.compose.runtime.mutableStateOf
@@ -16,9 +17,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.R
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.ui.components.PetDetailsChipsTestTags
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -184,4 +188,38 @@ class AlertDetailScreenTest {
     composeTestRule.runOnIdle { state.value = AlertDetailUiState(alert = alert) }
     composeTestRule.onNodeWithTag(AlertDetailTestTags.DISTANCE).assertDoesNotExist()
   }
+
+  @Test
+  fun ageSexAndSize_copiedOnTheAlert_areShownUnderTheName_andHiddenWhenUnknown() {
+    val lostDog =
+        Alert(
+            id = "alert-4",
+            petId = "pet-4",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rex",
+            petSpecies = Species.DOG,
+            petSex = Sex.MALE,
+            petSize = PetSize.LARGE,
+        )
+    val state = mutableStateOf(AlertDetailUiState(alert = lostDog, ageYears = 1))
+    composeTestRule.setContent { AlertDetailContent(state = state.value) }
+
+    detail(PetDetailsChipsTestTags::age).assertTextEquals("1 year")
+    detail(PetDetailsChipsTestTags::sex).assertTextEquals("Male")
+    detail(PetDetailsChipsTestTags::size).assertTextEquals("Large")
+
+    // An alert published before these details were copied: nothing to show
+    composeTestRule.runOnIdle {
+      state.value =
+          AlertDetailUiState(alert = lostDog.copy(petSex = Sex.UNKNOWN, petSize = PetSize.UNKNOWN))
+    }
+    detail(PetDetailsChipsTestTags::age).assertDoesNotExist()
+    detail(PetDetailsChipsTestTags::sex).assertDoesNotExist()
+    detail(PetDetailsChipsTestTags::size).assertDoesNotExist()
+  }
+
+  private fun detail(tag: (String) -> String) =
+      composeTestRule.onNodeWithTag(tag(AlertDetailTestTags.DETAILS_PREFIX))
 }

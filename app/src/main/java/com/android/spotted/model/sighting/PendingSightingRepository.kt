@@ -46,8 +46,9 @@ interface PendingSightingRepository {
   suspend fun delete(sightingId: String): Result<Unit>
 
   /**
-   * Emits the number of queued sightings right away, then again every time it changes. Emits a
+   * Emits the queued sightings right away, oldest first, then again every time the queue changes,
+   * even when its size stays the same (a sighting replaced, or one sent and another added). Emits a
    * [Result.failure] when the queue can't be read.
    */
-  fun observeCount(): Flow<Result<Int>>
+  fun observeQueue(): Flow<Result<List<PendingSighting>>>
 }
