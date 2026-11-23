@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.update
 /**
  * In-memory [PendingSightingRepository] for ViewModel and sender tests.
  * - The photo is not copied: [PendingSighting.photoUri] is the URI given to [add].
- * - [addFailure] / [listFailure] / [deleteFailure] / [countFailure]: set one to make the matching
- *   calls fail with it ([countFailure]: [observeCount] emits it).
+ * - [addFailure] / [listFailure] / [deleteFailure] / [queueFailure]: set one to make the matching
+ *   calls fail with it ([queueFailure]: [observeQueue] emits it).
  * - [pending]: what is queued, oldest first, so tests can check it.
  * - [addCount]: how many times [add] succeeded, i.e. how many times a send was asked for.
  */
@@ -24,7 +24,7 @@ class FakePendingSightingRepository(initial: List<PendingSighting> = emptyList()
   var addFailure: Throwable? = null
   var listFailure: Throwable? = null
   var deleteFailure: Throwable? = null
-  var countFailure: Throwable? = null
+  var queueFailure: Throwable? = null
 
   var addCount = 0
     private set
@@ -63,7 +63,7 @@ class FakePendingSightingRepository(initial: List<PendingSighting> = emptyList()
     return Result.success(Unit)
   }
 
-  override fun observeCount(): Flow<Result<Int>> = queue.map { current ->
-    countFailure?.let { Result.failure(it) } ?: Result.success(current.size)
+  override fun observeQueue(): Flow<Result<List<PendingSighting>>> = queue.map { current ->
+    queueFailure?.let { Result.failure(it) } ?: Result.success(current)
   }
 }

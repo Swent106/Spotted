@@ -55,8 +55,8 @@ class PendingSightingRepositoryFile(
   private val queueFile = File(directory, QUEUE_FILE)
   private val photosDirectory = File(directory, PHOTOS_FOLDER)
 
-  /** Number of queued sightings, or why the file can't be read. Null until it was read once. */
-  private val count = MutableStateFlow<Result<Int>?>(null)
+  /** The queued sightings, or why the file can't be read. Null until it was read once. */
+  private val queueState = MutableStateFlow<Result<List<PendingSighting>>?>(null)
 
   override suspend fun add(sighting: Sighting, photoUri: String?): Result<Unit> = locked {
     val queue = readQueue()
@@ -89,10 +89,10 @@ class PendingSightingRepositoryFile(
     photoFile(sightingId).delete()
   }
 
-  override fun observeCount(): Flow<Result<Int>> = flow {
-    // Reading the queue sets the count, or the failure if it can't be read
-    if (count.value == null) list()
-    emitAll(count.filterNotNull())
+  override fun observeQueue(): Flow<Result<List<PendingSighting>>> = flow {
+    // Reading the queue sets it, or the failure if it can't be read
+    if (queueState.value == null) list()
+    emitAll(queueState.filterNotNull())
   }
 
   /** Runs [action] on [ioDispatcher] under the mutex, returning its errors as a failure. */
@@ -114,10 +114,10 @@ class PendingSightingRepositoryFile(
             List(array.length()) { array.getJSONObject(it).toPendingSighting() }
           }
         } catch (exception: Exception) {
-          count.value = Result.failure(exception)
+          queueState.value = Result.failure(exception)
           throw exception
         }
-    count.value = Result.success(queue.size)
+    queueState.value = Result.success(queue)
     return queue
   }
 
@@ -131,7 +131,7 @@ class PendingSightingRepositoryFile(
         StandardCopyOption.ATOMIC_MOVE,
         StandardCopyOption.REPLACE_EXISTING,
     )
-    count.value = Result.success(queue.size)
+    queueState.value = Result.success(queue)
   }
 
   /** Copies the photo at [uri] to the photo file of [sightingId], through a temporary file. */

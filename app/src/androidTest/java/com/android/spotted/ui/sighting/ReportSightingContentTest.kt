@@ -613,7 +613,7 @@ class ReportSightingContentTest {
 
                   override suspend fun delete(sightingId: String) = Result.success(Unit)
 
-                  override fun observeCount() = flowOf(Result.success(queued.size))
+                  override fun observeQueue() = flowOf(Result.success(emptyList<PendingSighting>()))
                 },
             networkMonitor =
                 object : NetworkMonitor {
