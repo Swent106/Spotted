@@ -18,7 +18,9 @@ const {
   getDocs,
   limit,
   query,
+  serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
@@ -423,6 +425,68 @@ describe("Firestore security rules", () => {
     await assertSucceeds(setDoc(doc(db, "users", "user-1"), withoutUsername));
     await assertSucceeds(
       updateDoc(doc(db, "users", "user-1"), { username: deleteField() }),
+    );
+  });
+
+  it("allows creating a profile with createdAt set to the server time", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, "users", "user-1"),
+        userProfile("user-1", { createdAt: serverTimestamp() }),
+      ),
+    );
+  });
+
+  it("denies creating a profile with createdAt in the past", async () => {
+    const db = firestoreForUser("user-1");
+    const eightDaysAgo = Timestamp.fromMillis(Date.now() - 8 * 24 * 60 * 60 * 1000);
+
+    await assertFails(
+      setDoc(
+        doc(db, "users", "user-1"),
+        userProfile("user-1", { createdAt: eightDaysAgo }),
+      ),
+    );
+  });
+
+  it("allows a profile update that keeps createdAt as it was", async () => {
+    const createdAt = Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "users", "user-1"),
+        userProfile("user-1", { createdAt }),
+      );
+    });
+    const db = firestoreForUser("user-1");
+
+    // Like UserRepositoryFirestore.saveUser: the whole profile, with createdAt read back
+    await assertSucceeds(
+      setDoc(doc(db, "users", "user-1"), userProfile("user-1", { name: "Alex", createdAt })),
+    );
+  });
+
+  it("denies a profile update that moves createdAt earlier", async () => {
+    const createdAt = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "users", "user-1"),
+        userProfile("user-1", { createdAt }),
+      );
+    });
+    const db = firestoreForUser("user-1");
+    const earlier = Timestamp.fromMillis(createdAt.toMillis() - 7 * 24 * 60 * 60 * 1000);
+
+    await assertFails(updateDoc(doc(db, "users", "user-1"), { createdAt: earlier }));
+  });
+
+  it("allows a profile without createdAt to get it at its next save", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      updateDoc(doc(db, "users", "user-1"), { createdAt: serverTimestamp() }),
     );
   });
 
