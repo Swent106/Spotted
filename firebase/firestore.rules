@@ -7,8 +7,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Assumed data model:
     // users/{uid}: uid, name, phone, email, and homeArea are required strings;
-    // username is an optional string (see isValidUser), createdAt an optional
-    // server timestamp (see createdAtNeverEarlier).
+    // username is an optional string (see isValidUser), createdAt a required
+    // server timestamp (see createdAtSetOnce).
     // phone and homeArea may be empty; all fields have size limits below.
     // The document ID and uid field identify the authenticated profile owner.
     // pets/{petId}: ownerId, name, species, breed, photoUrl, allergies,
@@ -73,15 +73,12 @@ service cloud.firestore {
     }
 
     // createdAt: when the account was created, so the vote rules can require an account at least
-    // 7 days old (#462). It is set to the server time or kept as it was, never moved earlier, so
-    // nobody can make their account look older. Optional, because profiles saved before it (and
-    // the M2 APK, which drops it) have none: the app sets it again at the next save, which only
-    // makes the account look newer.
-    function createdAtNeverEarlier() {
-      let d = request.resource.data;
-      return !('createdAt' in d)
-          || d.createdAt == request.time
-          || (resource != null && d.createdAt == resource.data.get('createdAt', null));
+    // 7 days old (#462). Required: set to the server time when the profile is created, then never
+    // changed, so nobody can make their account look older.
+    function createdAtSetOnce() {
+      return resource == null
+          ? request.resource.data.createdAt == request.time
+          : request.resource.data.createdAt == resource.data.createdAt;
     }
 
     match /users/{userId} {
@@ -89,11 +86,11 @@ service cloud.firestore {
       allow create: if isOwner(userId)
           && uidUnchanged(userId)
           && isValidUser(request.resource.data, userId)
-          && createdAtNeverEarlier();
+          && createdAtSetOnce();
       allow update: if isOwner(userId)
           && uidNotModified(userId)
           && isValidUser(request.resource.data, userId)
-          && createdAtNeverEarlier();
+          && createdAtSetOnce();
       // Lets users delete their own account
       allow delete: if isOwner(userId);
     }

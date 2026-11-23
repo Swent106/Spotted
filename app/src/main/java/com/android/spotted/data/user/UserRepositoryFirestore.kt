@@ -59,8 +59,8 @@ class UserRepositoryFirestore(
 
   /**
    * Saves the whole profile. Its `createdAt` is kept as it was, or set to the server time on the
-   * first save (and for profiles saved before it existed): the vote rules read it to require an
-   * account at least 7 days old, and the Firestore rules never let it move earlier.
+   * first save: the vote rules read it to require an account at least 7 days old, and the Firestore
+   * rules require it and never let it change.
    */
   override suspend fun saveUser(user: UserProfile): Result<Unit> = firestoreResult {
     withContext(Dispatchers.IO) {

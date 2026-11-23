@@ -6,8 +6,11 @@ import com.android.spotted.data.user.UserRepositoryFirestore
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Source
+import java.util.concurrent.ExecutionException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -16,7 +19,6 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -162,30 +164,29 @@ class UserRepositoryFirestoreTest {
   }
 
   @Test
-  fun saveUser_profileSavedBeforeCreatedAt_getsIt() = runTest {
-    // A profile saved by an app older than createdAt
-    withContext(Dispatchers.IO) {
-      Tasks.await(
-          firestore
-              .collection("users")
-              .document(currentUserId())
-              .set(
-                  mapOf(
-                      "uid" to currentUserId(),
-                      "name" to "Jamie",
-                      "username" to "jamie",
-                      "phone" to "",
-                      "email" to "jamie@example.com",
-                      "homeArea" to "",
-                  )
-              )
-      )
+  fun createProfileWithoutCreatedAt_isRefused() = runTest {
+    val result = runCatching {
+      withContext(Dispatchers.IO) { Tasks.await(profileDocument().set(jamieFields())) }
     }
-    assertNull(storedCreatedAt())
 
+    assertPermissionDenied(result.exceptionOrNull())
+    assertTrue(repository.getUser(currentUserId()).exceptionOrNull() is NoSuchElementException)
+  }
+
+  @Test
+  fun updateRemovingCreatedAt_isRefused() = runTest {
     repository.saveUser(jamie()).getOrThrow()
+    val createdAt = storedCreatedAt()
 
-    assertNotNull(storedCreatedAt())
+    val result = runCatching {
+      withContext(Dispatchers.IO) {
+        Tasks.await(profileDocument().update("createdAt", FieldValue.delete()))
+      }
+    }
+
+    assertPermissionDenied(result.exceptionOrNull())
+    assertNotNull(createdAt)
+    assertEquals(createdAt, storedCreatedAt())
   }
 
   private fun jamie() =
@@ -196,12 +197,33 @@ class UserRepositoryFirestoreTest {
           email = "jamie@example.com",
       )
 
+  /** A valid profile of the signed-in user, as stored, but without createdAt. */
+  private fun jamieFields() =
+      mapOf(
+          "uid" to currentUserId(),
+          "name" to "Jamie",
+          "username" to "jamie",
+          "phone" to "",
+          "email" to "jamie@example.com",
+          "homeArea" to "",
+      )
+
+  private fun profileDocument() = firestore.collection("users").document(currentUserId())
+
   /** The createdAt stored in the signed-in user's profile document, read from the server. */
   private suspend fun storedCreatedAt(): Timestamp? =
       withContext(Dispatchers.IO) {
-        Tasks.await(firestore.collection("users").document(currentUserId()).get(Source.SERVER))
-            .getTimestamp("createdAt")
+        Tasks.await(profileDocument().get(Source.SERVER)).getTimestamp("createdAt")
       }
+
+  private fun assertPermissionDenied(error: Throwable?) {
+    val cause = if (error is ExecutionException) error.cause else error
+    assertTrue(
+        "expected PERMISSION_DENIED, was $error",
+        (cause as? FirebaseFirestoreException)?.code ==
+            FirebaseFirestoreException.Code.PERMISSION_DENIED,
+    )
+  }
 
   private fun currentUserId(): String =
       requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
