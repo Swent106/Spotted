@@ -105,7 +105,7 @@ fun AlertDetailScreen(
       modifier = modifier,
       onBack = onBack,
       // The system share sheet, launched from the View
-      onShare = { alert -> context.shareText(alertShareText(alert, state.placeName)) },
+      onShare = { alert -> alertShareText(alert, state.placeName).onSuccess(context::shareText) },
   )
 }
 

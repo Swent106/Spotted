@@ -16,7 +16,7 @@ class RouteOfIntentTest {
 
   @Test
   fun anAlertLink_opensThatAlert() {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("spotted://alert/a1"))
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://spotted-fd9bf.web.app/alert/a1"))
 
     assertEquals(Route.alertDetail("a1"), routeOf(intent))
   }
@@ -31,13 +31,15 @@ class RouteOfIntentTest {
   @Test
   fun theLauncherOrAnotherLink_opensNothing() {
     assertNull(routeOf(Intent(Intent.ACTION_MAIN)))
-    assertNull(routeOf(Intent(Intent.ACTION_VIEW, Uri.parse("spotted://pet/a1"))))
+    assertNull(
+        routeOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://spotted-fd9bf.web.app/pet/a1")))
+    )
   }
 
   @Test
   fun aLinkReopenedFromRecents_opensNothing() {
     val intent =
-        Intent(Intent.ACTION_VIEW, Uri.parse("spotted://alert/a1"))
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://spotted-fd9bf.web.app/alert/a1"))
             .addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
 
     assertNull(routeOf(intent))

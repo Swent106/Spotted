@@ -80,7 +80,7 @@ class MyAlertScreenTest {
     assertEquals(Intent.ACTION_CHOOSER, chooser.action)
     @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
     assertEquals(
-        "Luna is missing near Ouchy, Lausanne. Have you seen them? spotted://alert/alert-1",
+        "Luna is missing near Ouchy, Lausanne. Have you seen them? https://spotted-fd9bf.web.app/alert/alert-1",
         send?.getStringExtra(Intent.EXTRA_TEXT),
     )
   }
