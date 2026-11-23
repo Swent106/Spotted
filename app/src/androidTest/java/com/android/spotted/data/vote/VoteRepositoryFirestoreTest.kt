@@ -99,7 +99,7 @@ class VoteRepositoryFirestoreTest {
   }
 
   @Test
-  fun castVote_onMissingSighting_fails() = runTest {
+  fun castVote_onMissingSighting_isRefused() = runTest {
     seedEligibleVoter()
 
     val result = repository.castVote("missing-${UUID.randomUUID()}", voterId())
@@ -143,7 +143,7 @@ class VoteRepositoryFirestoreTest {
   }
 
   @Test
-  fun hasVoted_beforeAndAfterVoting() = runTest {
+  fun hasVoted_isFalseBeforeVoting_trueAfter() = runTest {
     seedEligibleVoter()
     val sightingId = seedSighting()
 

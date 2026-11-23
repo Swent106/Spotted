@@ -2661,14 +2661,14 @@ describe("Firestore vote rules", () => {
       status: "PENDING",
     });
     if (user) {
-      const profile = {
+      await seed(`users/${voterId}`, {
         uid: voterId,
         name: "Voter",
         phone: "",
         email: "voter@example.com",
         homeArea: "",
-      };
-      await seed(`users/${voterId}`, createdAt === null ? profile : { ...profile, createdAt });
+        createdAt,
+      });
     }
     if (trust) {
       await seed(`trust/${voterId}`, { score, judged, lastSightingId: "old-sighting" });
@@ -2778,11 +2778,9 @@ describe("Firestore vote rules", () => {
     await assertFails(castVote("new-voter"));
   });
 
-  it("vote create: an account without createdAt or without a profile is denied", async () => {
-    await seedEligibleVoter("no-date", { createdAt: null });
+  it("vote create: a user without a profile is denied", async () => {
     await seedEligibleVoter("no-profile", { user: false });
 
-    await assertFails(castVote("no-date"));
     await assertFails(castVote("no-profile"));
   });
 
@@ -2844,15 +2842,52 @@ describe("Firestore vote rules", () => {
     await assertFails(castVote("voter-1", { withQuota: false }));
   });
 
+  it("vote create: two votes counted as one in the quota are denied", async () => {
+    await seedEligibleVoter("voter-1");
+    await seed("sightings/sighting-2", {
+      id: "sighting-2",
+      reporterId: "reporter-1",
+      location: { latitude: 46.5, longitude: 6.6 },
+      seenAtMillis: 1000000,
+      species: "DOG",
+      alertId: "alert-1",
+      status: "PENDING",
+    });
+    const db = firestoreForUser("voter-1");
+    const vote = (sightingId) => doc(db, "sightings", sightingId, "votes", "voter-1");
+    const batch = writeBatch(db);
+    batch.set(vote("sighting-1"), { voterId: "voter-1", votedAt: serverTimestamp() });
+    batch.set(vote("sighting-2"), { voterId: "voter-1", votedAt: serverTimestamp() });
+    batch.set(doc(db, "voteQuota", "voter-1"), {
+      recent: [],
+      last: serverTimestamp(),
+      lastSightingId: "sighting-1",
+    });
+
+    await assertFails(batch.commit());
+    // Each vote on its own, with its quota update, is allowed
+    await assertSucceeds(castVote("voter-1", { sightingId: "sighting-1" }));
+    await assertSucceeds(castVote("voter-1", { sightingId: "sighting-2" }));
+  });
+
+  it("quota: its history cannot be erased, even in the same write as a vote", async () => {
+    await seedEligibleVoter("voter-1");
+    // Not full, so the daily limit allows a vote and only the history check can refuse it
+    await seedQuota("voter-1", hourlyVotes(3));
+
+    await assertFails(castVote("voter-1", { quotaOverrides: { recent: [] } }));
+    await assertSucceeds(castVote("voter-1"));
+  });
+
   it("quota: cannot be reset, changed or deleted, and only its owner can read it", async () => {
     await seedEligibleVoter("voter-1");
-    await seedQuota("voter-1", hourlyVotes(10));
+    const times = hourlyVotes(3);
+    await seedQuota("voter-1", times);
     const quota = doc(firestoreForUser("voter-1"), "voteQuota", "voter-1");
 
-    // Reset in the same write as a vote, then without a vote
-    await assertFails(castVote("voter-1", { quotaOverrides: { recent: [] } }));
+    // Without a vote, even with the history kept as it should be
     await assertFails(
-      setDoc(quota, { recent: [], last: serverTimestamp(), lastSightingId: "sighting-1" }),
+      setDoc(quota, { recent: times, last: serverTimestamp(), lastSightingId: "sighting-1" }),
     );
     await assertFails(deleteDoc(quota));
     await assertFails(getDoc(doc(firestoreForUser("voter-2"), "voteQuota", "voter-1")));

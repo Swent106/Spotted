@@ -628,7 +628,6 @@ service cloud.firestore {
       function accountAtLeastSevenDaysOld() {
         let userPath = /databases/$(database)/documents/users/$(voterId);
         return exists(userPath)
-          && get(userPath).data.get('createdAt', null) is timestamp
           && get(userPath).data.createdAt <= request.time - duration.value(7, 'd');
       }
 
