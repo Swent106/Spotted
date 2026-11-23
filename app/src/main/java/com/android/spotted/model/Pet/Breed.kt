@@ -8,6 +8,11 @@ const val MIXED_BREED_ID = "mixed"
 const val UNKNOWN_BREED_ID = "unknown"
 
 /**
+ * Ids of the breeds always shown first in a breed list, whatever the search: "Mixed", "Unknown".
+ */
+val PINNED_BREED_IDS: Set<String> = setOf(MIXED_BREED_ID, UNKNOWN_BREED_ID)
+
+/**
  * One breed the user can pick. [id] is stable and is what gets stored; [name] is only shown and may
  * change or be translated.
  */
@@ -19,9 +24,8 @@ data class BreedOption(val id: String, val name: String)
  * every breed. The order of [breeds] is kept.
  */
 fun filterBreeds(breeds: List<BreedOption>, query: String): List<BreedOption> {
-  val pinnedIds = setOf(MIXED_BREED_ID, UNKNOWN_BREED_ID)
-  val pinned = breeds.filter { it.id in pinnedIds }
-  val others = breeds.filter { it.id !in pinnedIds }
+  val pinned = breeds.filter { it.id in PINNED_BREED_IDS }
+  val others = breeds.filter { it.id !in PINNED_BREED_IDS }
 
   val q = query.trim()
   val matches =

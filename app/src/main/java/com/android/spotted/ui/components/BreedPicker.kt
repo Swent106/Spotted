@@ -28,16 +28,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.spotted.R
 import com.android.spotted.model.Pet.BreedOption
-import com.android.spotted.model.Pet.MIXED_BREED_ID
+import com.android.spotted.model.Pet.PINNED_BREED_IDS
 import com.android.spotted.model.Pet.Species
-import com.android.spotted.model.Pet.UNKNOWN_BREED_ID
 import com.android.spotted.model.Pet.filterBreeds
 import com.android.spotted.ui.theme.SpottedTheme
 
@@ -60,9 +59,12 @@ fun breedOptions(species: Species): List<BreedOption> {
         Species.CAT -> R.array.cat_breed_ids to R.array.cat_breed_names
         Species.OTHER -> return emptyList()
       }
-  val ids = stringArrayResource(idsRes)
-  val names = stringArrayResource(namesRes)
-  return remember(ids, names) { ids.zip(names) { id, name -> BreedOption(id, name) } }
+  // Read once per species: stringArrayResource returns a new array on every call
+  val resources = LocalContext.current.resources
+  return remember(species, resources) {
+    val names = resources.getStringArray(namesRes)
+    resources.getStringArray(idsRes).zip(names) { id, name -> BreedOption(id, name) }
+  }
 }
 
 /**
@@ -145,7 +147,7 @@ fun BreedPickerSheetContent(
 ) {
   val colors = SpottedTheme.colors
   val shown = filterBreeds(breeds, query)
-  val noMatch = query.isNotBlank() && shown.all { it.id in PINNED_IDS }
+  val noMatch = query.isNotBlank() && shown.all { it.id in PINNED_BREED_IDS }
 
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
     Text(
@@ -164,7 +166,7 @@ fun BreedPickerSheetContent(
       items(shown, key = { it.id }) { breed ->
         Text(
             text = breed.name,
-            color = if (breed.id in PINNED_IDS) colors.textSecondary else colors.ink,
+            color = if (breed.id in PINNED_BREED_IDS) colors.textSecondary else colors.ink,
             modifier =
                 Modifier.fillMaxWidth()
                     .clickable { onBreedSelected(breed.id) }
@@ -184,5 +186,3 @@ fun BreedPickerSheetContent(
     }
   }
 }
-
-private val PINNED_IDS = setOf(MIXED_BREED_ID, UNKNOWN_BREED_ID)
