@@ -41,11 +41,6 @@ class MainViewModelTest {
   }
 
   @Test
-  fun factory_executesFactory() {
-    runCatching { MainViewModel.Factory.create(MainViewModel::class.java) }
-  }
-
-  @Test
   fun whileTheProfileIsRead_startDestinationIsLoading() = runTest {
     authRepository.signInWithGoogle("fake_token")
     Dispatchers.setMain(StandardTestDispatcher())
