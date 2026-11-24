@@ -2528,3 +2528,159 @@ describe("Firestore block list rules", () => {
     await assertSucceeds(deleteDoc(blockDoc(firestoreForUser("alice"), "alice", "spammer")));
   });
 });
+
+describe("Firestore thanks rules", () => {
+  const { getCountFromServer } = require("firebase/firestore");
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  // alert-1 of owner-1, closed, for Milo; sighting-1 sent on it by helper-1
+  async function seed({ alert = {}, sighting = {} } = {}) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const alertDoc = {
+        id: "alert-1",
+        ownerId: "owner-1",
+        status: "CLOSED",
+        petName: "Milo",
+        ...alert,
+      };
+      // A field set to undefined is left out (e.g. an alert stored without a status)
+      for (const key of Object.keys(alertDoc)) {
+        if (alertDoc[key] === undefined) delete alertDoc[key];
+      }
+      await setDoc(doc(db, "alerts", "alert-1"), alertDoc);
+      await setDoc(doc(db, "sightings", "sighting-1"), {
+        id: "sighting-1",
+        reporterId: "helper-1",
+        alertId: "alert-1",
+        ...sighting,
+      });
+    });
+  }
+
+  function thanksData(overrides = {}) {
+    return {
+      alertId: "alert-1",
+      ownerId: "owner-1",
+      helperId: "helper-1",
+      sightingId: "sighting-1",
+      petName: "Milo",
+      thankedAtMillis: 1000,
+      ...overrides,
+    };
+  }
+
+  const thank = (userId, overrides = {}, id = "alert-1_helper-1") =>
+    setDoc(doc(firestoreForUser(userId), "thanks", id), thanksData(overrides));
+
+  it("thanks: the owner of a closed alert can thank a helper who sent a sighting on it", async () => {
+    await seed();
+
+    await assertSucceeds(thank("owner-1"));
+  });
+
+  it("thanks: a helper can't be thanked twice for the same alert", async () => {
+    await seed();
+    await assertSucceeds(thank("owner-1"));
+
+    await assertFails(thank("owner-1", { thankedAtMillis: 2000 }));
+  });
+
+  it("thanks: an open alert or an alert without a status can't be thanked for", async () => {
+    await seed({ alert: { status: "OPEN" } });
+    await assertFails(thank("owner-1"));
+
+    await seed({ alert: { status: undefined } });
+    await assertFails(thank("owner-1"));
+  });
+
+  it("thanks: only the alert's owner can thank, and not signed out", async () => {
+    await seed();
+
+    await assertFails(thank("someone-else", { ownerId: "someone-else" }));
+    await assertFails(thank("someone-else"));
+    await assertFails(thank(null));
+  });
+
+  it("thanks: the helper must have sent the sighting, on this alert", async () => {
+    await seed({ sighting: { reporterId: "helper-2" } });
+    await assertFails(thank("owner-1"));
+
+    await seed({ sighting: { alertId: "alert-2" } });
+    await assertFails(thank("owner-1"));
+
+    await seed();
+    await assertFails(thank("owner-1", { sightingId: "missing" }));
+  });
+
+  it("thanks: the owner can't thank themselves", async () => {
+    await seed({ sighting: { reporterId: "owner-1" } });
+
+    await assertFails(thank("owner-1", { helperId: "owner-1" }, "alert-1_owner-1"));
+  });
+
+  it("thanks: a wrong id, pet name, time or extra field is denied", async () => {
+    await seed();
+
+    await assertFails(thank("owner-1", {}, "another-id"));
+    await assertFails(thank("owner-1", { petName: "Rex" }));
+    await assertFails(thank("owner-1", { thankedAtMillis: Date.now() + 10 * 60 * 1000 }));
+    await assertFails(thank("owner-1", { thankedAtMillis: "yesterday" }));
+    await assertFails(thank("owner-1", { message: "Merci !" }));
+  });
+
+  it("thanks: a thanks can be neither changed nor deleted", async () => {
+    await seed();
+    await assertSucceeds(thank("owner-1"));
+
+    for (const userId of ["owner-1", "helper-1"]) {
+      const ref = doc(firestoreForUser(userId), "thanks", "alert-1_helper-1");
+      await assertFails(updateDoc(ref, { petName: "Rex" }));
+      await assertFails(deleteDoc(ref));
+    }
+  });
+
+  it("thanks read: any signed-in user can read and count a helper's thanks", async () => {
+    await seed();
+    await assertSucceeds(thank("owner-1"));
+
+    const helperThanks = (db) =>
+      query(collection(db, "thanks"), where("helperId", "==", "helper-1"));
+    const anyone = firestoreForUser("anyone");
+    await assertSucceeds(getDoc(doc(anyone, "thanks", "alert-1_helper-1")));
+    await assertSucceeds(getDocs(helperThanks(anyone)));
+    const count = await assertSucceeds(getCountFromServer(helperThanks(anyone)));
+    assert.equal(count.data().count, 1);
+
+    const signedOut = firestoreForUser(null);
+    await assertFails(getDoc(doc(signedOut, "thanks", "alert-1_helper-1")));
+    await assertFails(getCountFromServer(helperThanks(signedOut)));
+  });
+});
