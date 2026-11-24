@@ -145,7 +145,7 @@ private fun Body(
     // A failure after a list keeps it on screen, below the message
     state.errorMessage != null && state.items.isEmpty() ->
         MessageCard(
-            icon = R.drawable.ic_warning,
+            icon = R.drawable.ic_wifi_off,
             iconColor = SpottedTheme.colors.error,
             iconBackground = SpottedTheme.colors.errorTint,
             title = state.errorMessage,

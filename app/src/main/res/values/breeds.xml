@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Portions of this code were generated with the help of Claude (Anthropic). -->
+<!--
+  Breed lists for the breed picker. Each "_ids" array and its "_names" array are parallel.
+  Never change or reuse an id; names can change. BreedResourcesTest checks both arrays.
+-->
+<resources>
+    <string-array name="dog_breed_ids" translatable="false">
+        <item>mixed</item>
+        <item>unknown</item>
+        <item>australian_shepherd</item>
+        <item>beagle</item>
+        <item>bernese_mountain_dog</item>
+        <item>border_collie</item>
+        <item>boxer</item>
+        <item>chihuahua</item>
+        <item>cocker_spaniel</item>
+        <item>dachshund</item>
+        <item>french_bulldog</item>
+        <item>german_shepherd</item>
+        <item>golden_retriever</item>
+        <item>husky</item>
+        <item>jack_russell_terrier</item>
+        <item>labrador_retriever</item>
+        <item>maltese</item>
+        <item>poodle</item>
+        <item>pug</item>
+        <item>shih_tzu</item>
+        <item>west_highland_white_terrier</item>
+        <item>yorkshire_terrier</item>
+    </string-array>
+    <string-array name="dog_breed_names">
+        <item>@string/breed_mixed</item>
+        <item>@string/breed_unknown</item>
+        <item>Australian Shepherd</item>
+        <item>Beagle</item>
+        <item>Bernese Mountain Dog</item>
+        <item>Border Collie</item>
+        <item>Boxer</item>
+        <item>Chihuahua</item>
+        <item>Cocker Spaniel</item>
+        <item>Dachshund</item>
+        <item>French Bulldog</item>
+        <item>German Shepherd</item>
+        <item>Golden Retriever</item>
+        <item>Siberian Husky</item>
+        <item>Jack Russell Terrier</item>
+        <item>Labrador Retriever</item>
+        <item>Maltese</item>
+        <item>Poodle</item>
+        <item>Pug</item>
+        <item>Shih Tzu</item>
+        <item>West Highland White Terrier</item>
+        <item>Yorkshire Terrier</item>
+    </string-array>
+    <string-array name="cat_breed_ids" translatable="false">
+        <item>mixed</item>
+        <item>unknown</item>
+        <item>bengal</item>
+        <item>british_shorthair</item>
+        <item>chartreux</item>
+        <item>european_shorthair</item>
+        <item>maine_coon</item>
+        <item>norwegian_forest_cat</item>
+        <item>persian</item>
+        <item>ragdoll</item>
+        <item>russian_blue</item>
+        <item>siamese</item>
+        <item>siberian</item>
+        <item>sphynx</item>
+    </string-array>
+    <string-array name="cat_breed_names">
+        <item>@string/breed_mixed</item>
+        <item>@string/breed_unknown</item>
+        <item>Bengal</item>
+        <item>British Shorthair</item>
+        <item>Chartreux</item>
+        <item>European Shorthair</item>
+        <item>Maine Coon</item>
+        <item>Norwegian Forest Cat</item>
+        <item>Persian</item>
+        <item>Ragdoll</item>
+        <item>Russian Blue</item>
+        <item>Siamese</item>
+        <item>Siberian</item>
+        <item>Sphynx</item>
+    </string-array>
+</resources>

@@ -366,6 +366,21 @@ class SightingRepositoryFirestoreTest {
     )
   }
 
+  @Test
+  fun setSightingStatus_votedFalse_failsAndChangesNothing() = runTest {
+    // Even the alert owner cannot hide a sighting as false: only the votes can (#463)
+    val alertId = seedAlertBypassingRules(ownerId = currentUserId())
+    val sighting =
+        sighting(id = repository.getNewId(), reporterId = OTHER_REPORTER, alertId = alertId)
+    seedBypassingRules(sighting)
+
+    val error =
+        repository.setSightingStatus(sighting.id, SightingStatus.VOTED_FALSE).exceptionOrNull()
+
+    assertTrue(error is IllegalArgumentException)
+    assertEquals(listOf(sighting), repository.getSightingsForAlert(alertId).getOrThrow())
+  }
+
   private fun currentUserId(): String =
       requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
 

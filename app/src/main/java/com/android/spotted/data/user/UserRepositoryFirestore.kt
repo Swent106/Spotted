@@ -5,8 +5,10 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.user.UserProfile
 import com.android.spotted.model.user.UserRepository
 import com.google.android.gms.tasks.Tasks
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ServerTimestamp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
@@ -55,9 +57,16 @@ class UserRepositoryFirestore(
     return document.toUserProfile()
   }
 
+  /**
+   * Saves the whole profile. Its `createdAt` is kept as it was, or set to the server time on the
+   * first save: the vote rules read it to require an account at least 7 days old, and the Firestore
+   * rules require it and never let it change.
+   */
   override suspend fun saveUser(user: UserProfile): Result<Unit> = firestoreResult {
     withContext(Dispatchers.IO) {
-      Tasks.await(users.document(user.uid).set(UserProfileDocument.from(user)))
+      val profile = users.document(user.uid)
+      val createdAt = Tasks.await(profile.get()).getTimestamp(CREATED_AT_FIELD)
+      Tasks.await(profile.set(UserProfileDocument.from(user).also { it.createdAt = createdAt }))
     }
   }
 
@@ -89,6 +98,8 @@ class UserRepositoryFirestore(
     var alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM
     // Empty in profiles saved before the username was asked for
     var username: String = ""
+    // When the account was created; null is written as the server time
+    @ServerTimestamp var createdAt: Timestamp? = null
 
     fun toUserProfile() =
         UserProfile(
@@ -121,5 +132,6 @@ class UserRepositoryFirestore(
 
   private companion object {
     const val USERS_COLLECTION = "users"
+    const val CREATED_AT_FIELD = "createdAt"
   }
 }

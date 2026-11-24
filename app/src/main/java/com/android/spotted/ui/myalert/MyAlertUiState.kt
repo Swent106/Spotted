@@ -34,7 +34,14 @@ data class MyAlertUiState(
     val isClosed: Boolean = false,
     val placeName: String? = null,
 ) {
-  /** Sightings drawn on the map: dismissed ones are hidden there, but stay greyed in the list. */
+  /**
+   * Sightings drawn on the map: dismissed ones and those voted false are hidden there, but stay in
+   * the list (greyed, or labelled "Hidden").
+   */
   val mapSightings: List<Sighting>
-    get() = sightings.filter { it.status != SightingStatus.DISMISSED }
+    get() = sightings.filter { it.status !in HIDDEN_FROM_MAP }
+
+  private companion object {
+    val HIDDEN_FROM_MAP = setOf(SightingStatus.DISMISSED, SightingStatus.VOTED_FALSE)
+  }
 }

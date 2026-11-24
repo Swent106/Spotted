@@ -51,6 +51,7 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.alert.alertShareText
+import com.android.spotted.ui.components.PetDetailsChips
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.components.SpottedBackButton
 import com.android.spotted.ui.components.shareText
@@ -68,7 +69,10 @@ object AlertDetailTestTags {
   const val PHOTO_PLACEHOLDER = "alertDetail_photoPlaceholder"
   const val NAME = "alertDetail_name"
   const val SPECIES = "alertDetail_species"
+  /** Prefix of the age, sex and size chips: `alertDetail_age`, `_sex`, `_size`. */
+  const val DETAILS_PREFIX = "alertDetail"
   const val LOST_AT = "alertDetail_lostAt"
+  const val LOSS_SUMMARY = "alertDetail_lossSummary"
   const val MAP = "alertDetail_map"
   const val LOCATION = "alertDetail_location"
   const val PLACE = "alertDetail_place"
@@ -102,7 +106,7 @@ fun AlertDetailScreen(
       modifier = modifier,
       onBack = onBack,
       // The system share sheet, launched from the View
-      onShare = { alert -> context.shareText(alertShareText(alert, state.placeName)) },
+      onShare = { alert -> alertShareText(alert, state.placeName).onSuccess(context::shareText) },
   )
 }
 
@@ -139,6 +143,8 @@ fun AlertDetailContent(
             alert = state.alert,
             distanceText = state.distanceText,
             placeName = state.placeName,
+            ageYears = state.ageYears,
+            canReportSighting = state.canReportSighting,
             onReportSighting = onReportSighting,
             onBack = onBack,
             onShare = { onShare(state.alert) },
@@ -175,6 +181,8 @@ private fun AlertDetails(
     alert: Alert,
     distanceText: String?,
     placeName: String?,
+    ageYears: Int?,
+    canReportSighting: Boolean,
     onReportSighting: () -> Unit,
     onBack: () -> Unit,
     onShare: () -> Unit,
@@ -205,12 +213,12 @@ private fun AlertDetails(
             modifier = Modifier.testTag(AlertDetailTestTags.FOUND_MESSAGE),
         )
       }
-      PetSummary(alert, distanceText, placeName)
+      PetSummary(alert, ageYears, distanceText, placeName)
       PetWarnings(alert)
       LastSeenArea(alert.lastKnownLocation, placeName)
     }
     BottomActions(
-        canReportSighting = alert.status == AlertStatus.OPEN,
+        canReportSighting = canReportSighting,
         onReportSighting = onReportSighting,
         onShare = onShare,
     )
@@ -274,7 +282,12 @@ private fun PetPhotoHeader(alert: Alert, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PetSummary(alert: Alert, distanceText: String?, placeName: String?) {
+private fun PetSummary(
+    alert: Alert,
+    ageYears: Int?,
+    distanceText: String?,
+    placeName: String?,
+) {
   Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text(
@@ -293,6 +306,12 @@ private fun PetSummary(alert: Alert, distanceText: String?, placeName: String?) 
           style = jakarta(11, 15f, 600, SpottedTheme.colors.inkSoft),
       )
     }
+    PetDetailsChips(
+        ageYears = ageYears,
+        sex = alert.petSex,
+        size = alert.petSize,
+        testTagPrefix = AlertDetailTestTags.DETAILS_PREFIX,
+    )
     Text(
         // The place's name once it is known, e.g. "Ouchy, Lausanne"; until then, the coordinates
         "Lost ${timeSinceLost(alert.lostAtMillis)} · " +
@@ -300,6 +319,7 @@ private fun PetSummary(alert: Alert, distanceText: String?, placeName: String?) 
         style = jakarta(12, 17f, 600, SpottedTheme.colors.lostRed),
         modifier = Modifier.testTag(AlertDetailTestTags.LOST_AT),
     )
+    LossSummaryChips(alert.lossCause, alert.lossEnvironment)
     if (distanceText != null) {
       Text(
           distanceText,
