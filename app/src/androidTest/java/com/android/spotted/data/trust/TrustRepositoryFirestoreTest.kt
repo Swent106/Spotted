@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.data.sighting.SightingRepositoryFirestore
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.SightingNotFoundException
+import com.android.spotted.model.trust.SightingNotHiddenException
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
 import com.google.android.gms.tasks.Tasks
@@ -23,6 +24,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -219,7 +221,7 @@ class TrustRepositoryFirestoreTest {
 
   @Test
   fun confirmSighting_alreadyJudgedFalse_onlyChangesTheStatus() = runTest {
-    // No client can write a FALSE verdict in S6: seeded, as the votes of US-T2 will write it
+    // Seeded: only the votes write a FALSE verdict (VoteRepositoryFirestore)
     val helperId = seedTrust(score = doubleValue(0.15), judged = 1)
     val sightingId =
         seedSighting(helperId, seedAlert(ownerId = currentUid()), trustVerdict = "FALSE")
@@ -303,6 +305,112 @@ class TrustRepositoryFirestoreTest {
     assertEquals("PENDING", sightingField(sightingId, "status"))
   }
 
+  // ===================== Restore (#463) =====================
+
+  @Test
+  fun restoreSighting_givesTheReporterTheirScoreBackAndSetsItPending() = runTest {
+    // 0.6 and 5 judged before the penalty, then halved
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1)
+    val sightingId = seedHiddenSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    repository.restoreSighting(sightingId).getOrThrow()
+
+    val restored = repository.getTrust(helperId).getOrThrow()
+    assertEquals(0.6, restored.score, 1e-9)
+    assertEquals(TrustScore(restored.score, 5, 0, 1), restored)
+    assertEquals("PENDING", sightingField(sightingId, "status"))
+    assertEquals("FALSE", sightingField(sightingId, "trustVerdict"))
+  }
+
+  @Test
+  fun restoreSighting_twice_failsTheSecondTimeAndChangesNothing() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1)
+    val sightingId = seedHiddenSighting(helperId, seedAlert(ownerId = currentUid()))
+    repository.restoreSighting(sightingId).getOrThrow()
+    val afterRestore = repository.getTrust(helperId).getOrThrow()
+
+    val error = repository.restoreSighting(sightingId).exceptionOrNull()
+
+    assertTrue("was $error", error is SightingNotHiddenException)
+    assertEquals(afterRestore, repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun restoreSighting_ofASightingNotHidden_failsWithSightingNotHidden() = runTest {
+    val helperId = newHelperId()
+    val sightingId = seedSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    val error = repository.restoreSighting(sightingId).exceptionOrNull()
+
+    assertTrue("was $error", error is SightingNotHiddenException)
+    assertEquals("PENDING", sightingField(sightingId, "status"))
+  }
+
+  @Test
+  fun restoreSighting_ofAHiddenSightingAlreadyRestored_failsWithSightingNotHidden() = runTest {
+    // Not reachable through the rules: a restored sighting is never hidden again
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1)
+    val sightingId =
+        seedSighting(
+            helperId,
+            seedAlert(ownerId = currentUid()),
+            trustVerdict = "FALSE",
+            status = "VOTED_FALSE",
+            extraFields = mapOf("penaltyCancelled" to mapOf("booleanValue" to true)),
+        )
+
+    val error = repository.restoreSighting(sightingId).exceptionOrNull()
+
+    assertTrue("was $error", error is SightingNotHiddenException)
+    assertEquals(TrustScore(0.3, 6, 1, 1), repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun restoreSighting_ofAHiddenSightingWithoutItsSavedTrust_failsWithSightingNotHidden() = runTest {
+    // Without the trust before the penalty, there is nothing to cancel it from
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1)
+    val sightingId =
+        seedSighting(
+            helperId,
+            seedAlert(ownerId = currentUid()),
+            trustVerdict = "FALSE",
+            status = "VOTED_FALSE",
+        )
+
+    val error = repository.restoreSighting(sightingId).exceptionOrNull()
+
+    assertTrue("was $error", error is SightingNotHiddenException)
+    assertEquals("VOTED_FALSE", sightingField(sightingId, "status"))
+  }
+
+  @Test
+  fun restoreSighting_byAUserWhoDoesNotOwnTheAlert_changesNothing() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1)
+    val sightingId = seedHiddenSighting(helperId, seedAlert(ownerId = "someone-else"))
+
+    val error = repository.restoreSighting(sightingId).exceptionOrNull()
+
+    assertEquals(
+        FirebaseFirestoreException.Code.PERMISSION_DENIED,
+        (error as? FirebaseFirestoreException)?.code,
+    )
+    assertEquals(TrustScore(0.3, 6, 1, 1), repository.getTrust(helperId).getOrThrow())
+    assertEquals("VOTED_FALSE", sightingField(sightingId, "status"))
+  }
+
+  @Test
+  fun setSightingStatus_ofAHiddenSighting_isRefused() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1)
+    val sightingId = seedHiddenSighting(helperId, seedAlert(ownerId = currentUid()))
+
+    // Leaving VOTED_FALSE without restoring would keep the reporter's penalty
+    val result = sightingRepository.setSightingStatus(sightingId, SightingStatus.PENDING)
+
+    assertTrue(result.isFailure)
+    assertEquals("VOTED_FALSE", sightingField(sightingId, "status"))
+    assertNull(sightingField(sightingId, "penaltyCancelled"))
+  }
+
   private fun currentUid(): String = checkNotNull(auth.currentUser).uid
 
   /** The string [field] of the sighting [sightingId] as stored, or null if it has none. */
@@ -335,6 +443,8 @@ class TrustRepositoryFirestoreTest {
       reporterId: String?,
       alertId: String,
       trustVerdict: String? = null,
+      status: String = "PENDING",
+      extraFields: Map<String, Any> = emptyMap(),
   ): String {
     val sightingId = "sighting-${UUID.randomUUID()}"
     val location =
@@ -353,9 +463,9 @@ class TrustRepositoryFirestoreTest {
             "seenAtMillis" to mapOf("integerValue" to "1000000"),
             "species" to stringValue("DOG"),
             "alertId" to stringValue(alertId),
-            "status" to stringValue("PENDING"),
+            "status" to stringValue(status),
             trustVerdict?.let { "trustVerdict" to stringValue(it) },
-        )
+        ) + extraFields
     seedDocument("sightings", sightingId, fields)
     return sightingId
   }
@@ -369,6 +479,31 @@ class TrustRepositoryFirestoreTest {
         )
     assertEquals(HttpURLConnection.HTTP_OK, response)
     seededDocuments += "$collection/$id"
+  }
+
+  /**
+   * Writes a sighting of [reporterId] hidden by the votes, bypassing the rules: the reporter had a
+   * score of 0.6 and 5 judged sightings before its penalty.
+   */
+  private suspend fun seedHiddenSighting(reporterId: String, alertId: String): String {
+    val beforePenalty =
+        mapOf(
+            "score" to doubleValue(0.6),
+            "judged" to integerValue(5),
+            "falseSightings" to integerValue(0),
+            "penaltiesApplied" to integerValue(0),
+        )
+    return seedSighting(
+        reporterId,
+        alertId,
+        trustVerdict = "FALSE",
+        status = "VOTED_FALSE",
+        extraFields =
+            mapOf(
+                "voteWeight" to doubleValue(2.0),
+                "penalty" to mapOf("mapValue" to mapOf("fields" to beforePenalty)),
+            ),
+    )
   }
 
   private fun stringValue(value: String): Map<String, Any> = mapOf("stringValue" to value)

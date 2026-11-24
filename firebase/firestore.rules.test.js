@@ -3147,7 +3147,10 @@ describe("Firestore vote rules", () => {
   });
 
   it("vote threshold: a judged sighting only gains weight, it is never penalised twice", async () => {
-    for (const judged of [{ status: "CONFIRMED", trustVerdict: "CONFIRMED" }]) {
+    for (const judged of [
+      { status: "CONFIRMED", trustVerdict: "CONFIRMED" },
+      { status: "PENDING", trustVerdict: "FALSE", penaltyCancelled: true },
+    ]) {
       await testEnvironment.clearFirestore();
       await seedVotedSighting(1.5, judged);
       await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });
@@ -3178,5 +3181,106 @@ describe("Firestore vote rules", () => {
     });
 
     await assertFails(batch.commit());
+  });
+
+  // A hidden sighting: reporter-1 had 0.6 and 5 judged before the penalty, then 0.3
+  async function seedHiddenSighting({ reporterTrust = trustOf(0.3, 6, 1, 1), overrides = {} } = {}) {
+    await seedVotedSighting(2.0, {
+      status: "VOTED_FALSE",
+      trustVerdict: "FALSE",
+      penalty: trustOf(0.6, 5),
+      ...overrides,
+    });
+    await seed("trust/reporter-1", { ...reporterTrust, lastSightingId: "sighting-1" });
+  }
+
+  /** The write of TrustRepositoryFirestore.restoreSighting by [userId], with [trust] for reporter-1. */
+  function restore(userId, trust, sightingChange = { status: "PENDING", penaltyCancelled: true }) {
+    const db = firestoreForUser(userId);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "sightings", "sighting-1"), sightingChange);
+    if (trust !== null) {
+      batch.set(doc(db, "trust", "reporter-1"), { ...trust, lastSightingId: "sighting-1" });
+    }
+    return batch.commit();
+  }
+
+  it("restore: the alert owner gets the reporter's score back", async () => {
+    await seedHiddenSighting();
+
+    await assertSucceeds(restore("owner-1", trustOf(0.6, 5, 0, 1)));
+  });
+
+  it("restore: after another verdict, the score is the one without the penalty", async () => {
+    // 0.6, halved to 0.3, then confirmed: 0.37. Without the penalty: 0.6 then confirmed, 0.64
+    await seedHiddenSighting({ reporterTrust: trustOf(0.37, 7, 1, 1) });
+
+    await assertFails(restore("owner-1", trustOf(0.74, 6, 0, 1))); // the naive doubling
+    await assertSucceeds(restore("owner-1", trustOf(0.6 + 0.1 * (1 - 0.6), 6, 0, 1)));
+  });
+
+  it("restore: a score off by more than rounding is denied", async () => {
+    await seedHiddenSighting();
+
+    await assertFails(restore("owner-1", trustOf(0.6 + 1e-6, 5, 0, 1)));
+    await assertFails(restore("owner-1", trustOf(0.6 - 1e-6, 5, 0, 1)));
+  });
+
+  it("restore: the counts lose the false sighting and keep the penalty", async () => {
+    await seedHiddenSighting();
+
+    await assertFails(restore("owner-1", trustOf(0.6, 6, 1, 1))); // nothing cancelled
+    await assertFails(restore("owner-1", trustOf(0.6, 5, 0, 0))); // the penalty forgotten
+  });
+
+  it("restore: only the owner of the sighting's alert may restore it", async () => {
+    await seedHiddenSighting();
+
+    for (const userId of ["reporter-1", "voter-1"]) {
+      await assertFails(restore(userId, trustOf(0.6, 5, 0, 1)));
+    }
+  });
+
+  it("restore: the status cannot leave VOTED_FALSE without cancelling the penalty", async () => {
+    await seedHiddenSighting();
+
+    for (const status of ["PENDING", "CONFIRMED", "DISMISSED"]) {
+      await assertFails(
+        updateDoc(doc(firestoreForUser("owner-1"), "sightings", "sighting-1"), { status }),
+      );
+    }
+    await assertFails(restore("owner-1", null));
+  });
+
+  it("restore: back to PENDING only, and once", async () => {
+    // reporter-1 took another penalty since (0.3 halved to 0.15), so cancelling this one twice
+    // would still be a valid trust write: only the restore guards can refuse the second one
+    await seedHiddenSighting({ reporterTrust: trustOf(0.15, 7, 2, 2) });
+
+    await assertFails(
+      restore("owner-1", trustOf(0.3, 6, 1, 2), { status: "CONFIRMED", penaltyCancelled: true }),
+    );
+    await assertSucceeds(restore("owner-1", trustOf(0.3, 6, 1, 2)));
+    await assertFails(restore("owner-1", trustOf(0.45, 5, 0, 2)));
+  });
+
+  it("restore: a sighting whose penalty was cancelled cannot be restored again", async () => {
+    // Not reachable through the rules (a restored sighting is never hidden again), so seeded:
+    // only penaltyCancelled tells it apart from a sighting that can be restored
+    await seedHiddenSighting({
+      reporterTrust: trustOf(0.15, 7, 2, 2),
+      overrides: { penaltyCancelled: true },
+    });
+
+    await assertFails(restore("owner-1", trustOf(0.3, 6, 1, 2), { status: "PENDING" }));
+  });
+
+  it("restore: once restored, the owner may confirm or dismiss it as usual", async () => {
+    await seedHiddenSighting();
+    await assertSucceeds(restore("owner-1", trustOf(0.6, 5, 0, 1)));
+    const sighting = doc(firestoreForUser("owner-1"), "sightings", "sighting-1");
+
+    await assertSucceeds(updateDoc(sighting, { status: "CONFIRMED" }));
+    await assertSucceeds(updateDoc(sighting, { status: "DISMISSED" }));
   });
 });
