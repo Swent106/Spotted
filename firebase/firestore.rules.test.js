@@ -2250,7 +2250,13 @@ describe("Firestore trust access rules", () => {
   ) {
     const db = firestoreForUser(userId);
     const batch = writeBatch(db);
-    batch.set(doc(db, "trust", reporterId), { lastSightingId: sightingId, ...trust });
+    // A confirmed verdict leaves the false counts at 0
+    batch.set(doc(db, "trust", reporterId), {
+      lastSightingId: sightingId,
+      falseSightings: 0,
+      penaltiesApplied: 0,
+      ...trust,
+    });
     const sightingChange =
       status === null ? { trustVerdict: verdict } : { trustVerdict: verdict, status };
     batch.update(doc(db, "sightings", sightingId), sightingChange);
@@ -2379,6 +2385,61 @@ describe("Firestore trust access rules", () => {
       }),
     );
     await assertFails(updateDoc(doc(db, "sightings", "sighting-1"), { trustVerdict: "CONFIRMED" }));
+  });
+
+  it("trust verdict: a confirmation keeps the false counts as they were", async () => {
+    await seedJudgeableSighting();
+    await testEnvironment.withSecurityRulesDisabled((context) =>
+      setDoc(doc(context.firestore(), "trust", "helper-1"), {
+        score: 0.3,
+        judged: 6,
+        falseSightings: 2,
+        penaltiesApplied: 3,
+      }),
+    );
+    const score = 0.3 + 0.1 * (1 - 0.3);
+
+    await assertFails(
+      judge("owner-1", {
+        verdict: "CONFIRMED",
+        trust: { score, judged: 7, falseSightings: 1, penaltiesApplied: 3 },
+      }),
+    );
+    await assertFails(
+      judge("owner-1", {
+        verdict: "CONFIRMED",
+        trust: { score, judged: 7, falseSightings: 2, penaltiesApplied: 2 },
+      }),
+    );
+    await assertSucceeds(
+      judge("owner-1", {
+        verdict: "CONFIRMED",
+        trust: { score, judged: 7, falseSightings: 2, penaltiesApplied: 3 },
+      }),
+    );
+  });
+
+  it("trust verdict: the false counts must be present and consistent", async () => {
+    await seedJudgeableSighting();
+    const trust = { score: confirmedFromInitial, judged: 1 };
+    const db = firestoreForUser("owner-1");
+
+    // Missing counts
+    const batch = writeBatch(db);
+    batch.set(doc(db, "trust", "helper-1"), { lastSightingId: "sighting-1", ...trust });
+    batch.update(doc(db, "sightings", "sighting-1"), {
+      trustVerdict: "CONFIRMED",
+      status: "CONFIRMED",
+    });
+    await assertFails(batch.commit());
+    // More false sightings than judged, or fewer penalties than false sightings
+    for (const counts of [
+      { falseSightings: 2, penaltiesApplied: 2 },
+      { falseSightings: 1, penaltiesApplied: 0 },
+      { falseSightings: -1, penaltiesApplied: 0 },
+    ]) {
+      await assertFails(judge("owner-1", { verdict: "CONFIRMED", trust: { ...trust, ...counts } }));
+    }
   });
 
   it("trust verdict: a sighting only moves the trust of its own reporter", async () => {
