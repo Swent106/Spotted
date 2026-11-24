@@ -26,8 +26,8 @@ import org.junit.runner.RunWith
 
 /**
  * [VoteRepositoryFirestore] against the Firestore emulator and its rules. The signed-in user is the
- * voter: unless a test says otherwise, their account is 30 days old and Trusted, so the rules let
- * them vote on other users' sightings.
+ * voter: their account is 30 days old and Trusted, so the rules let them vote on other users'
+ * sightings.
  */
 @RunWith(AndroidJUnit4::class)
 class VoteRepositoryFirestoreTest {
@@ -59,6 +59,7 @@ class VoteRepositoryFirestoreTest {
   fun castVote_eligibleVoter_storesTheVote() = runTest {
     seedEligibleVoter()
     val sightingId = seedSighting()
+    assertFalse(repository.hasVoted(sightingId, voterId()).getOrThrow())
 
     assertTrue(repository.castVote(sightingId, voterId()).isSuccess)
 
@@ -78,50 +79,8 @@ class VoteRepositoryFirestoreTest {
     assertEquals(1, repository.getVoteCount(sightingId).getOrThrow())
   }
 
-  @Test
-  fun castVote_asAnotherUser_isRefused() = runTest {
-    seedEligibleVoter()
-    val sightingId = seedSighting()
-
-    val error = repository.castVote(sightingId, "someone-else").exceptionOrNull()
-
-    assertPermissionDenied(error)
-    assertEquals(0, repository.getVoteCount(sightingId).getOrThrow())
-  }
-
-  @Test
-  fun castVote_onOwnSighting_isRefused() = runTest {
-    seedEligibleVoter()
-    val sightingId = seedSighting(reporterId = voterId())
-
-    assertPermissionDenied(repository.castVote(sightingId, voterId()).exceptionOrNull())
-    assertFalse(repository.hasVoted(sightingId, voterId()).getOrThrow())
-  }
-
-  @Test
-  fun castVote_onMissingSighting_isRefused() = runTest {
-    seedEligibleVoter()
-
-    val result = repository.castVote("missing-${UUID.randomUUID()}", voterId())
-
-    assertPermissionDenied(result.exceptionOrNull())
-  }
-
-  @Test
-  fun castVote_accountLessThanSevenDaysOld_isRefused() = runTest {
-    seedEligibleVoter(accountAge = Duration.ofDays(6))
-    val sightingId = seedSighting()
-
-    assertPermissionDenied(repository.castVote(sightingId, voterId()).exceptionOrNull())
-  }
-
-  @Test
-  fun castVote_belowTrusted_isRefused() = runTest {
-    seedEligibleVoter(score = 0.39)
-    val sightingId = seedSighting()
-
-    assertPermissionDenied(repository.castVote(sightingId, voterId()).exceptionOrNull())
-  }
+  // Who may vote is tested in the rules tests (firestore.rules.test.js); here, the repository's own
+  // logic: the transaction, the AlreadyVotedException, the quota it writes, and the reads
 
   @Test
   fun castVote_tenVotesInADay_theEleventhIsRefused() = runTest {
@@ -142,16 +101,6 @@ class VoteRepositoryFirestoreTest {
     assertEquals(0, repository.getVoteCount(sightingId).getOrThrow())
   }
 
-  @Test
-  fun hasVoted_isFalseBeforeVoting_trueAfter() = runTest {
-    seedEligibleVoter()
-    val sightingId = seedSighting()
-
-    assertFalse(repository.hasVoted(sightingId, voterId()).getOrThrow())
-    repository.castVote(sightingId, voterId()).getOrThrow()
-    assertTrue(repository.hasVoted(sightingId, voterId()).getOrThrow())
-  }
-
   private fun assertPermissionDenied(error: Throwable?) {
     assertTrue(
         "expected PERMISSION_DENIED, was $error",
@@ -164,11 +113,8 @@ class VoteRepositoryFirestoreTest {
       requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
 
   /** Writes the voter's profile and trust score, bypassing the rules. */
-  private suspend fun seedEligibleVoter(
-      accountAge: Duration = Duration.ofDays(30),
-      score: Double = 0.5,
-  ) {
-    val createdAt = Instant.now().minus(accountAge).toString()
+  private suspend fun seedEligibleVoter() {
+    val createdAt = Instant.now().minus(Duration.ofDays(30)).toString()
     seedDocument(
         "users",
         voterId(),
@@ -185,16 +131,17 @@ class VoteRepositoryFirestoreTest {
         "trust",
         voterId(),
         mapOf(
-            "score" to mapOf("doubleValue" to score),
+            "score" to mapOf("doubleValue" to 0.5),
             "judged" to mapOf("integerValue" to "3"),
             "lastSightingId" to stringValue("old-sighting"),
         ),
     )
   }
 
-  /** Writes a pending sighting of [reporterId], bypassing the rules, and returns its id. */
-  private suspend fun seedSighting(reporterId: String = "reporter-${UUID.randomUUID()}"): String {
+  /** Writes a pending sighting of another user, bypassing the rules, and returns its id. */
+  private suspend fun seedSighting(): String {
     val sightingId = "sighting-${UUID.randomUUID()}"
+    val reporterId = "reporter-${UUID.randomUUID()}"
     val location =
         mapOf(
             "mapValue" to
