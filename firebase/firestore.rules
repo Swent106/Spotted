@@ -324,13 +324,16 @@ service cloud.firestore {
 
       // Full schema of a sighting document (matches SightingRepositoryFirestore).
       // species and status must be names of the Species and SightingStatus enums.
+      // voteWeight and penalty are checked by the only rule that may change them (the votes,
+      // below): checking them here too would cost expressions
+      // in every update, which already come close to the limit of 1000 per request.
       function validSighting(d, previousHeadingDegrees) {
         return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
           && d.keys().hasOnly([
                 'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
                 'status', 'headingDegrees', 'activities', 'conditions', 'reactions', 'placeType',
-                'collar', 'trustVerdict'])
-          && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED']
+                'collar', 'trustVerdict', 'voteWeight', 'penalty'])
+          && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED', 'VOTED_FALSE']
           && d.get('trustVerdict', 'CONFIRMED') in ['CONFIRMED', 'FALSE']
           && validSightingDetails(d)
           && d.id == sightingId
@@ -388,11 +391,17 @@ service cloud.firestore {
         return 'trustVerdict' in d;
       }
 
+      // Fields only the votes write (see below)
+      function voteFields() {
+        return ['voteWeight', 'penalty'];
+      }
+
       allow create: if request.auth != null
           && validSighting(request.resource.data, null)
           && request.resource.data.reporterId == request.auth.uid
           && statusOf(request.resource.data) == 'PENDING'
           && !isJudged(request.resource.data)
+          && !request.resource.data.keys().hasAny(voteFields())
           && notInTheFuture(request.resource.data)
           && canBeLinkedTo(request.resource.data);
 
@@ -423,6 +432,7 @@ service cloud.firestore {
               request.resource.data, resource.data.get('headingDegrees', null))
           && request.resource.data.reporterId == resource.data.reporterId
           && statusOf(request.resource.data) == 'PENDING'
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(voteFields())
           && alertIdKept()
           && notInTheFuture(request.resource.data)
           && linkedAlertAllowed();
@@ -431,20 +441,24 @@ service cloud.firestore {
       // The status stays explicit once reviewed (it cannot be deleted).
       // The first confirmation must judge the sighting too (next rule), so it moves the trust
       // score of its reporter. Once judged, the status alone may change again.
+      // VOTED_FALSE is set only by the votes (below), so the owner cannot hide a sighting alone.
+      // It cannot be left yet: the restore, which also cancels the reporter's penalty, comes in
+      // #463 part 3. A plain status change would let the reporter keep the penalty.
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
               request.resource.data, resource.data.get('headingDegrees', null))
           && 'status' in request.resource.data
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && statusOf(resource.data) != 'VOTED_FALSE'
+          && request.resource.data.status != 'VOTED_FALSE'
           && (request.resource.data.status != 'CONFIRMED' || isJudged(resource.data));
 
       // The owner of the linked alert may judge the sighting for the trust score of its reporter:
       // once, and only in the same write as the trust update it causes (see trust/{uid}).
-      // In S6 only a confirmation judges (TrustRepositoryFirestore.confirmSighting): the write
-      // must confirm the sighting with a confirmed verdict. So one owner, even a new account,
-      // cannot lower a reporter's score, nor credit a dismissed sighting. FALSE verdicts come
-      // with the votes of US-T2 (#385).
+      // Only a confirmation (TrustRepositoryFirestore.confirmSighting): the write must confirm
+      // the sighting with a confirmed verdict. So one owner, even a new account, cannot lower a
+      // reporter's score, nor credit a dismissed sighting. FALSE verdicts come from the votes.
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
@@ -457,6 +471,47 @@ service cloud.firestore {
           && request.resource.data.trustVerdict == 'CONFIRMED'
           && getAfter(/databases/$(database)/documents/trust/$(resource.data.reporterId))
                .data.get('lastSightingId', null) == sightingId;
+
+      // The "This looks false" votes (#463, VoteRepositoryFirestore.castVote). In the same write as
+      // their new vote (whose own rules check who may vote), a voter adds their trust score to
+      // voteWeight (VoteRules.weightAfter). The vote that brings it to the threshold
+      // (VoteRules.THRESHOLD, 2.0) hides the sighting: VOTED_FALSE, a FALSE verdict, and the
+      // reporter's trust before it (penalty), in the same write as the trust update it causes
+      // (see trust/{uid}). It must hide it, unless the sighting was already judged: then the
+      // votes only add weight, so a sighting is penalised once.
+      function votesNow() {
+        let votePath = /databases/$(database)/documents/sightings/$(sightingId)/votes/$(request.auth.uid);
+        return !exists(votePath) && existsAfter(votePath);
+      }
+
+      function weightAfterVote() {
+        let voterTrustPath = /databases/$(database)/documents/trust/$(request.auth.uid);
+        return resource.data.get('voteWeight', 0.0) + get(voterTrustPath).data.score;
+      }
+
+      function reachesThreshold(weight) {
+        return weight >= 2.0;
+      }
+
+      function hidesForVotes() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['voteWeight', 'status', 'trustVerdict', 'penalty'])
+          && request.resource.data.status == 'VOTED_FALSE'
+          && request.resource.data.trustVerdict == 'FALSE'
+          && getAfter(/databases/$(database)/documents/trust/$(resource.data.reporterId))
+               .data.get('lastSightingId', null) == sightingId;
+      }
+
+      // No validSighting here: the rule fixes every field it lets change, and a request may run
+      // each update rule, so a third validSighting would pass the limit of 1000 expressions on a
+      // sighting with every animal detail.
+      allow update: if request.auth != null
+          && 'voteWeight' in request.resource.data
+          && votesNow()
+          && request.resource.data.voteWeight == weightAfterVote()
+          && (reachesThreshold(request.resource.data.voteWeight) && !isJudged(resource.data)
+              ? hidesForVotes()
+              : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voteWeight']));
 
       // Once reviewed, the sighting is evidence the owner relies on, so it cannot be deleted.
       // A judged one cannot either: created again with the same id, it would be counted twice.
@@ -536,12 +591,13 @@ service cloud.firestore {
 
     // trust/{uid}: score (0..1), judged (count of judged sightings), falseSightings (how many of
     // them count as false), penaltiesApplied (false verdicts ever applied, cancelled ones included)
-    // of a user, and lastSightingId, the sighting judged last. Kept apart from users/{uid}, which
-    // holds private contact details, so any signed-in user can see how reliable a helper is.
-    // Only TrustRepositoryFirestore.confirmSighting writes it: in one transaction, the owner of an
-    // alert confirms a sighting linked to it (its trustVerdict) and applies that verdict to the
-    // trust of its reporter. False verdicts, and their cancelling, come with the votes (#463).
-    // The constants match TrustRules in model/trust/TrustScore.kt.
+    // of a user, and lastSightingId, the sighting whose verdict changed last. Kept apart from
+    // users/{uid}, which holds private contact details, so any signed-in user can see how reliable
+    // a helper is. Written in one transaction with a sighting of the user, in two ways:
+    // - the owner of its alert confirms it (TrustRepositoryFirestore.confirmSighting);
+    // - a vote brings it to the threshold, a false verdict (VoteRepositoryFirestore.castVote).
+    // Cancelling a false verdict comes in #463 part 3.
+    // The constants match TrustRules in model/trust/TrustScore.kt and VoteRules in VoteRules.kt.
     match /trust/{uid} {
       function judgedSightingPath() {
         return /databases/$(database)/documents/sightings/$(request.resource.data.lastSightingId);
@@ -592,13 +648,35 @@ service cloud.firestore {
       }
 
       // The sighting named by lastSightingId: reported by this user, linked to an alert of the
-      // signed-in user, not judged before this write and confirmed by it.
+      // signed-in user, not judged before this write and confirmed by it. Only CONFIRMED: an
+      // owner who also cast the deciding vote must go through the vote penalty below.
       function judgesSightingNow() {
         let before = get(judgedSightingPath()).data;
         return before.reporterId == uid
           && !('trustVerdict' in before)
           && ownsAlertOf(before)
           && getAfter(judgedSightingPath()).data.get('trustVerdict', null) == 'CONFIRMED';
+      }
+
+      // The sighting named by lastSightingId: reported by this user, not judged before this write,
+      // and hidden by it with a FALSE verdict, by the vote of the signed-in user that brings its
+      // weight to the threshold (VoteRules.THRESHOLD; the weight itself is checked on the
+      // sighting). It saves the trust before the penalty, which a restore needs.
+      function penalisesForVotesNow() {
+        let before = get(judgedSightingPath()).data;
+        let after = getAfter(judgedSightingPath()).data;
+        let votePath = /databases/$(database)/documents/sightings/$(request.resource.data.lastSightingId)/votes/$(request.auth.uid);
+        return before.reporterId == uid
+          && !('trustVerdict' in before)
+          && after.get('trustVerdict', null) == 'FALSE'
+          && after.get('voteWeight', 0) >= 2.0
+          && !exists(votePath) && existsAfter(votePath)
+          && after.get('penalty', null) == {
+               'score': scoreBefore(),
+               'judged': judgedBefore(),
+               'falseSightings': falseBefore(),
+               'penaltiesApplied': penaltiesBefore()
+             };
       }
 
       // One verdict at a time: judged goes up by one, a FALSE one also counts a false sighting
@@ -615,14 +693,14 @@ service cloud.firestore {
       allow create, update: if isAuthenticated()
           && validTrust(request.resource.data)
           && exists(judgedSightingPath())
-          && judgesSightingNow()
-          && appliesOneVerdict('CONFIRMED');
+          && ((judgesSightingNow() && appliesOneVerdict('CONFIRMED'))
+              || (penalisesForVotesNow() && appliesOneVerdict('FALSE')));
     }
 
     // sightings/{sightingId}/votes/{voterId}: a "This looks false" vote (US-T2 #385), written by
     // VoteRepositoryFirestore.castVote. One document per voter, holding only voterId (= the
-    // document id) and votedAt (the server time). The weight is never sent: the backend reads it
-    // from the voter's trust score (#463). Who may vote (#462):
+    // document id) and votedAt (the server time). The weight is never sent: the rules of the
+    // sighting read it from the voter's trust score (#463). Who may vote (#462):
     // - not the reporter of the sighting, and only once (a vote is never changed or deleted);
     // - an account at least 7 days old (users/{uid}.createdAt);
     // - level Trusted or above (trust/{uid}, same thresholds as TrustRules in TrustScore.kt).

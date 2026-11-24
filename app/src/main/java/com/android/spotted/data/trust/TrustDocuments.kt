@@ -9,8 +9,8 @@ import com.google.firebase.firestore.Transaction
 
 /**
  * How a [TrustScore] is stored in `trust/{uid}`, and the write that applies a verdict to it. Shared
- * by every writer of a trust (the owner's confirmation in [TrustRepositoryFirestore], and the
- * votes' false verdict to come in #463), so all write exactly what the Firestore rules check.
+ * by [TrustRepositoryFirestore] (the owner's verdicts) and the vote repository (the votes' false
+ * verdict), so both write exactly what the Firestore rules check.
  */
 internal object TrustDocuments {
   const val TRUST_COLLECTION = "trust"
@@ -23,9 +23,15 @@ internal object TrustDocuments {
   /** On a sighting: the verdict that counted for its reporter, so it counts once. */
   const val TRUST_VERDICT_FIELD = "trustVerdict"
 
+  /**
+   * On a sighting judged false: the trust of its reporter just before the penalty, as a map of the
+   * [TrustScore] fields. A restore needs it to cancel the penalty.
+   */
+  const val PENALTY_FIELD = "penalty"
+
   const val REPORTER_ID_FIELD = "reporterId"
 
-  /** The fields of [trust], as stored in `trust/{uid}`. */
+  /** The fields of [trust], as stored in `trust/{uid}` and in a sighting's [PENALTY_FIELD]. */
   fun fieldsOf(trust: TrustScore): Map<String, Any> =
       mapOf(
           SCORE_FIELD to trust.score,
@@ -70,8 +76,9 @@ internal object TrustDocuments {
 
   /**
    * Applies [verdict] to the trust of the reporter of [sighting], and marks the sighting judged
-   * with it, together with the [otherSightingFields]. Reads before it writes: call it before the
-   * other writes of the transaction. Returns the new trust.
+   * with it, together with the [otherSightingFields]. A false verdict also saves on the sighting
+   * the trust before it ([PENALTY_FIELD]). Reads before it writes: call it before the other writes
+   * of the transaction. Returns the new trust.
    */
   fun Transaction.judge(
       firestore: FirebaseFirestore,
@@ -83,7 +90,12 @@ internal object TrustDocuments {
     val before = get(firestore.collection(TRUST_COLLECTION).document(reporterId)).toTrustScore()
     val next = before.after(verdict)
     setTrust(firestore, reporterId, next, sighting.id)
-    update(sighting.reference, otherSightingFields + (TRUST_VERDICT_FIELD to verdict.name))
+    val penalty =
+        if (verdict == Verdict.FALSE) mapOf(PENALTY_FIELD to fieldsOf(before)) else emptyMap()
+    update(
+        sighting.reference,
+        otherSightingFields + penalty + (TRUST_VERDICT_FIELD to verdict.name),
+    )
     return next
   }
 }

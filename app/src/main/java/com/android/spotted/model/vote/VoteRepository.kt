@@ -4,9 +4,9 @@ package com.android.spotted.model.vote
 /**
  * "This looks false" votes on sightings: each user votes at most once per sighting.
  *
- * This repository only stores and reads votes. Who may vote is checked by the Firestore rules
- * (#462), and what the votes cause (hiding the sighting, the reporter's penalty) comes with the
- * vote threshold (#463).
+ * Who may vote is checked by the Firestore rules (#462). Each vote weighs the voter's trust score,
+ * and the vote that brings the total to [VoteRules.THRESHOLD] also hides the sighting and applies a
+ * false verdict to its reporter, in the same write (#463).
  *
  * Contract shared by every implementation (Firestore and fakes):
  * - errors are returned as [Result.failure], never thrown to the caller;

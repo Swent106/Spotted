@@ -2,6 +2,9 @@
 package com.android.spotted.data.vote
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.data.trust.TrustRepositoryFirestore
+import com.android.spotted.model.trust.TrustScore
+import com.android.spotted.model.trust.Verdict
 import com.android.spotted.model.vote.AlreadyVotedException
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
@@ -94,6 +97,54 @@ class VoteRepositoryFirestoreTest {
     assertFalse(repository.hasVoted(sightingIds.last(), voterId()).getOrThrow())
   }
 
+  // ===================== Weight and threshold (#463) =====================
+
+  @Test
+  fun castVote_addsTheVotersScoreToTheWeight() = runTest {
+    seedEligibleVoter()
+    val sightingId = seedSighting(voteWeight = 1.0)
+
+    repository.castVote(sightingId, voterId()).getOrThrow()
+
+    val sighting = sightingSnapshot(sightingId)
+    assertEquals(1.5, sighting.getDouble("voteWeight")!!, 1e-9)
+    assertEquals("PENDING", sighting.getString("status"))
+  }
+
+  @Test
+  fun castVote_reachingTheThreshold_hidesTheSightingAndPenalisesTheReporter() = runTest {
+    seedEligibleVoter()
+    val sightingId = seedSighting(voteWeight = 1.5)
+
+    repository.castVote(sightingId, voterId()).getOrThrow()
+
+    val sighting = sightingSnapshot(sightingId)
+    assertEquals("VOTED_FALSE", sighting.getString("status"))
+    assertEquals("FALSE", sighting.getString("trustVerdict"))
+    assertEquals(2.0, sighting.getDouble("voteWeight")!!, 1e-9)
+    assertEquals(
+        TrustScore.INITIAL.after(Verdict.FALSE),
+        trustRepository().getTrust(sighting.getString("reporterId")!!).getOrThrow(),
+    )
+  }
+
+  @Test
+  fun castVote_onAConfirmedSighting_onlyAddsWeight() = runTest {
+    seedEligibleVoter()
+    val sightingId =
+        seedSighting(voteWeight = 1.5, status = "CONFIRMED", trustVerdict = "CONFIRMED")
+
+    repository.castVote(sightingId, voterId()).getOrThrow()
+
+    val sighting = sightingSnapshot(sightingId)
+    assertEquals("CONFIRMED", sighting.getString("status"))
+    assertEquals(2.0, sighting.getDouble("voteWeight")!!, 1e-9)
+    assertEquals(
+        TrustScore.INITIAL,
+        trustRepository().getTrust(sighting.getString("reporterId")!!).getOrThrow(),
+    )
+  }
+
   @Test
   fun getVoteCount_sightingWithoutVotes_isZero() = runTest {
     val sightingId = seedSighting()
@@ -108,6 +159,13 @@ class VoteRepositoryFirestoreTest {
             FirebaseFirestoreException.Code.PERMISSION_DENIED,
     )
   }
+
+  private fun trustRepository() = TrustRepositoryFirestore(firestore)
+
+  private suspend fun sightingSnapshot(sightingId: String) =
+      withContext(Dispatchers.IO) {
+        Tasks.await(firestore.collection("sightings").document(sightingId).get())
+      }
 
   private fun voterId(): String =
       requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
@@ -138,8 +196,15 @@ class VoteRepositoryFirestoreTest {
     )
   }
 
-  /** Writes a pending sighting of another user, bypassing the rules, and returns its id. */
-  private suspend fun seedSighting(): String {
+  /**
+   * Writes a sighting of another user, bypassing the rules, and returns its id: pending and without
+   * votes unless told otherwise. Its reporter's trust, if a vote creates it, is deleted with it.
+   */
+  private suspend fun seedSighting(
+      voteWeight: Double? = null,
+      status: String = "PENDING",
+      trustVerdict: String? = null,
+  ): String {
     val sightingId = "sighting-${UUID.randomUUID()}"
     val reporterId = "reporter-${UUID.randomUUID()}"
     val location =
@@ -153,6 +218,12 @@ class VoteRepositoryFirestoreTest {
                         )
                 )
         )
+    val optional =
+        listOfNotNull(
+                voteWeight?.let { "voteWeight" to mapOf("doubleValue" to it) },
+                trustVerdict?.let { "trustVerdict" to stringValue(it) },
+            )
+            .toMap()
     seedDocument(
         "sightings",
         sightingId,
@@ -162,9 +233,10 @@ class VoteRepositoryFirestoreTest {
             "location" to location,
             "seenAtMillis" to mapOf("integerValue" to "1000000"),
             "species" to stringValue("DOG"),
-            "status" to stringValue("PENDING"),
-        ),
+            "status" to stringValue(status),
+        ) + optional,
     )
+    seededDocuments += "trust/$reporterId"
     // The vote cast by a test, if any, is deleted with it
     seededDocuments += "sightings/$sightingId/votes/${voterId()}"
     return sightingId
