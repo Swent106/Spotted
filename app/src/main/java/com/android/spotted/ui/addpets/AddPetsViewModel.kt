@@ -11,17 +11,13 @@ import com.android.spotted.R
 import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.model.Pet.Behavior
-import com.android.spotted.model.Pet.Lifestyle
-import com.android.spotted.model.Pet.Microchipped
-import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
-import com.android.spotted.model.Pet.PetSize
-import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.photo.PhotoRepository
+import com.android.spotted.ui.components.PetDetailsInput
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,24 +108,9 @@ class AddPetsViewModel(
     _uiState.update { it.copy(breedId = breedId, errorMessage = null) }
   }
 
-  fun onSexChanged(sex: Sex) {
-    _uiState.update { it.copy(sex = sex, errorMessage = null) }
-  }
-
-  fun onNeuteredChanged(neutered: Neutered) {
-    _uiState.update { it.copy(neutered = neutered, errorMessage = null) }
-  }
-
-  fun onSizeChanged(size: PetSize) {
-    _uiState.update { it.copy(size = size, errorMessage = null) }
-  }
-
-  fun onLifestyleChanged(lifestyle: Lifestyle) {
-    _uiState.update { it.copy(lifestyle = lifestyle, errorMessage = null) }
-  }
-
-  fun onMicrochippedChanged(microchipped: Microchipped) {
-    _uiState.update { it.copy(microchipped = microchipped, errorMessage = null) }
+  /** Sets the optional details: sex, neutered, size, lifestyle and microchip. */
+  fun onDetailsChanged(details: PetDetailsInput) {
+    _uiState.update { it.copy(details = details, errorMessage = null) }
   }
 
   fun onBehaviorToggled(behavior: Behavior) {
@@ -221,11 +202,11 @@ class AddPetsViewModel(
               note = state.description.trim(),
               birthYear = state.birthYear,
               breedId = state.breedId,
-              sex = state.sex,
-              neutered = state.neutered,
-              size = state.size,
-              lifestyle = state.lifestyle,
-              microchipped = state.microchipped,
+              sex = state.details.sex,
+              neutered = state.details.neutered,
+              size = state.details.size,
+              lifestyle = state.details.lifestyle,
+              microchipped = state.details.microchipped,
           )
       petRepository
           .addPet(pet)

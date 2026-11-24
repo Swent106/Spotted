@@ -4,13 +4,9 @@ package com.android.spotted.ui.addpets
 
 import com.android.spotted.R
 import com.android.spotted.model.Pet.Behavior
-import com.android.spotted.model.Pet.Lifestyle
-import com.android.spotted.model.Pet.Microchipped
-import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
-import com.android.spotted.model.Pet.PetSize
-import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.ui.components.PetDetailsInput
 
 sealed interface AddPetsMessage {
   data class Resource(val id: Int, val arguments: List<Any> = emptyList()) : AddPetsMessage
@@ -32,11 +28,7 @@ data class AddPetsUiState(
     val birthYearError: AddPetsMessage? = null,
     /** Breed picked from the list of [species], or null; [breed] stays the free-text fallback. */
     val breedId: String? = null,
-    val sex: Sex = Sex.UNKNOWN,
-    val neutered: Neutered = Neutered.UNKNOWN,
-    val size: PetSize = PetSize.UNKNOWN,
-    val lifestyle: Lifestyle = Lifestyle.UNKNOWN,
-    val microchipped: Microchipped = Microchipped.UNKNOWN,
+    val details: PetDetailsInput = PetDetailsInput(),
     val addedPets: List<Pet> = emptyList(),
     val isSaving: Boolean = false,
     val isDone: Boolean = false,
@@ -80,9 +72,5 @@ data class AddPetsUiState(
             behaviors.isNotEmpty() ||
             birthYear != null ||
             breedId != null ||
-            sex != Sex.UNKNOWN ||
-            neutered != Neutered.UNKNOWN ||
-            size != PetSize.UNKNOWN ||
-            lifestyle != Lifestyle.UNKNOWN ||
-            microchipped != Microchipped.UNKNOWN
+            details.isSet
 }

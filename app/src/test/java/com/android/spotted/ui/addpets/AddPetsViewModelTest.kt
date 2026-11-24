@@ -14,6 +14,7 @@ import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.ui.components.PetDetailsInput
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -414,21 +415,21 @@ class AddPetsViewModelTest {
   fun newFieldChanges_areReflectedInState() {
     viewModel.onBirthYearChanged(2021)
     viewModel.onBreedIdChanged("beagle")
-    viewModel.onSexChanged(Sex.FEMALE)
-    viewModel.onNeuteredChanged(Neutered.YES)
-    viewModel.onSizeChanged(PetSize.MEDIUM)
-    viewModel.onLifestyleChanged(Lifestyle.INDOOR_AND_OUTDOOR)
-    viewModel.onMicrochippedChanged(Microchipped.NO)
+    val details =
+        PetDetailsInput(
+            sex = Sex.FEMALE,
+            neutered = Neutered.YES,
+            size = PetSize.MEDIUM,
+            lifestyle = Lifestyle.INDOOR_AND_OUTDOOR,
+            microchipped = Microchipped.NO,
+        )
+    viewModel.onDetailsChanged(details)
 
     val state = viewModel.uiState.value
     assertEquals(2021, state.birthYear)
     assertNull(state.birthYearError)
     assertEquals("beagle", state.breedId)
-    assertEquals(Sex.FEMALE, state.sex)
-    assertEquals(Neutered.YES, state.neutered)
-    assertEquals(PetSize.MEDIUM, state.size)
-    assertEquals(Lifestyle.INDOOR_AND_OUTDOOR, state.lifestyle)
-    assertEquals(Microchipped.NO, state.microchipped)
+    assertEquals(details, state.details)
   }
 
   @Test
@@ -437,11 +438,11 @@ class AddPetsViewModelTest {
         listOf(
             { onBirthYearChanged(2021) },
             { onBreedIdChanged("beagle") },
-            { onSexChanged(Sex.MALE) },
-            { onNeuteredChanged(Neutered.NO) },
-            { onSizeChanged(PetSize.LARGE) },
-            { onLifestyleChanged(Lifestyle.OUTDOOR_ONLY) },
-            { onMicrochippedChanged(Microchipped.YES) },
+            { onDetailsChanged(PetDetailsInput(sex = Sex.MALE)) },
+            { onDetailsChanged(PetDetailsInput(neutered = Neutered.NO)) },
+            { onDetailsChanged(PetDetailsInput(size = PetSize.LARGE)) },
+            { onDetailsChanged(PetDetailsInput(lifestyle = Lifestyle.OUTDOOR_ONLY)) },
+            { onDetailsChanged(PetDetailsInput(microchipped = Microchipped.YES)) },
         )
     setters.forEach { set ->
       val fresh = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2035 })
@@ -457,11 +458,15 @@ class AddPetsViewModelTest {
     fillForm(name = "Rex", species = Species.DOG)
     viewModel.onBirthYearChanged(2021)
     viewModel.onBreedIdChanged("beagle")
-    viewModel.onSexChanged(Sex.MALE)
-    viewModel.onNeuteredChanged(Neutered.YES)
-    viewModel.onSizeChanged(PetSize.LARGE)
-    viewModel.onLifestyleChanged(Lifestyle.INDOOR_ONLY)
-    viewModel.onMicrochippedChanged(Microchipped.YES)
+    viewModel.onDetailsChanged(
+        PetDetailsInput(
+            sex = Sex.MALE,
+            neutered = Neutered.YES,
+            size = PetSize.LARGE,
+            lifestyle = Lifestyle.INDOOR_ONLY,
+            microchipped = Microchipped.YES,
+        )
+    )
 
     viewModel.savePet()
     advanceUntilIdle()
@@ -477,7 +482,7 @@ class AddPetsViewModelTest {
     val state = viewModel.uiState.value
     assertNull(state.birthYear)
     assertNull(state.breedId)
-    assertEquals(Sex.UNKNOWN, state.sex)
+    assertEquals(PetDetailsInput(), state.details)
     assertFalse(state.hasFormInput)
   }
 
