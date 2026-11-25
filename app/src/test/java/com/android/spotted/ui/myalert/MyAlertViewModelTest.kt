@@ -191,6 +191,47 @@ class MyAlertViewModelTest {
       }
 
   @Test
+  fun hiddenSighting_staysInOwnerListAndIsRestorable() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val hidden = sighting(status = SightingStatus.VOTED_FALSE)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(hidden)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+
+        assertEquals(listOf(hidden), viewModel.uiState.value.hiddenSightings)
+        assertEquals(SightingStatus.VOTED_FALSE, viewModel.uiState.value.sightings.single().status)
+        assertTrue(viewModel.uiState.value.mapSightings.isEmpty())
+
+        viewModel.restore(hidden.id)
+        advanceUntilIdle()
+
+        assertEquals(SightingStatus.PENDING, viewModel.uiState.value.sightings.single().status)
+        assertTrue(viewModel.uiState.value.hiddenSightings.isEmpty())
+      }
+
+  @Test
+  fun restoreFailure_keepsHiddenSighting() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val hidden = sighting(status = SightingStatus.VOTED_FALSE)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(hidden)
+        val viewModel = viewModel(alert.id)
+        advanceUntilIdle()
+        sightingRepository.statusFailure = IllegalStateException()
+
+        viewModel.restore(hidden.id)
+        advanceUntilIdle()
+
+        assertEquals(SightingStatus.VOTED_FALSE, viewModel.uiState.value.sightings.single().status)
+        assertEquals(MyAlertViewModel.RESTORE_FAILED, viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
   fun likelyArea_isNullAfterConfirmedSightingIsDismissed() =
       runTest(testDispatcher) {
         signIn()
