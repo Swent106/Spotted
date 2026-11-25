@@ -64,6 +64,7 @@ import com.android.spotted.ui.profile.HelperProfileNavigation
 import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.scantag.ScanTagScreen
+import com.android.spotted.ui.settings.SettingsScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
 import com.android.spotted.ui.theme.SpottedTheme
@@ -101,6 +102,8 @@ object Route {
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
   /** New sightings on all the owner's alerts, opened from the Home bell. */
   const val NOTIFICATIONS = "notifications"
+  /** The app settings, opened from the Home gear. */
+  const val SETTINGS = "settings"
 
   fun petProfile(petId: String) = "$PET/$petId"
 
@@ -328,9 +331,9 @@ fun NavGraphBuilder.addPetsDestination(
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
  * profile (Profile tab), [editProfileContent] the profile form it opens, [editPetContent] the edit
- * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, and [myAlertContent] the
- * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
- * instead of the real ViewModels.
+ * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home, and [settingsContent] the Settings screen;
+ * tests replace them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -347,6 +350,7 @@ fun NavGraphBuilder.homeDestinations(
           onProfileClick = navigation.onProfileClick,
           onScanTagClick = navigation.onScanTagClick,
           onNotificationsClick = navigation.onNotificationsClick,
+          onSettingsClick = navigation.onSettingsClick,
       )
     },
     notificationsContent:
@@ -440,6 +444,9 @@ fun NavGraphBuilder.homeDestinations(
     editProfileContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       PersonalInfoScreen(onBack = onDone, onSaved = onDone)
     },
+    settingsContent: @Composable (onBack: () -> Unit) -> Unit = { onBack ->
+      SettingsScreen(onBack = onBack)
+    },
 ) {
   // Every click below is ignored while a transition is running (the screen is not RESUMED), so
   // two quick taps open one screen. Callbacks with an argument check the entry themselves, as
@@ -468,8 +475,12 @@ fun NavGraphBuilder.homeDestinations(
             onNotificationsClick =
                 dropUnlessResumed { navController.navigate(Route.NOTIFICATIONS) },
             onScanTagClick = dropUnlessResumed { navController.navigate(Route.SCAN_TAG) },
+            onSettingsClick = dropUnlessResumed { navController.navigate(Route.SETTINGS) },
         )
     )
+  }
+  composable(Route.SETTINGS) {
+    settingsContent(dropUnlessResumed { navController.popBackStackSafely() })
   }
   composable(Route.NOTIFICATIONS) { entry ->
     notificationsContent({ navController.popBackStackSafely() }) { alertId ->
@@ -567,4 +578,6 @@ data class HomeNavigation(
     val onScanTagClick: () -> Unit = {},
     /** Opens the Notifications screen (the bell). */
     val onNotificationsClick: () -> Unit = {},
+    /** Opens the Settings screen (the gear). */
+    val onSettingsClick: () -> Unit = {},
 )
