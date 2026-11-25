@@ -599,6 +599,50 @@ service cloud.firestore {
           && appliesOneVerdict();
     }
 
+    // thanks/{alertId}_{helperId}: a thank-you from the owner of a closed alert to a helper who
+    // sent a sighting on it (ThanksRepositoryFirestore). The id makes it once per alert and helper.
+    // Any signed-in user can read them, so the thanks count shows on a helper's profile. A thanks
+    // is never changed or removed.
+    match /thanks/{thanksId} {
+      function validThanks(d) {
+        return d.keys().hasAll(
+                ['alertId', 'ownerId', 'helperId', 'sightingId', 'petName', 'thankedAtMillis'])
+          && d.keys().hasOnly(
+                ['alertId', 'ownerId', 'helperId', 'sightingId', 'petName', 'thankedAtMillis'])
+          && d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128
+          && d.helperId is string && d.helperId.size() > 0 && d.helperId.size() <= 128
+          && d.sightingId is string && d.sightingId.size() > 0 && d.sightingId.size() <= 128
+          && thanksId == d.alertId + '_' + d.helperId
+          // The time comes from the phone: a minute of clock difference is accepted
+          && d.thankedAtMillis is int && d.thankedAtMillis <= request.time.toMillis() + 60000;
+      }
+
+      // The alert is the signed-in user's, it is closed, and the pet name is the alert's
+      function closedAlertOfOwner(d) {
+        let alertPath = /databases/$(database)/documents/alerts/$(d.alertId);
+        return exists(alertPath)
+          && get(alertPath).data.ownerId == request.auth.uid
+          && get(alertPath).data.get('status', 'OPEN') == 'CLOSED'
+          && d.petName == get(alertPath).data.petName;
+      }
+
+      // The sighting proves the helper helped: they sent it, on this alert
+      function helperSentSighting(d) {
+        let sightingPath = /databases/$(database)/documents/sightings/$(d.sightingId);
+        return exists(sightingPath)
+          && get(sightingPath).data.reporterId == d.helperId
+          && get(sightingPath).data.get('alertId', null) == d.alertId;
+      }
+
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated()
+          && validThanks(request.resource.data)
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.helperId != request.auth.uid
+          && closedAlertOfOwner(request.resource.data)
+          && helperSentSighting(request.resource.data);
+    }
+
     // sightings/{sightingId}/votes/{voterId}: a "This looks false" vote (US-T2 #385), written by
     // VoteRepositoryFirestore.castVote. One document per voter, holding only voterId (= the
     // document id) and votedAt (the server time). The weight is never sent: the backend reads it
