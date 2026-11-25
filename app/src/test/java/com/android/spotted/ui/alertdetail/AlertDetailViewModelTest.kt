@@ -81,6 +81,36 @@ class AlertDetailViewModelTest {
   }
 
   @Test
+  fun prepareShare_withNamedPlace_usesThePlaceInsteadOfCoordinates() =
+      runTest(testDispatcher) {
+        val alert = alert("alert-477").copy(petName = "Milo")
+        alertRepository.publishAlert(alert)
+        val viewModel =
+            AlertDetailViewModel(
+                alertRepository,
+                addressRepository = FakeAddressRepository(name = "Ouchy, Lausanne"),
+            )
+
+        viewModel.loadAlert(alert.id)
+        advanceUntilIdle()
+        val text = viewModel.prepareShare(alert).getOrThrow()
+
+        assertTrue(text.startsWith("Milo is missing near Ouchy, Lausanne."))
+        assertTrue(text.endsWith(buildAlertLink(alert.id).getOrThrow()))
+      }
+
+  @Test
+  fun prepareShare_afterFailure_successClearsTheShareError() {
+    val viewModel = AlertDetailViewModel(alertRepository)
+
+    assertTrue(viewModel.prepareShare(alert("invalid/alert")).isFailure)
+    assertEquals(AlertDetailViewModel.SHARE_FAILED, viewModel.uiState.value.shareErrorMessage)
+
+    assertTrue(viewModel.prepareShare(alert("alert-477")).isSuccess)
+    assertNull(viewModel.uiState.value.shareErrorMessage)
+  }
+
+  @Test
   fun prepareShare_invalidAlertId_setsShareErrorWithoutThrowing() {
     val viewModel = AlertDetailViewModel(alertRepository)
 

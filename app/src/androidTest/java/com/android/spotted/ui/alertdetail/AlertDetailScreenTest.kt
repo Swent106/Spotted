@@ -40,6 +40,7 @@ class AlertDetailScreenTest {
   @Test
   fun openAlert_showsPetDetailsHighlightedNeedsAndReportAction() {
     var reportClicked = false
+    var shareClicked = false
     val alert =
         Alert(
             id = "alert-1",
@@ -58,6 +59,7 @@ class AlertDetailScreenTest {
       AlertDetailContent(
           state = AlertDetailUiState(alert = alert),
           onReportSighting = { reportClicked = true },
+          onShare = { shareClicked = true },
       )
     }
 
@@ -94,10 +96,13 @@ class AlertDetailScreenTest {
         .assertIsDisplayed()
         .performClick()
     assertTrue(reportClicked)
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).assertIsDisplayed().performClick()
+    assertTrue(shareClicked)
   }
 
   @Test
   fun closedAlert_showsFoundMessageAndHidesReportAction() {
+    var shareClicked = false
     val alert =
         Alert(
             id = "alert-closed",
@@ -112,14 +117,49 @@ class AlertDetailScreenTest {
         )
     val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-    composeTestRule.setContent { AlertDetailContent(state = AlertDetailUiState(alert = alert)) }
+    composeTestRule.setContent {
+      AlertDetailContent(
+          state = AlertDetailUiState(alert = alert),
+          onShare = { shareClicked = true },
+      )
+    }
 
     composeTestRule
         .onNodeWithTag(AlertDetailTestTags.FOUND_MESSAGE)
         .assertIsDisplayed()
         .assertTextEquals(context.getString(R.string.alert_detail_found_message, "Milo"))
     composeTestRule.onNodeWithTag(AlertDetailTestTags.REPORT_SIGHTING).assertDoesNotExist()
-    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).assertIsDisplayed().performClick()
+    assertTrue(shareClicked)
+  }
+
+  @Test
+  fun shareError_isShownUnderAlertActions() {
+    val alert =
+        Alert(
+            id = "alert-1",
+            petId = "pet-1",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Luna",
+            petSpecies = Species.CAT,
+        )
+
+    composeTestRule.setContent {
+      AlertDetailContent(
+          state =
+              AlertDetailUiState(
+                  alert = alert,
+                  shareErrorMessage = AlertDetailViewModel.SHARE_FAILED,
+              )
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(AlertDetailTestTags.ERROR)
+        .assertIsDisplayed()
+        .assertTextEquals(AlertDetailViewModel.SHARE_FAILED)
   }
 
   @Test
