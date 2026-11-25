@@ -154,10 +154,7 @@ class MainUserFlowTest : EndToEndTest() {
     // Where the pet was last seen: a tap in the middle of the map places the pin
     node(MapPickerTestTags.MAP).performScrollTo().performTouchInput { click(center) }
     waitFor(MapPickerTestTags.RADIUS_LABEL, "Tapping the map should place the last seen pin")
-    node(ReportMissingScreenTestTags.PUBLISH_BUTTON)
-        .performScrollTo()
-        .assertIsEnabled()
-        .performClick()
+    node(ReportMissingScreenTestTags.NEXT_BUTTON).performScrollTo().assertIsEnabled().performClick()
     // The optional "What happened?" step: skipped here
     waitFor(ReportMissingScreenTestTags.SKIP, "Publishing should ask what happened first")
     node(ReportMissingScreenTestTags.SKIP).performScrollTo().performClick()

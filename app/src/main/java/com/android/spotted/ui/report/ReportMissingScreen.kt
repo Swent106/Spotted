@@ -61,7 +61,7 @@ object ReportMissingScreenTestTags {
   const val BACK_BUTTON = "reportMissingBackButton"
   const val PET_OPTION_PREFIX = "reportMissingPetOption_"
   const val NO_PETS = "reportMissingNoPets"
-  const val PUBLISH_BUTTON = "reportMissingPublishButton"
+  const val NEXT_BUTTON = "reportMissingNextButton"
   const val PUBLISH_LOADER = "reportMissingPublishLoader"
   const val ERROR_MESSAGE = "reportMissingErrorMessage"
   const val ALREADY_MISSING_PREFIX = "reportMissingAlreadyMissing_"
@@ -98,8 +98,8 @@ fun ReportMissingContent(
     onPetSelected: (String) -> Unit = {},
     onLocationChange: (Location) -> Unit = {},
     onOpenWhatHappened: () -> Unit = {},
-    onCauseSelected: (LossCause) -> Unit = {},
-    onEnvironmentSelected: (LossEnvironment) -> Unit = {},
+    onCauseToggled: (LossCause) -> Unit = {},
+    onEnvironmentToggled: (LossEnvironment) -> Unit = {},
     onBackToForm: () -> Unit = {},
     onSkip: () -> Unit = {},
     onPublish: () -> Unit = {},
@@ -114,8 +114,8 @@ fun ReportMissingContent(
   if (state.showWhatHappened) {
     WhatHappenedStep(
         state = state,
-        onCauseSelected = onCauseSelected,
-        onEnvironmentSelected = onEnvironmentSelected,
+        onCauseToggled = onCauseToggled,
+        onEnvironmentToggled = onEnvironmentToggled,
         onBack = onBackToForm,
         onSkip = onSkip,
         onPublish = onPublish,
@@ -185,7 +185,8 @@ fun ReportMissingContent(
     PublishButton(
         enabled = state.canPublish,
         isPublishing = state.isPublishing,
-        testTag = ReportMissingScreenTestTags.PUBLISH_BUTTON,
+        text = stringResource(R.string.report_missing_next),
+        testTag = ReportMissingScreenTestTags.NEXT_BUTTON,
         onClick = onOpenWhatHappened,
     )
   }
@@ -199,8 +200,8 @@ fun ReportMissingContent(
 @Composable
 private fun WhatHappenedStep(
     state: ReportMissingUiState,
-    onCauseSelected: (LossCause) -> Unit,
-    onEnvironmentSelected: (LossEnvironment) -> Unit,
+    onCauseToggled: (LossCause) -> Unit,
+    onEnvironmentToggled: (LossEnvironment) -> Unit,
     onBack: () -> Unit,
     onSkip: () -> Unit,
     onPublish: () -> Unit,
@@ -238,7 +239,7 @@ private fun WhatHappenedStep(
                   selected = selected,
                   role = Role.RadioButton,
                   testTag = ReportMissingScreenTestTags.causeChip(cause),
-                  onClick = { onCauseSelected(if (selected) LossCause.UNKNOWN else cause) },
+                  onClick = { onCauseToggled(cause) },
               )
             }
       }
@@ -255,9 +256,7 @@ private fun WhatHappenedStep(
                   selected = selected,
                   role = Role.RadioButton,
                   testTag = ReportMissingScreenTestTags.environmentChip(environment),
-                  onClick = {
-                    onEnvironmentSelected(if (selected) LossEnvironment.UNKNOWN else environment)
-                  },
+                  onClick = { onEnvironmentToggled(environment) },
               )
             }
       }
@@ -268,6 +267,7 @@ private fun WhatHappenedStep(
     PublishButton(
         enabled = state.canPublish,
         isPublishing = state.isPublishing,
+        text = stringResource(R.string.report_missing_publish),
         testTag = ReportMissingScreenTestTags.WHAT_HAPPENED_PUBLISH,
         onClick = onPublish,
     )
@@ -322,6 +322,7 @@ private fun ErrorMessage(message: String, onDismiss: () -> Unit) {
 
 @Composable
 private fun PublishButton(
+    text: String,
     enabled: Boolean,
     isPublishing: Boolean,
     testTag: String,
@@ -341,7 +342,7 @@ private fun PublishButton(
           modifier = Modifier.size(20.dp).testTag(ReportMissingScreenTestTags.PUBLISH_LOADER),
       )
     } else {
-      Text("Publish alert", style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
+      Text(text, style = jakarta(16, 20f, 700, SpottedTheme.colors.onAccent))
     }
   }
 }
@@ -464,8 +465,8 @@ fun ReportMissingScreen(
       onPetSelected = viewModel::selectPet,
       onLocationChange = viewModel::setLocation,
       onOpenWhatHappened = viewModel::openWhatHappened,
-      onCauseSelected = viewModel::setCause,
-      onEnvironmentSelected = viewModel::setEnvironment,
+      onCauseToggled = viewModel::toggleCause,
+      onEnvironmentToggled = viewModel::toggleEnvironment,
       onBackToForm = viewModel::backToForm,
       onSkip = viewModel::skipWhatHappened,
       onPublish = viewModel::publish,

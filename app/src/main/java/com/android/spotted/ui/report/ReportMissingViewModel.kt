@@ -137,14 +137,18 @@ class ReportMissingViewModel(
     _uiState.update { it.copy(showWhatHappened = false) }
   }
 
-  /** Sets how the pet got lost. */
-  fun setCause(cause: LossCause) {
-    _uiState.update { it.copy(cause = cause) }
+  /** Picks how the pet got lost; picking the chosen cause again clears it. */
+  fun toggleCause(cause: LossCause) {
+    _uiState.update { it.copy(cause = if (it.cause == cause) LossCause.UNKNOWN else cause) }
   }
 
-  /** Sets the kind of place where the pet got lost. */
-  fun setEnvironment(environment: LossEnvironment) {
-    _uiState.update { it.copy(environment = environment) }
+  /** Picks the kind of place where the pet got lost; picking the chosen one again clears it. */
+  fun toggleEnvironment(environment: LossEnvironment) {
+    _uiState.update {
+      it.copy(
+          environment = if (it.environment == environment) LossEnvironment.UNKNOWN else environment
+      )
+    }
   }
 
   /**

@@ -509,7 +509,7 @@ class ReportMissingViewModelTest {
 
         viewModel.openWhatHappened()
         assertTrue(viewModel.uiState.value.showWhatHappened)
-        viewModel.setCause(LossCause.STOLEN)
+        viewModel.toggleCause(LossCause.STOLEN)
         viewModel.backToForm()
 
         val state = viewModel.uiState.value
@@ -523,8 +523,8 @@ class ReportMissingViewModelTest {
         val viewModel = loadedViewModel(LUNA)
         viewModel.setLocation(PARC_BERTRAND)
         viewModel.openWhatHappened()
-        viewModel.setCause(LossCause.DURING_A_WALK)
-        viewModel.setEnvironment(LossEnvironment.SUBURB)
+        viewModel.toggleCause(LossCause.DURING_A_WALK)
+        viewModel.toggleEnvironment(LossEnvironment.SUBURB)
 
         viewModel.publish()
         advanceUntilIdle()
@@ -541,7 +541,7 @@ class ReportMissingViewModelTest {
         val viewModel = loadedViewModel(LUNA)
         viewModel.setLocation(PARC_BERTRAND)
         viewModel.openWhatHappened()
-        viewModel.setCause(LossCause.SCARED_BY_NOISE)
+        viewModel.toggleCause(LossCause.SCARED_BY_NOISE)
 
         viewModel.publish()
         advanceUntilIdle()
@@ -557,7 +557,7 @@ class ReportMissingViewModelTest {
         val viewModel = loadedViewModel(LUNA)
         viewModel.setLocation(PARC_BERTRAND)
         viewModel.openWhatHappened()
-        viewModel.setEnvironment(LossEnvironment.FOREST_OR_MOUNTAIN)
+        viewModel.toggleEnvironment(LossEnvironment.FOREST_OR_MOUNTAIN)
 
         viewModel.publish()
         advanceUntilIdle()
@@ -568,13 +568,39 @@ class ReportMissingViewModelTest {
       }
 
   @Test
+  fun toggleCause_picksTheCause_andClearsItWhenPickedAgain() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+
+        viewModel.toggleCause(LossCause.STOLEN)
+        assertEquals(LossCause.STOLEN, viewModel.uiState.value.cause)
+        viewModel.toggleCause(LossCause.SCARED_BY_NOISE)
+        assertEquals(LossCause.SCARED_BY_NOISE, viewModel.uiState.value.cause)
+        viewModel.toggleCause(LossCause.SCARED_BY_NOISE)
+        assertEquals(LossCause.UNKNOWN, viewModel.uiState.value.cause)
+      }
+
+  @Test
+  fun toggleEnvironment_picksTheEnvironment_andClearsItWhenPickedAgain() =
+      runTest(testDispatcher) {
+        val viewModel = loadedViewModel(LUNA)
+
+        viewModel.toggleEnvironment(LossEnvironment.SUBURB)
+        assertEquals(LossEnvironment.SUBURB, viewModel.uiState.value.environment)
+        viewModel.toggleEnvironment(LossEnvironment.CITY_CENTRE)
+        assertEquals(LossEnvironment.CITY_CENTRE, viewModel.uiState.value.environment)
+        viewModel.toggleEnvironment(LossEnvironment.CITY_CENTRE)
+        assertEquals(LossEnvironment.UNKNOWN, viewModel.uiState.value.environment)
+      }
+
+  @Test
   fun skipWhatHappened_forgetsTheChoices_andPublishesAsWithoutTheStep() =
       runTest(testDispatcher) {
         val viewModel = loadedViewModel(LUNA)
         viewModel.setLocation(PARC_BERTRAND)
         viewModel.openWhatHappened()
-        viewModel.setCause(LossCause.STOLEN)
-        viewModel.setEnvironment(LossEnvironment.CITY_CENTRE)
+        viewModel.toggleCause(LossCause.STOLEN)
+        viewModel.toggleEnvironment(LossEnvironment.CITY_CENTRE)
 
         viewModel.skipWhatHappened()
         advanceUntilIdle()

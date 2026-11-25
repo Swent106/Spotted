@@ -195,12 +195,14 @@ class ReportMissingContentTest {
     }
     openWhatHappenedFromTheForm(viewModel)
     tap(ReportMissingScreenTestTags.causeChip(LossCause.SCARED_BY_NOISE))
+    tap(ReportMissingScreenTestTags.environmentChip(LossEnvironment.SUBURB))
 
     tap(ReportMissingScreenTestTags.WHAT_HAPPENED_BACK)
 
-    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON).assertExists()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.NEXT_BUTTON).assertExists()
     composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED).assertDoesNotExist()
     assertEquals(LossCause.SCARED_BY_NOISE, viewModel.uiState.value.cause)
+    assertEquals(LossEnvironment.SUBURB, viewModel.uiState.value.environment)
   }
 
   @Test
@@ -229,7 +231,7 @@ class ReportMissingContentTest {
     composeTestRule.onNodeWithTag(petTag("luna")).assertIsDisplayed()
     composeTestRule.onNodeWithTag(MapPickerTestTags.MAP).performScrollTo().assertIsDisplayed()
     composeTestRule
-        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+        .onNodeWithTag(ReportMissingScreenTestTags.NEXT_BUTTON)
         .performScrollTo()
         .assertIsNotEnabled()
   }
@@ -262,7 +264,7 @@ class ReportMissingContentTest {
     }
 
     composeTestRule
-        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+        .onNodeWithTag(ReportMissingScreenTestTags.NEXT_BUTTON)
         .performScrollTo()
         .assertIsEnabled()
         .performClick()
@@ -277,7 +279,7 @@ class ReportMissingContentTest {
     composeTestRule.setContent { ReportMissingContent(state = ready.copy(isPublishing = true)) }
 
     composeTestRule
-        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+        .onNodeWithTag(ReportMissingScreenTestTags.NEXT_BUTTON)
         .performScrollTo()
         .assertIsNotEnabled()
     composeTestRule
@@ -345,7 +347,7 @@ class ReportMissingContentTest {
 
     composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.ALL_PETS_MISSING).assertIsDisplayed()
     composeTestRule
-        .onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+        .onNodeWithTag(ReportMissingScreenTestTags.NEXT_BUTTON)
         .performScrollTo()
         .assertIsNotEnabled()
   }
@@ -429,7 +431,7 @@ class ReportMissingContentTest {
     composeTestRule.setContent { ReportMissingContent(state = whatHappened) }
 
     composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED).assertIsDisplayed()
-    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.PUBLISH_BUTTON).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.NEXT_BUTTON).assertDoesNotExist()
     LossCause.entries.forEach { cause ->
       val chip = composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.causeChip(cause))
       if (cause == LossCause.UNKNOWN) chip.assertDoesNotExist()
@@ -444,7 +446,7 @@ class ReportMissingContentTest {
   }
 
   @Test
-  fun whatHappened_tappingAChip_reportsIt_andTappingTheChosenOne_unselectsIt() {
+  fun whatHappened_tappingAChip_reportsTheTappedValue() {
     val causes = mutableListOf<LossCause>()
     val environments = mutableListOf<LossEnvironment>()
     composeTestRule.setContent {
@@ -454,8 +456,8 @@ class ReportMissingContentTest {
                   cause = LossCause.STOLEN,
                   environment = LossEnvironment.CITY_CENTRE,
               ),
-          onCauseSelected = { causes += it },
-          onEnvironmentSelected = { environments += it },
+          onCauseToggled = { causes += it },
+          onEnvironmentToggled = { environments += it },
       )
     }
     composeTestRule
@@ -467,8 +469,11 @@ class ReportMissingContentTest {
     tap(ReportMissingScreenTestTags.environmentChip(LossEnvironment.FOREST_OR_MOUNTAIN))
     tap(ReportMissingScreenTestTags.environmentChip(LossEnvironment.CITY_CENTRE))
 
-    assertEquals(listOf(LossCause.DURING_A_WALK, LossCause.UNKNOWN), causes)
-    assertEquals(listOf(LossEnvironment.FOREST_OR_MOUNTAIN, LossEnvironment.UNKNOWN), environments)
+    assertEquals(listOf(LossCause.DURING_A_WALK, LossCause.STOLEN), causes)
+    assertEquals(
+        listOf(LossEnvironment.FOREST_OR_MOUNTAIN, LossEnvironment.CITY_CENTRE),
+        environments,
+    )
   }
 
   @Test
@@ -554,7 +559,7 @@ class ReportMissingContentTest {
   private fun openWhatHappenedFromTheForm(viewModel: ReportMissingViewModel) {
     composeTestRule.waitUntil(5_000) { viewModel.uiState.value.selectedPetId == "milo" }
     composeTestRule.runOnIdle { viewModel.setLocation(parcBertrand) }
-    tap(ReportMissingScreenTestTags.PUBLISH_BUTTON)
+    tap(ReportMissingScreenTestTags.NEXT_BUTTON)
     composeTestRule.onNodeWithTag(ReportMissingScreenTestTags.WHAT_HAPPENED).assertIsDisplayed()
   }
 }

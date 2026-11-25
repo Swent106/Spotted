@@ -191,6 +191,8 @@
     <string name="report_missing_environment_forest_or_mountain">Forest or mountain</string>
     <string name="report_missing_unknown">Unknown</string>
     <string name="report_missing_skip">Skip and publish</string>
+    <string name="report_missing_next">Next</string>
+    <string name="report_missing_publish">Publish alert</string>
 
     <!-- Breed picker -->
     <string name="breed_mixed">Mixed</string>
