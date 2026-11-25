@@ -27,6 +27,11 @@ class ViewModelFactoriesTest {
       }
 
   @Test
+  fun mainFactory_createsTheViewModel() {
+    assertNotNull(MainViewModel.Factory.create(MainViewModel::class.java, extras))
+  }
+
+  @Test
   fun personalInfoFactory_createsTheViewModel() {
     assertNotNull(PersonalInfoViewModel.Factory.create(PersonalInfoViewModel::class.java, extras))
   }
