@@ -233,10 +233,13 @@ class MyAlertViewModel(
         )
   }
 
-  /** Closes the alert after the owner has found their pet. */
+  /**
+   * Closes the alert after the owner has found their pet. Ignored while a close is already running,
+   * so a double tap closes it once.
+   */
   fun markFound() {
     if (!canManageAlert()) return
-    _uiState.update { it.copy(errorMessage = null) }
+    _uiState.update { it.copy(errorMessage = null, isClosing = true) }
     viewModelScope.launch {
       alertRepository
           .closeAlert(alertId)
@@ -250,11 +253,17 @@ class MyAlertViewModel(
                               closedAtMillis = now(),
                           ),
                       isClosed = true,
+                      isClosing = false,
                   )
                 }
               },
               onFailure = { failure ->
-                _uiState.update { it.copy(errorMessage = failure.localizedMessage ?: CLOSE_FAILED) }
+                _uiState.update {
+                  it.copy(
+                      errorMessage = failure.localizedMessage ?: CLOSE_FAILED,
+                      isClosing = false,
+                  )
+                }
               },
           )
     }
@@ -263,6 +272,7 @@ class MyAlertViewModel(
   private fun canManageAlert(): Boolean =
       _uiState.value.alert != null &&
           !_uiState.value.isClosed &&
+          !_uiState.value.isClosing &&
           authRepository.currentUser.value?.uid == _uiState.value.alert?.ownerId
 
   companion object {
