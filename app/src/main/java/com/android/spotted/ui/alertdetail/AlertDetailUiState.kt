@@ -2,6 +2,7 @@
 package com.android.spotted.ui.alertdetail
 
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 
 /**
  * State for loading and presenting one alert. It intentionally contains no owner address.
@@ -11,6 +12,8 @@ import com.android.spotted.model.alert.Alert
  * @property placeName where the pet was last seen, e.g. "Ouchy, Lausanne"; null while unknown.
  * @property ageYears the pet's age in whole years, from the birth year copied on the alert; null
  *   when unknown.
+ * @property isOwnAlert true when the signed-in user published [alert], e.g. opened from a link they
+ *   shared.
  */
 data class AlertDetailUiState(
     val alert: Alert? = null,
@@ -20,4 +23,9 @@ data class AlertDetailUiState(
     val distanceText: String? = null,
     val placeName: String? = null,
     val ageYears: Int? = null,
-)
+    val isOwnAlert: Boolean = false,
+) {
+  /** Only an open alert of someone else: the rules refuse a sighting on your own alert. */
+  val canReportSighting: Boolean
+    get() = alert?.status == AlertStatus.OPEN && !isOwnAlert
+}

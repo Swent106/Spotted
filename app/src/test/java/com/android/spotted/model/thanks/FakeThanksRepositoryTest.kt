@@ -3,6 +3,8 @@ package com.android.spotted.model.thanks
 
 import com.android.spotted.model.fakes.FakeThanksRepository
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -27,36 +29,39 @@ class FakeThanksRepositoryTest {
       )
 
   @Test
-  fun idOf_isBuiltFromAlertAndHelper() {
+  fun id_isBuiltFromAlertAndHelper() {
     assertEquals("alert-1_helper-1", thanks().id)
   }
 
   @Test
-  fun thank_isCounted() = runTest {
+  fun thank_newThanks_isCounted() = runTest {
     assertTrue(repository.thank(thanks()).isSuccess)
 
     assertEquals(1, repository.getThanksCount("helper-1").getOrThrow())
   }
 
   @Test
-  fun neverThanked_countsZero() = runTest {
+  fun getThanksCount_neverThanked_returnsZero() = runTest {
     assertEquals(0, repository.getThanksCount("helper-1").getOrThrow())
   }
 
   @Test
-  fun thankingTwiceForTheSameAlert_failsAndCountsOnce() = runTest {
+  fun thank_sameAlertTwice_failsAndKeepsTheFirst() = runTest {
     repository.thank(thanks()).getOrThrow()
 
-    val result = repository.thank(thanks(thankedAtMillis = 2_000L))
+    val error = repository.thank(thanks(thankedAtMillis = 2_000L)).exceptionOrNull()
 
-    val error = result.exceptionOrNull() as? AlreadyThankedException
-    assertEquals("alert-1", error?.alertId)
-    assertEquals("helper-1", error?.helperId)
-    assertEquals(1, repository.getThanksCount("helper-1").getOrThrow())
+    assertTrue("Expected AlreadyThankedException, got $error", error is AlreadyThankedException)
+    error as AlreadyThankedException
+    assertEquals("alert-1", error.alertId)
+    assertEquals("helper-1", error.helperId)
+    // single(): still one thanks, and it was not overwritten by the second one
+    val stored = repository.observeThanksReceived("helper-1").first().getOrThrow()
+    assertEquals(1_000L, stored.single().thankedAtMillis)
   }
 
   @Test
-  fun thanksForTwoAlerts_countTwice() = runTest {
+  fun getThanksCount_countsOnlyThatHelper_acrossAlerts() = runTest {
     repository.thank(thanks(alertId = "alert-1")).getOrThrow()
     repository.thank(thanks(alertId = "alert-2")).getOrThrow()
     repository.thank(thanks(helperId = "helper-2")).getOrThrow()
@@ -65,7 +70,7 @@ class FakeThanksRepositoryTest {
   }
 
   @Test
-  fun thankingYourself_fails() = runTest {
+  fun thank_yourself_fails() = runTest {
     val result = repository.thank(thanks(helperId = "owner-1"))
 
     assertTrue(result.exceptionOrNull() is IllegalArgumentException)
@@ -86,7 +91,45 @@ class FakeThanksRepositoryTest {
   }
 
   @Test
-  fun failure_isReturnedByEveryCall() = runTest {
+  fun observeThanksReceived_newThanks_emitsAgain() = runTest {
+    val emissions = mutableListOf<List<Thanks>>()
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+      repository.observeThanksReceived("helper-1").collect { emissions += it.getOrThrow() }
+    }
+
+    repository.thank(thanks()).getOrThrow()
+
+    assertEquals(listOf(emptyList(), listOf(thanks())), emissions)
+  }
+
+  @Test
+  fun observeThanksReceived_sameTime_sortsById() = runTest {
+    val second = thanks(alertId = "alert-2")
+    val first = thanks(alertId = "alert-1")
+    repository.thank(second).getOrThrow()
+    repository.thank(first).getOrThrow()
+
+    val received = repository.observeThanksReceived("helper-1").first().getOrThrow()
+
+    assertEquals(listOf(first, second), received)
+  }
+
+  @Test
+  fun observeThanksReceived_overTheMax_keepsTheNewest() = runTest {
+    val max = ThanksRepository.MAX_THANKS_RECEIVED
+    repeat(max + 1) { i ->
+      repository.thank(thanks(alertId = "alert-$i", thankedAtMillis = i.toLong())).getOrThrow()
+    }
+
+    val received = repository.observeThanksReceived("helper-1").first().getOrThrow()
+
+    assertEquals(max, received.size)
+    assertEquals("alert-$max", received.first().alertId)
+    assertTrue(received.none { it.alertId == "alert-0" })
+  }
+
+  @Test
+  fun allCalls_failureSet_returnTheFailure() = runTest {
     val expected = IllegalStateException("offline")
     repository.failure = expected
 
