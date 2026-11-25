@@ -11,6 +11,7 @@ import com.android.spotted.data.Pet.PetRepositoryFirestore
 import com.android.spotted.data.alert.AlertRepositoryFirestore
 import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.location.LocationRepositoryProvider
+import com.android.spotted.data.moderation.BlockRepositoryFirestore
 import com.android.spotted.data.notification.NotificationRepositoryDefault
 import com.android.spotted.data.photo.PhotoRepositoryFirestore
 import com.android.spotted.data.sighting.PendingSightingRepositoryProvider
@@ -27,6 +28,7 @@ import com.android.spotted.model.distanceKm
 import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.AddressRepository
 import com.android.spotted.model.location.LocationRepository
+import com.android.spotted.model.moderation.BlockRepository
 import com.android.spotted.model.notification.NotificationRepository
 import com.android.spotted.model.photo.PhotoRepository
 import com.android.spotted.model.sighting.PendingSighting
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -86,6 +89,7 @@ class HomeViewModel(
     private val locationRepository: LocationRepository? = null,
     private val pendingSightingRepository: PendingSightingRepository? = null,
     private val notificationRepository: NotificationRepository? = null,
+    private val blockRepository: BlockRepository? = null,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(HomeUiState())
@@ -154,6 +158,7 @@ class HomeViewModel(
                 errorMessage = null,
                 pets = start.pets.copy(isLoading = true, errorMessage = null),
                 lostPetsNearby = start.lostPetsNearby.copy(isLoading = true, errorMessage = null),
+                carouselAlerts = start.carouselAlerts.copy(isLoading = true, errorMessage = null),
             )
         )
 
@@ -242,9 +247,27 @@ class HomeViewModel(
         }
     val usingCache = !cachedAlerts.isNullOrEmpty()
     val displayedResult = if (usingCache) Result.success(cachedAlerts.orEmpty()) else result
+    val carouselResult =
+        if (displayedResult.isFailure) displayedResult
+        else {
+          val blockedResult = blockRepository?.observeBlocked(uid)?.first()
+          if (blockedResult?.isFailure == true) {
+            Result.failure(blockedResult.exceptionOrNull()!!)
+          } else {
+            val blocked = blockedResult?.getOrNull().orEmpty()
+            Result.success(
+                displayedResult
+                    .getOrThrow()
+                    .filterNot { it.ownerId in blocked }
+                    .sortedBy { center.distanceKm(it.lastKnownLocation) }
+                    .take(CAROUSEL_ALERTS_LIMIT)
+            )
+          }
+        }
     updateFor(uid) {
       it.copy(
           lostPetsNearby = it.lostPetsNearby.after(displayedResult, LOST_PETS_LOAD_FAILED),
+          carouselAlerts = it.carouselAlerts.after(carouselResult, LOST_PETS_LOAD_FAILED),
           nowMillis = if (displayedResult.isSuccess) now() else it.nowMillis,
           isOffline = usingCache,
       )
@@ -390,6 +413,7 @@ class HomeViewModel(
     const val SIGN_OUT_FAILED = "Couldn't sign out. Please try again."
     const val WAITING_DELETE_FAILED = "Couldn't delete this sighting. Please try again."
     private const val OFFLINE_ALERTS_LIMIT = 5
+    private const val CAROUSEL_ALERTS_LIMIT = 10
 
     /** Geneva city centre: used when the home area can't be found. */
     val DEFAULT_SEARCH_CENTER = Location(latitude = 46.2044, longitude = 6.1432)
@@ -412,6 +436,7 @@ class HomeViewModel(
             pendingSightingRepository = PendingSightingRepositoryProvider.get(application),
             notificationRepository =
                 NotificationRepositoryDefault(alertRepository, SightingRepositoryFirestore()),
+            blockRepository = BlockRepositoryFirestore(),
         )
       }
     }

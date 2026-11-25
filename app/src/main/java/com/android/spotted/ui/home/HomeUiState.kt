@@ -52,6 +52,8 @@ data class WaitingSighting(
  * @property pets pets owned by the signed-in user.
  * @property lostPetsNearby open alerts around the search area, newest first, without the user's own
  *   alerts.
+ * @property carouselAlerts nearby open alerts for the carousel, nearest first, without the user's
+ *   own alerts or alerts from blocked users.
  * @property nowMillis time of the last successful load of [lostPetsNearby], for "lost 2 h ago".
  * @property distanceTexts "600 m away" of each alert of [lostPetsNearby], by alert id: from the
  *   device position, else from the home. An alert without one shows no distance.
@@ -70,6 +72,7 @@ data class HomeUiState(
     val alertRadiusKm: Int = UserProfile.DEFAULT_ALERT_RADIUS_KM,
     val pets: HomeSection<Pet> = HomeSection(),
     val lostPetsNearby: HomeSection<Alert> = HomeSection(),
+    val carouselAlerts: HomeSection<Alert> = HomeSection(),
     /** The user's own open alerts, wherever they are: not in "Lost near you", but on the map. */
     val ownLostPets: List<Alert> = emptyList(),
     val nowMillis: Long = 0L,

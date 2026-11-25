@@ -15,6 +15,7 @@ import com.android.spotted.model.auth.User
 import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeBlockRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
 import com.android.spotted.model.fakes.FakeNotificationRepository
 import com.android.spotted.model.formatDistance
@@ -55,6 +56,7 @@ class HomeViewModelTest {
   private lateinit var userRepository: FakeUserRepository
   private lateinit var petRepository: ControllablePetRepository
   private lateinit var alertRepository: FakeAlertRepository
+  private lateinit var blockRepository: FakeBlockRepository
 
   @Before
   fun setUp() {
@@ -64,6 +66,7 @@ class HomeViewModelTest {
     userRepository = FakeUserRepository()
     petRepository = ControllablePetRepository()
     alertRepository = FakeAlertRepository()
+    blockRepository = FakeBlockRepository()
   }
 
   @After
@@ -130,6 +133,7 @@ class HomeViewModelTest {
           searchCenter = CENTER,
           radiusKm = RADIUS_KM,
           now = { NOW },
+          blockRepository = blockRepository,
       )
 
   // ===================== Your pets =====================
@@ -203,6 +207,31 @@ class HomeViewModelTest {
       }
 
   @Test
+  fun carouselAlerts_nearestFirst_limitedAndExcludesOwnAndBlockedUsers() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        blockRepository.block(ALICE.uid, "blocked-owner")
+        val own = alert("mine", ownerId = ALICE.uid)
+        val blocked = alert("blocked", ownerId = "blocked-owner")
+        val nearby =
+            (1..12).map { index ->
+              alert(
+                  "near-$index",
+                  ownerId = "owner-$index",
+                  location = Location(CENTER.latitude + index * 0.001, CENTER.longitude),
+                  lostAtMillis = (20 - index).toLong(),
+              )
+            }
+        publish(own, blocked, *nearby.toTypedArray())
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(nearby.take(10), viewModel.uiState.value.carouselAlerts.items)
+        assertNull(viewModel.uiState.value.carouselAlerts.errorMessage)
+      }
+
+  @Test
   fun lostPets_empty_whenNoAlertIsNearby() =
       runTest(testDispatcher) {
         signIn(ALICE)
@@ -212,6 +241,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.lostPetsNearby.isEmpty)
+        assertTrue(viewModel.uiState.value.carouselAlerts.isEmpty)
       }
 
   @Test
@@ -225,6 +255,10 @@ class HomeViewModelTest {
 
         val lostPets = viewModel.uiState.value.lostPetsNearby
         assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, lostPets.errorMessage)
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            viewModel.uiState.value.carouselAlerts.errorMessage,
+        )
         assertFalse(lostPets.isEmpty)
         assertFalse(viewModel.uiState.value.isOffline)
       }
