@@ -599,6 +599,98 @@ service cloud.firestore {
           && appliesOneVerdict();
     }
 
+    // sightings/{sightingId}/votes/{voterId}: a "This looks false" vote (US-T2 #385), written by
+    // VoteRepositoryFirestore.castVote. One document per voter, holding only voterId (= the
+    // document id) and votedAt (the server time). The weight is never sent: the backend reads it
+    // from the voter's trust score (#463). Who may vote (#462):
+    // - not the reporter of the sighting, and only once (a vote is never changed or deleted);
+    // - an account at least 7 days old (users/{uid}.createdAt);
+    // - level Trusted or above (trust/{uid}, same thresholds as TrustRules in TrustScore.kt).
+    //   The score starts at 0.3 and only a confirmed sighting raises it, so a Trusted user
+    //   (score >= 0.4) always has at least one confirmed sighting;
+    // - at most 10 votes in 24 hours (voteQuota/{uid}, written in the same transaction).
+    // "Within the alert's area" is not checked: a vote has no location, and any location the
+    // app sent could be faked. The level and the daily limit are what stop fake accounts.
+    match /sightings/{sightingId}/votes/{voterId} {
+      function voteQuotaAfter() {
+        return getAfter(/databases/$(database)/documents/voteQuota/$(voterId)).data;
+      }
+
+      // TrustLevel.TRUSTED or above: at least MIN_JUDGED_SIGHTINGS (3) judged sightings and a
+      // score of at least TRUSTED_MIN_SCORE (0.4)
+      function isTrustedOrAbove() {
+        let trustPath = /databases/$(database)/documents/trust/$(voterId);
+        return exists(trustPath)
+          && get(trustPath).data.judged >= 3
+          && get(trustPath).data.score >= 0.4;
+      }
+
+      function accountAtLeastSevenDaysOld() {
+        let userPath = /databases/$(database)/documents/users/$(voterId);
+        return exists(userPath)
+          && get(userPath).data.createdAt <= request.time - duration.value(7, 'd');
+      }
+
+      function notTheReporter() {
+        let sightingPath = /databases/$(database)/documents/sightings/$(sightingId);
+        return exists(sightingPath) && get(sightingPath).data.reporterId != voterId;
+      }
+
+      // Counting needs list (VoteRepositoryFirestore.getVoteCount uses count())
+      allow read: if isAuthenticated();
+
+      // No update or delete: the vote stays as it was cast (the default rule refuses them)
+      allow create: if isOwner(voterId)
+          && request.resource.data.keys().hasOnly(['voterId', 'votedAt'])
+          && request.resource.data.voterId == voterId
+          && request.resource.data.votedAt == request.time
+          && notTheReporter()
+          && accountAtLeastSevenDaysOld()
+          && isTrustedOrAbove()
+          // Counted in the voter's quota by this same write (see voteQuota/{uid})
+          && voteQuotaAfter().last == request.time
+          && voteQuotaAfter().lastSightingId == sightingId;
+    }
+
+    // voteQuota/{uid}: the times of the user's last 10 votes, so the rules can allow at most 10 in
+    // 24 hours. last is the time of the latest vote (the server time: a server timestamp can't go
+    // in a list), recent the times of the 9 before it, oldest first, and lastSightingId the
+    // sighting of the latest vote. Written by VoteRepositoryFirestore.castVote in the same
+    // transaction as each vote, and only then: it can't be reset, changed or deleted.
+    match /voteQuota/{uid} {
+      function votesBefore() {
+        return resource == null ? [] : resource.data.recent.concat([resource.data.last]);
+      }
+
+      // Fewer than 10 votes before this one, or the oldest of the last 10 is over 24 hours old
+      function underDailyLimit() {
+        return votesBefore().size() < 10
+          || votesBefore()[0] < request.time - duration.value(24, 'h');
+      }
+
+      // The previous latest vote moves into recent, which keeps only the last 9
+      function keepsLastNine() {
+        let before = votesBefore();
+        return request.resource.data.recent
+          == (before.size() <= 9 ? before : before[before.size() - 9:before.size()]);
+      }
+
+      function castsAVoteNow() {
+        let votePath = /databases/$(database)/documents/sightings/$(request.resource.data.lastSightingId)/votes/$(uid);
+        return !exists(votePath) && existsAfter(votePath);
+      }
+
+      allow get: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['recent', 'last', 'lastSightingId'])
+          && request.resource.data.recent is list
+          && request.resource.data.last == request.time
+          && request.resource.data.lastSightingId is string
+          && underDailyLimit()
+          && keepsLastNine()
+          && castsAVoteNow();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
