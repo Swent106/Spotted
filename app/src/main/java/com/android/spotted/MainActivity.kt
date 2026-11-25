@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -34,7 +35,7 @@ import coil.ImageLoader
 import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
-import com.android.spotted.model.alert.alertIdFromLink
+import com.android.spotted.model.alert.parseAlertLink
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.NearbyAlertsViewModel
@@ -176,7 +177,7 @@ class MainActivity : ComponentActivity() {
     content.viewTreeObserver.addOnPreDrawListener(
         object : ViewTreeObserver.OnPreDrawListener {
           override fun onPreDraw(): Boolean {
-            if (mainViewModel.uiState.value == StartDestination.LOADING) return false
+            if (mainViewModel.uiState.value.destination == StartDestination.LOADING) return false
             content.viewTreeObserver.removeOnPreDrawListener(this)
             return true
           }
@@ -186,13 +187,14 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * The screen [intent] asks for: the route of a tapped notification, or the alert of a
- * `spotted://alert/<alertId>` link; null for any other intent (e.g. the launcher's). Like a
- * notification, a link reopened from Recents opens nothing.
+ * The screen [intent] asks for: the route of a tapped notification, or the alert of an alert link
+ * (see [parseAlertLink]); null for any other intent (e.g. the launcher's). Like a notification, a
+ * link reopened from Recents opens nothing.
  */
 fun routeOf(intent: Intent): String? {
   if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
-  return notificationRouteOf(intent) ?: alertIdFromLink(intent.dataString)?.let(Route::alertDetail)
+  return notificationRouteOf(intent)
+      ?: parseAlertLink(intent.dataString).getOrNull()?.let(Route::alertDetail)
 }
 
 /**
@@ -213,8 +215,15 @@ fun SpottedApp(
     notificationRoute: String? = null,
     onNotificationRouteOpened: () -> Unit = {},
 ) {
-  val destination by viewModel.uiState.collectAsState()
+  val state by viewModel.uiState.collectAsState()
+  val destination = state.destination
   val navController = rememberNavController()
+
+  // Watch the connection only while the app is in the foreground (started)
+  LifecycleStartEffect(viewModel) {
+    viewModel.startWatchingNetwork()
+    onStopOrDispose { viewModel.stopWatchingNetwork() }
+  }
 
   StartRouting(destination, navController)
   NotificationRouting(notificationRoute, destination, navController, onNotificationRouteOpened)

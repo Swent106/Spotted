@@ -2709,7 +2709,7 @@ describe("Firestore vote rules", () => {
    */
   async function seedEligibleVoter(
     voterId,
-    { createdAt = daysAgo(30), score = 0.5, judged = 3 } = {},
+    { createdAt = daysAgo(30), score = 0.5, judged = 3, trust = true, user = true } = {},
   ) {
     await seed("alerts/alert-1", { id: "alert-1", ownerId: "owner-1", status: "OPEN" });
     await seed("sightings/sighting-1", {
@@ -2721,15 +2721,19 @@ describe("Firestore vote rules", () => {
       alertId: "alert-1",
       status: "PENDING",
     });
-    await seed(`users/${voterId}`, {
-      uid: voterId,
-      name: "Voter",
-      phone: "",
-      email: "voter@example.com",
-      homeArea: "",
-      createdAt,
-    });
-    await seed(`trust/${voterId}`, { score, judged, lastSightingId: "old-sighting" });
+    if (user) {
+      await seed(`users/${voterId}`, {
+        uid: voterId,
+        name: "Voter",
+        phone: "",
+        email: "voter@example.com",
+        homeArea: "",
+        createdAt,
+      });
+    }
+    if (trust) {
+      await seed(`trust/${voterId}`, { score, judged, lastSightingId: "old-sighting" });
+    }
   }
 
   /** Seeds the voter's quota with votes at these [times] (oldest first). */
@@ -2835,6 +2839,12 @@ describe("Firestore vote rules", () => {
     await assertFails(castVote("new-voter"));
   });
 
+  it("vote create: a user without a profile is denied", async () => {
+    await seedEligibleVoter("no-profile", { user: false });
+
+    await assertFails(castVote("no-profile"));
+  });
+
   it("vote create: Trusted at the lowest score (0.4, 3 judged) is allowed", async () => {
     await seedEligibleVoter("voter-1", { score: 0.4, judged: 3 });
 
@@ -2849,6 +2859,12 @@ describe("Firestore vote rules", () => {
 
   it("vote create: fewer than 3 judged sightings (level New) is denied", async () => {
     await seedEligibleVoter("voter-1", { score: 0.9, judged: 2 });
+
+    await assertFails(castVote("voter-1"));
+  });
+
+  it("vote create: a user without a trust score (never judged) is denied", async () => {
+    await seedEligibleVoter("voter-1", { trust: false });
 
     await assertFails(castVote("voter-1"));
   });

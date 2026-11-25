@@ -436,6 +436,42 @@ class AlertDetailViewModelTest {
     }
   }
 
+  // ===================== Own alert =====================
+
+  @Test
+  fun ownAlert_cannotGetASightingFromItsOwner() =
+      runTest(testDispatcher) {
+        val owner = authRepository.signInWithGoogle("token").getOrThrow()
+        alertRepository.publishAlert(alert("alert-1").copy(ownerId = owner.uid))
+        val viewModel = AlertDetailViewModel(alertRepository, authRepository = authRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isOwnAlert)
+        assertFalse(viewModel.uiState.value.canReportSighting)
+      }
+
+  @Test
+  fun someoneElsesOpenAlert_canGetASighting_butNotOnceClosed() =
+      runTest(testDispatcher) {
+        authRepository.signInWithGoogle("token")
+        alertRepository.publishAlert(alert("alert-1"))
+        alertRepository.publishAlert(
+            alert("alert-2").copy(status = AlertStatus.CLOSED, closedAtMillis = 2L)
+        )
+        val viewModel = AlertDetailViewModel(alertRepository, authRepository = authRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isOwnAlert)
+        assertTrue(viewModel.uiState.value.canReportSighting)
+
+        viewModel.loadAlert("alert-2")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.canReportSighting)
+      }
+
   private fun alert(id: String) =
       Alert(
           id = id,
