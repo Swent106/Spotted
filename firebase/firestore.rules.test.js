@@ -3026,6 +3026,8 @@ describe("Firestore thanks rules", () => {
     await assertFails(thank("someone-else", { ownerId: "someone-else" }));
     await assertFails(thank("someone-else"));
     await assertFails(thank(null));
+    // Only the ownerId check refuses this one: the real owner can't store someone else as owner
+    await assertFails(thank("owner-1", { ownerId: "someone-else" }));
   });
 
   it("thanks: the helper must have sent the sighting, on this alert", async () => {
