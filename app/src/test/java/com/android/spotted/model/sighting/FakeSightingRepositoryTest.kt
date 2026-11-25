@@ -4,6 +4,7 @@ package com.android.spotted.model.sighting
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.fakes.FakeSightingRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -197,6 +198,7 @@ class FakeSightingRepositoryTest {
   }
 
   /** Collects [FakeSightingRepository.observeSightingsForAlert] until the test ends. */
+  @OptIn(ExperimentalCoroutinesApi::class)
   private fun TestScope.collectSightingsOf(alertId: String): List<Result<List<Sighting>>> {
     val emissions = mutableListOf<Result<List<Sighting>>>()
     backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {

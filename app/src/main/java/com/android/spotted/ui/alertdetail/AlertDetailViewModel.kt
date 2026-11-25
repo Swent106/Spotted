@@ -10,6 +10,7 @@ import com.android.spotted.data.location.AddressRepositoryGeocoder
 import com.android.spotted.data.location.LocationRepositoryProvider
 import com.android.spotted.data.user.UserRepositoryFirestore
 import com.android.spotted.model.Location
+import com.android.spotted.model.Pet.ageInYears
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
@@ -39,6 +40,7 @@ import kotlinx.coroutines.launch
  * @property userRepository gives the signed-in user's profile; null: no fallback.
  * @property addressRepository names the place the pet was last seen and finds the position of the
  *   home area; null: no place name, and only the home pin.
+ * @property now the current time in epoch millis, used to compute the pet's age.
  */
 class AlertDetailViewModel(
     private val alertRepository: AlertRepository,
@@ -46,6 +48,7 @@ class AlertDetailViewModel(
     private val authRepository: AuthRepository? = null,
     private val userRepository: UserRepository? = null,
     private val addressRepository: AddressRepository? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
   private val _uiState = MutableStateFlow(AlertDetailUiState())
@@ -63,7 +66,14 @@ class AlertDetailViewModel(
           .fold(
               onSuccess = { alert ->
                 _uiState.update {
-                  it.copy(alert = alert, isLoading = false, notFound = alert == null)
+                  it.copy(
+                      alert = alert,
+                      isLoading = false,
+                      notFound = alert == null,
+                      isOwnAlert =
+                          alert != null && alert.ownerId == authRepository?.currentUser?.value?.uid,
+                      ageYears = alert?.let { found -> ageInYears(found.petBirthYear, now()) },
+                  )
                 }
                 if (alert != null) {
                   loadDistance(alert)

@@ -14,9 +14,9 @@ import com.android.spotted.model.fakes.FakeSightingRepository
 import com.android.spotted.model.fakes.FakeTrustRepository
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
+import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
-import com.android.spotted.model.trust.TrustLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher

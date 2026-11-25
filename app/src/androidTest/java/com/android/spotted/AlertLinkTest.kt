@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.spotted.model.alert.buildAlertLink
 import com.android.spotted.ui.StartDestination
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -23,8 +24,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * A `spotted://alert/<id>` link opens that alert's detail: Android sends it to [MainActivity], and
- * [routeOf] turns it into the route that [NotificationRouting] opens above Home, after sign-in.
+ * An alert link ([buildAlertLink]) opens that alert's detail: Android sends it to [MainActivity],
+ * and [routeOf] turns it into the route that [NotificationRouting] opens above Home, after sign-in.
  */
 @RunWith(AndroidJUnit4::class)
 class AlertLinkTest {
@@ -47,7 +48,7 @@ class AlertLinkTest {
   fun aSignedOutUser_signsInFirst_thenSeesTheAlertOfTheLink() {
     lateinit var navController: NavHostController
     var destination by mutableStateOf(StartDestination.SIGNIN)
-    var route by mutableStateOf(routeOf(linkIntent("spotted://alert/a1")))
+    var route by mutableStateOf(routeOf(linkIntent(buildAlertLink("a1").getOrThrow())))
     composeTestRule.setContent {
       navController = rememberNavController()
       StartRouting(destination, navController)

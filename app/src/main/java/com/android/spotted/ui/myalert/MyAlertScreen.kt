@@ -125,7 +125,9 @@ fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
       onDismiss = viewModel::dismiss,
       onMarkFound = viewModel::markFound,
       // The system share sheet, launched from the View
-      onShare = { state.alert?.let { context.shareText(alertShareText(it, state.placeName)) } },
+      onShare = {
+        state.alert?.let { alertShareText(it, state.placeName).onSuccess(context::shareText) }
+      },
   )
 }
 
@@ -491,6 +493,7 @@ private fun StatusChip(sighting: Sighting) {
         SightingStatus.PENDING -> "To review" to SpottedTheme.colors.blue
         SightingStatus.CONFIRMED -> "Confirmed" to SpottedTheme.colors.success
         SightingStatus.DISMISSED -> "Dismissed" to SpottedTheme.colors.error
+        SightingStatus.VOTED_FALSE -> "Hidden" to SpottedTheme.colors.textSecondary
       }
   Text(
       label,

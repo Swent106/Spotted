@@ -17,6 +17,7 @@ import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.LocationException
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
+import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,6 +39,9 @@ import org.junit.Before
 import org.junit.Test
 
 private class OtherViewModel : ViewModel()
+
+/** Mid-June 2026, far from New Year in any time zone. */
+private val MID_2026 = Instant.parse("2026-06-15T12:00:00Z").toEpochMilli()
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlertDetailViewModelTest {
@@ -143,6 +147,39 @@ class AlertDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(AlertDetailViewModel.LOAD_FAILED, viewModel.uiState.value.errorMessage)
+      }
+
+  @Test
+  fun loadAlert_computesTheAgeFromTheBirthYearCopiedOnTheAlert() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("born-2021").copy(petBirthYear = 2021))
+        alertRepository.publishAlert(alert("no-year"))
+        val viewModel = AlertDetailViewModel(alertRepository, now = { MID_2026 })
+
+        viewModel.loadAlert("born-2021")
+        advanceUntilIdle()
+        assertEquals(5, viewModel.uiState.value.ageYears)
+
+        // An older alert, saved before the birth year was copied, shows no age
+        viewModel.loadAlert("no-year")
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.ageYears)
+      }
+
+  @Test
+  fun loadAlert_failureAfterASuccess_doesNotKeepThePreviousAge() =
+      runTest(testDispatcher) {
+        alertRepository.publishAlert(alert("born-2021").copy(petBirthYear = 2021))
+        val viewModel = AlertDetailViewModel(alertRepository, now = { MID_2026 })
+        viewModel.loadAlert("born-2021")
+        advanceUntilIdle()
+
+        alertRepository.failure = IllegalStateException("offline")
+        viewModel.loadAlert("born-2021")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.alert)
+        assertNull(viewModel.uiState.value.ageYears)
       }
 
   @Test
@@ -398,6 +435,42 @@ class AlertDetailViewModelTest {
       AlertDetailViewModel.Factory.create(OtherViewModel::class.java)
     }
   }
+
+  // ===================== Own alert =====================
+
+  @Test
+  fun ownAlert_cannotGetASightingFromItsOwner() =
+      runTest(testDispatcher) {
+        val owner = authRepository.signInWithGoogle("token").getOrThrow()
+        alertRepository.publishAlert(alert("alert-1").copy(ownerId = owner.uid))
+        val viewModel = AlertDetailViewModel(alertRepository, authRepository = authRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isOwnAlert)
+        assertFalse(viewModel.uiState.value.canReportSighting)
+      }
+
+  @Test
+  fun someoneElsesOpenAlert_canGetASighting_butNotOnceClosed() =
+      runTest(testDispatcher) {
+        authRepository.signInWithGoogle("token")
+        alertRepository.publishAlert(alert("alert-1"))
+        alertRepository.publishAlert(
+            alert("alert-2").copy(status = AlertStatus.CLOSED, closedAtMillis = 2L)
+        )
+        val viewModel = AlertDetailViewModel(alertRepository, authRepository = authRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isOwnAlert)
+        assertTrue(viewModel.uiState.value.canReportSighting)
+
+        viewModel.loadAlert("alert-2")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.canReportSighting)
+      }
 
   private fun alert(id: String) =
       Alert(

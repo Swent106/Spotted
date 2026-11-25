@@ -11,6 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.buildAlertLink
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
@@ -80,7 +81,8 @@ class MyAlertScreenTest {
     assertEquals(Intent.ACTION_CHOOSER, chooser.action)
     @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
     assertEquals(
-        "Luna is missing near Ouchy, Lausanne. Have you seen them? spotted://alert/alert-1",
+        "Luna is missing near Ouchy, Lausanne. Have you seen them? " +
+            buildAlertLink(ALERT.id).getOrThrow(),
         send?.getStringExtra(Intent.EXTRA_TEXT),
     )
   }

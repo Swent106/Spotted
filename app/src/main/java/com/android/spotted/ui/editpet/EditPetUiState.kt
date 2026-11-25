@@ -5,13 +5,17 @@ package com.android.spotted.ui.editpet
 import androidx.annotation.StringRes
 import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
+import com.android.spotted.ui.components.PetDetailsInput
 
 data class EditPetUiState(
     val name: String = "",
     val species: Species? = null,
     val breed: String = "",
+    val breedId: String? = null,
     val photoUri: String? = null,
     val description: String = "",
+    val birthYear: Int? = null,
+    val details: PetDetailsInput = PetDetailsInput(),
     val allergies: List<String> = emptyList(),
     val behaviors: Set<Behavior> = emptySet(),
     val isLoading: Boolean = true,

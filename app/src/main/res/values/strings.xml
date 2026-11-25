@@ -17,11 +17,35 @@
     <string name="add_pets_species_dog">Dog</string>
     <string name="add_pets_species_cat">Cat</string>
     <string name="add_pets_species_other">Other</string>
+
+    <!-- Pet details shown under the name (age, sex, size) -->
+    <string name="pet_sex_male">Male</string>
+    <string name="pet_sex_female">Female</string>
+    <string name="pet_size_small">Small</string>
+    <string name="pet_size_medium">Medium</string>
+    <string name="pet_size_large">Large</string>
+    <string name="pet_age_under_one_year">Under 1 year</string>
+    <plurals name="pet_age_years">
+        <item quantity="one">%d year</item>
+        <item quantity="other">%d years</item>
+    </plurals>
+
+    <!-- How and where the pet got lost, shown as chips on Alert detail -->
+    <string name="loss_cause_escaped_from_home">Escaped from home</string>
+    <string name="loss_cause_during_a_walk">Lost during a walk</string>
+    <string name="loss_cause_scared_by_noise">Ran off, scared by a noise</string>
+    <string name="loss_cause_during_move_or_trip">Lost during a move or trip</string>
+    <string name="loss_cause_stolen">Stolen</string>
+    <string name="loss_environment_city_centre">City centre</string>
+    <string name="loss_environment_suburb">Suburb</string>
+    <string name="loss_environment_village_or_rural">Village or countryside</string>
+    <string name="loss_environment_forest_or_mountain">Forest or mountain</string>
     <string name="add_pets_photo_section">PHOTO</string>
     <string name="add_pets_description_section">DESCRIPTION</string>
     <string name="add_pets_description_placeholder">Colour, size, collar…</string>
     <string name="add_pets_age_section">AGE</string>
     <string name="add_pets_age_placeholder">e.g. 4 years</string>
+    <string name="add_pets_birth_year_invalid">Enter a birth year between %1$d and %2$d</string>
     <string name="add_pets_characteristics_section">CHARACTERISTICS</string>
     <string name="add_pets_behavior_stressed_in_crowds">Stressed in crowds</string>
     <string name="add_pets_behavior_doesnt_like_being_touched">Doesn\'t like being touched</string>
@@ -37,6 +61,7 @@
     <string name="add_pets_save_error">Unable to save the pet</string>
     <string name="edit_pet_load_error">Unable to load the pet</string>
     <string name="edit_pet_save_error">Unable to save changes to the pet</string>
+    <string name="edit_pet_future_birth_year_error">Birth year cannot be in the future</string>
     <string name="edit_pet_photo_upload_error">Unable to upload the new photo; pet changes were not saved</string>
     <string name="edit_pet_photo_delete_error">Unable to remove the old photo. Save again to retry.</string>
     <string name="edit_pet_delete_error">Unable to delete the pet</string>
@@ -94,7 +119,12 @@
     <string name="sighting_photo_no_animal">We couldn\'t see an animal in this photo. Choose another one.</string>
     <string name="sighting_photo_required">Add a photo: with no matching alert, it\'s how the owner will recognise their pet.</string>
     <string name="sighting_no_missing_pet_matches_nearby">No missing pet matches nearby</string>
-    <string name="sighting_saved_offline">Saved, it will be sent when you\'re back online</string>
+    <string name="sighting_offline_title">You are offline</string>
+    <string name="sighting_offline_text">Saved on your phone, sent when signal is back</string>
+    <string name="sighting_saved_offline_title">Saved on your phone</string>
+    <string name="sighting_saved_offline_text_pet">We\'ll send your sighting of %1$s as soon as you\'re back online. You don\'t need to keep the app open.</string>
+    <string name="sighting_saved_offline_text">We\'ll send your sighting as soon as you\'re back online. You don\'t need to keep the app open.</string>
+    <string name="sighting_back_home">Back to Home</string>
     <string name="notification_channel_sightings">Sightings</string>
     <string name="notification_channel_nearby_alerts">Nearby alerts</string>
     <string name="notification_sighting_title">Someone saw %1$s</string>
@@ -161,4 +191,13 @@
     <string name="report_missing_environment_forest_or_mountain">Forest or mountain</string>
     <string name="report_missing_unknown">Unknown</string>
     <string name="report_missing_skip">Skip and publish</string>
+
+    <!-- Breed picker -->
+    <string name="breed_mixed">Mixed</string>
+    <string name="breed_unknown">Unknown</string>
+    <string name="breed_picker_label">Breed</string>
+    <string name="breed_picker_placeholder">Select a breed</string>
+    <string name="breed_picker_title">Choose a breed</string>
+    <string name="breed_picker_search_placeholder">Labrador</string>
+    <string name="breed_picker_no_match">No breed matches \"%1$s\"</string>
 </resources>
