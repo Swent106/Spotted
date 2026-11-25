@@ -119,6 +119,7 @@ class AlertDetailScreenTest {
         .assertIsDisplayed()
         .assertTextEquals(context.getString(R.string.alert_detail_found_message, "Milo"))
     composeTestRule.onNodeWithTag(AlertDetailTestTags.REPORT_SIGHTING).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).assertIsDisplayed()
   }
 
   @Test

@@ -8,6 +8,7 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.buildAlertLink
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
@@ -57,6 +58,39 @@ class AlertDetailViewModelTest {
   @After
   fun tearDown() {
     Dispatchers.resetMain()
+  }
+
+  @Test
+  fun prepareShare_validAlert_returnsTextWithLink() {
+    val viewModel = AlertDetailViewModel(alertRepository)
+    val alert =
+        alert("alert-477")
+            .copy(
+                petName = "Milo",
+                lastKnownLocation = Location(latitude = 46.5070, longitude = 6.6270),
+            )
+
+    val text = viewModel.prepareShare(alert).getOrThrow()
+
+    assertEquals(
+        "Milo is missing near 46.5070, 6.6270. Have you seen them? " +
+            buildAlertLink(alert.id).getOrThrow(),
+        text,
+    )
+    assertNull(viewModel.uiState.value.shareErrorMessage)
+  }
+
+  @Test
+  fun prepareShare_invalidAlertId_setsShareErrorWithoutThrowing() {
+    val viewModel = AlertDetailViewModel(alertRepository)
+
+    val result = viewModel.prepareShare(alert("invalid/alert"))
+
+    assertTrue(result.isFailure)
+    assertEquals(
+        AlertDetailViewModel.SHARE_FAILED,
+        viewModel.uiState.value.shareErrorMessage,
+    )
   }
 
   @Test

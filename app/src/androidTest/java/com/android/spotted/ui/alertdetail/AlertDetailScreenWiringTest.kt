@@ -20,6 +20,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
+import com.android.spotted.model.alert.buildAlertLink
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.distanceKm
@@ -126,6 +127,7 @@ class AlertDetailScreenWiringTest {
     assertEquals("text/plain", send.type)
     val text = send.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
     assertTrue(text, text.startsWith("Luna is missing near 46.5197, 6.6323."))
+    assertTrue(text, text.endsWith(buildAlertLink(alert.id).getOrThrow()))
   }
 
   @Test
