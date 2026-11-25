@@ -26,8 +26,8 @@ import com.android.spotted.ui.authentification.SignInScreenTestTags
 import com.android.spotted.ui.components.MapPickerTestTags
 import com.android.spotted.ui.home.HomeScreenTestTags
 import com.android.spotted.ui.personalinfo.PersonalInfoScreenTestTags
-import com.android.spotted.ui.profile.HelperProfileTestTags
 import com.android.spotted.ui.report.ReportMissingScreenTestTags
+import com.android.spotted.ui.settings.SettingsScreenTestTags
 import com.android.spotted.ui.sighting.ReportSightingScreenTestTags
 import com.android.spotted.utils.EndToEndTest
 import com.android.spotted.utils.TestAccount
@@ -224,11 +224,12 @@ class MainUserFlowTest : EndToEndTest() {
   }
 
   private fun signOut() {
-    node(HomeScreenTestTags.TAB_PROFILE).performClick()
-    waitFor(HelperProfileTestTags.SCREEN, "The Profile tab should open the Helper profile")
-    node(HelperProfileTestTags.ACCOUNT_BUTTON).scrollToAndClick()
-    waitFor(HelperProfileTestTags.SIGN_OUT, "The account button should offer to sign out")
-    node(HelperProfileTestTags.SIGN_OUT).scrollToAndClick()
+    // Sign out lives in Settings only (#504), which opens from Home
+    node(HomeScreenTestTags.TAB_HOME).performClick()
+    waitFor(HomeScreenTestTags.SCREEN, "The Home tab should open Home")
+    node(HomeScreenTestTags.SETTINGS_BUTTON).scrollToAndClick()
+    waitFor(SettingsScreenTestTags.SCREEN, "The Settings button should open Settings")
+    node(SettingsScreenTestTags.SIGN_OUT).scrollToAndClick()
     waitFor(SignInScreenTestTags.SCREEN, "The Sign in screen should show after signing out")
     waitUntil("Firebase should have no signed-in user after signing out") {
       FirebaseAuth.getInstance().currentUser == null

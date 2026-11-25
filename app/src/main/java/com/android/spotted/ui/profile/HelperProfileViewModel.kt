@@ -26,13 +26,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Helper profile: the signed-in user's name, area and trust level, and the account actions.
+ * Helper profile: the signed-in user's name, area and trust level, and account deletion. Signing
+ * out lives in Settings.
  *
- * Signing out or deleting the account clears the signed-in user, so MainViewModel sends the app
- * back to Sign in; this ViewModel does not navigate itself.
+ * Deleting the account clears the signed-in user, so MainViewModel sends the app back to Sign in;
+ * this ViewModel does not navigate itself.
  *
  * @property userRepository reads and deletes the user's profile.
- * @property authRepository gives the signed-in user, signs out and deletes the account.
+ * @property authRepository gives the signed-in user and deletes the account.
  * @property petRepository deletes the user's pets with the account.
  * @property alertRepository deletes the user's alerts with the account.
  * @property trustRepository reads the user's trust level; without it, no level is shown.
@@ -97,19 +98,6 @@ class HelperProfileViewModel(
       val trust = repository.getTrust(uid).getOrNull()
       if (requestId == trustRequestId) {
         _uiState.update { it.copy(trust = trust) }
-      }
-    }
-  }
-
-  /** Signs out; the profile is kept for the next sign-in. */
-  fun signOut() {
-    if (_uiState.value.isLeaving) return
-    _uiState.update {
-      it.copy(isLeaving = true, errorMessage = null, isDeleteConfirmationVisible = false)
-    }
-    viewModelScope.launch {
-      authRepository.signOut().onFailure {
-        _uiState.update { it.copy(isLeaving = false, errorMessage = SIGN_OUT_FAILED) }
       }
     }
   }

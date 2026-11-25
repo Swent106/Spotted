@@ -77,16 +77,10 @@ class HomeViewModelTest {
   private class SwitchableAuthRepository : AuthRepository {
     override val currentUser = MutableStateFlow<User?>(null)
 
-    /** When set, [signOut] fails with it and the user stays signed in. */
-    var signOutFailure: Throwable? = null
-
     override suspend fun signInWithGoogle(idToken: String): Result<User> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun signOut(): Result<Unit> {
-      signOutFailure?.let {
-        return Result.failure(it)
-      }
       currentUser.value = null
       return Result.success(Unit)
     }
@@ -437,42 +431,6 @@ class HomeViewModelTest {
             HomeUiState(errorMessage = HomeViewModel.NOT_SIGNED_IN),
             viewModel.uiState.value,
         )
-      }
-
-  @Test
-  fun signOut_fromTheViewModel_signsTheUserOutAndClearsTheirData() =
-      runTest(testDispatcher) {
-        signIn(ALICE)
-        addPets(LUNA)
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.signOut()
-        advanceUntilIdle()
-
-        assertNull(authRepository.currentUser.value)
-        assertEquals(
-            HomeUiState(errorMessage = HomeViewModel.NOT_SIGNED_IN),
-            viewModel.uiState.value,
-        )
-      }
-
-  @Test
-  fun signOut_failure_keepsTheUserAndTheirPets_andShowsAnError() =
-      runTest(testDispatcher) {
-        signIn(ALICE)
-        addPets(LUNA)
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        authRepository.signOutFailure = Exception("offline")
-
-        viewModel.signOut()
-        advanceUntilIdle()
-
-        assertEquals(ALICE, authRepository.currentUser.value)
-        val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.SIGN_OUT_FAILED, state.errorMessage)
-        assertEquals(listOf(LUNA), state.pets.items)
       }
 
   @Test

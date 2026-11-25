@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -75,7 +74,6 @@ object HelperProfileTestTags {
   const val EDIT_PROFILE = "helperProfile_editProfile"
   const val ERROR = "helperProfile_error"
   const val ACCOUNT_OPTIONS = "helperProfile_accountOptions"
-  const val SIGN_OUT = "helperProfile_signOut"
   const val DELETE_ACCOUNT = "helperProfile_deleteAccount"
   const val DELETE_CONFIRM_DIALOG = "helperProfile_deleteConfirmDialog"
   const val DELETE_CONFIRM = "helperProfile_deleteConfirm"
@@ -95,9 +93,10 @@ data class HelperProfileNavigation(
 /**
  * Helper profile (Figma "13 · Helper profile"), wired to its [HelperProfileViewModel].
  *
- * The red button at the top offers to sign out or to delete the account; deleting asks for a
- * confirmation first. Both first clear the Google account remembered by Credential Manager (#75),
- * so the next sign-in asks which account to use; MainViewModel then sends the app back to Sign in.
+ * The red button at the top offers to delete the account, which asks for a confirmation first.
+ * Deleting first clears the Google account remembered by Credential Manager (#75), so the next
+ * sign-in asks which account to use; MainViewModel then sends the app back to Sign in. Signing out
+ * lives in Settings.
  */
 @Composable
 fun HelperProfileScreen(
@@ -130,7 +129,6 @@ fun HelperProfileScreen(
 
   if (showAccountOptions) {
     AccountOptionsDialog(
-        onSignOut = { leave(viewModel::signOut) },
         onDeleteAccount = {
           showAccountOptions = false
           viewModel.requestDeleteAccount()
@@ -272,7 +270,7 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
                 .size(48.dp)
                 .clickable(
                     enabled = !state.isLeaving,
-                    onClickLabel = "Sign out or delete account",
+                    onClickLabel = "Delete account",
                     role = Role.Button,
                     onClick = onAccountClick,
                 )
@@ -288,8 +286,8 @@ private fun Header(state: HelperProfileUiState, onAccountClick: () -> Unit) {
                   .testTag(HelperProfileTestTags.ACCOUNT_BUTTON_VISUAL),
       ) {
         Image(
-            painterResource(R.drawable.ic_logout),
-            contentDescription = "Sign out",
+            painterResource(R.drawable.ic_delete),
+            contentDescription = "Delete account",
             modifier = Modifier.size(14.dp),
         )
       }
@@ -487,10 +485,9 @@ private fun EditProfile(state: HelperProfileUiState, onClick: () -> Unit) {
   }
 }
 
-/** Sign out, or delete the account so the next sign-in starts with a new profile. */
+/** Delete the account, so the next sign-in starts with a new profile. Sign out is in Settings. */
 @Composable
 internal fun AccountOptionsDialog(
-    onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -503,24 +500,9 @@ internal fun AccountOptionsDialog(
       text = {
         Column(Modifier.testTag(HelperProfileTestTags.ACCOUNT_OPTIONS)) {
           TextButton(
-              onClick = onSignOut,
-              modifier =
-                  Modifier.fillMaxWidth()
-                      .heightIn(min = 56.dp)
-                      .testTag(HelperProfileTestTags.SIGN_OUT),
-          ) {
-            Text(
-                "Sign out",
-                style = jakarta(16, 22f, FontWeight.SemiBold, colors.blue),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-          }
-          TextButton(
               onClick = onDeleteAccount,
               modifier = Modifier.fillMaxWidth().testTag(HelperProfileTestTags.DELETE_ACCOUNT),
           ) {
-            // Centred like the Sign out button above it
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
               Text("Delete account", style = jakarta(15, 20f, FontWeight.SemiBold, colors.error))
               Text(

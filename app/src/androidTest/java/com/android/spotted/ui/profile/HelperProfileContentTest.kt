@@ -158,39 +158,27 @@ class HelperProfileContentTest {
   }
 
   @Test
-  fun accountOptions_offerSignOutAndDelete() {
-    var signOuts = 0
+  fun accountOptions_offerOnlyDeleteAccount_andNoSignOut() {
     var deletions = 0
     composeTestRule.setContent {
-      AccountOptionsDialog(
-          onSignOut = { signOuts++ },
-          onDeleteAccount = { deletions++ },
-          onDismiss = {},
-      )
+      AccountOptionsDialog(onDeleteAccount = { deletions++ }, onDismiss = {})
     }
 
-    composeTestRule.onNodeWithTag(HelperProfileTestTags.SIGN_OUT).performClick()
+    // Sign out lives in Settings only (#504)
+    composeTestRule.onNodeWithText("Sign out").assertDoesNotExist()
     composeTestRule.onNodeWithTag(HelperProfileTestTags.DELETE_ACCOUNT).performClick()
 
-    assertEquals(1, signOuts)
     assertEquals(1, deletions)
   }
 
   @Test
-  fun signOutButton_hasAtLeast56DpTouchTarget() {
-    composeTestRule.setContent {
-      AccountOptionsDialog(onSignOut = {}, onDeleteAccount = {}, onDismiss = {})
-    }
+  fun profileScreen_offersNoSignOut() {
+    setContent(HelperProfileUiState(name = "Rayen"))
 
-    val heightPx =
-        composeTestRule
-            .onNodeWithTag(HelperProfileTestTags.SIGN_OUT)
-            .fetchSemanticsNode()
-            .boundsInRoot
-            .height
-    val heightDp = with(composeTestRule.density) { heightPx.toDp() }
-
-    assertTrue("Sign-out touch target was $heightDp", heightDp >= 56.dp)
+    composeTestRule.onNodeWithText("Sign out").assertDoesNotExist()
+    composeTestRule
+        .onNodeWithContentDescription("Sign out", useUnmergedTree = true)
+        .assertDoesNotExist()
   }
 
   @Test
