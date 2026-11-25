@@ -624,6 +624,27 @@ class AlertRepositoryFirestoreInstrumentedTest {
   }
 
   @Test
+  fun closeAlert_twoAtOnce_keepsOneClosingTime() = runBlocking {
+    val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0))
+    // Two taps (or two phones) closing at the same time, each with its own clock
+    val closers =
+        listOf(5_000L, 9_000L).map { time -> AlertRepositoryFirestore(firestore, now = { time }) }
+
+    val results =
+        closers.map { closer -> async(Dispatchers.IO) { closer.closeAlert(alert.id) } }.awaitAll()
+
+    // The close that loses the race may be refused by the rules (the alert is already closed):
+    // what matters is that one close went through and the alert keeps a single closing time
+    assertTrue("At least one close should succeed: $results", results.any { it.isSuccess })
+    val stored = repository.getAlertById(alert.id).getOrThrow()
+    assertEquals(AlertStatus.CLOSED, stored?.status)
+    assertTrue(
+        "Closing time should be one of the two: ${stored?.closedAtMillis}",
+        stored?.closedAtMillis in setOf(5_000L, 9_000L),
+    )
+  }
+
+  @Test
   fun updateLastSeen_withNewerTime_movesTheAlert() = runBlocking {
     val alert = publishOpenAlert(Location(latitude = 46.0, longitude = 6.0), lostAtMillis = 1000L)
     val seenAt = Location(latitude = 46.01, longitude = 6.02)

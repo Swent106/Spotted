@@ -890,6 +890,15 @@ describe("Firestore alert access rules", () => {
     );
   });
 
+  it("close: a closed alert can't get a new closing time", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 3000000 })
+    );
+  });
+
   it("update: owner cannot move a closed alert", async () => {
     await seedAlert(closing);
     const db = firestoreForUser("owner-1");
