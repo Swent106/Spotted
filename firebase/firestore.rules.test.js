@@ -14,11 +14,14 @@ const {
   deleteDoc,
   doc,
   deleteField,
+  getCountFromServer,
   getDoc,
   getDocs,
   limit,
   query,
+  serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
@@ -58,12 +61,18 @@ describe("Firestore security rules", () => {
     });
   }
 
+  // The createdAt of the profiles written by seedUser
+  const SEEDED_CREATED_AT = Timestamp.fromMillis(Date.UTC(2026, 0, 1));
+
   async function seedUser(uid) {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), "users", uid), userProfile(uid));
+      await setDoc(doc(context.firestore(), "users", uid), seededProfile(uid));
     });
   }
 
+  const seededProfile = (uid) => userProfile(uid, { createdAt: SEEDED_CREATED_AT });
+
+  /** A valid profile, with createdAt set to the server time as the app sends it on creation. */
   function userProfile(uid, overrides = {}) {
     return {
       uid,
@@ -72,6 +81,7 @@ describe("Firestore security rules", () => {
       phone: "+41 79 123 45 67",
       email: "jamie@example.com",
       homeArea: "Lausanne",
+      createdAt: serverTimestamp(),
       ...overrides,
     };
   }
@@ -334,7 +344,7 @@ describe("Firestore security rules", () => {
 
       if (testCase.allowed) {
         const snapshot = await assertSucceeds(operation);
-        assert.deepEqual(snapshot.data(), userProfile("user-1"));
+        assert.deepEqual(snapshot.data(), seededProfile("user-1"));
       } else {
         await assertFails(operation);
       }
@@ -424,6 +434,67 @@ describe("Firestore security rules", () => {
     await assertSucceeds(
       updateDoc(doc(db, "users", "user-1"), { username: deleteField() }),
     );
+  });
+
+  it("allows creating a profile with createdAt set to the server time", async () => {
+    const db = firestoreForUser("user-1");
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, "users", "user-1"),
+        userProfile("user-1", { createdAt: serverTimestamp() }),
+      ),
+    );
+  });
+
+  it("denies creating a profile without createdAt", async () => {
+    const db = firestoreForUser("user-1");
+    const { createdAt, ...withoutCreatedAt } = userProfile("user-1");
+
+    await assertFails(setDoc(doc(db, "users", "user-1"), withoutCreatedAt));
+  });
+
+  it("denies creating a profile with createdAt in the past", async () => {
+    const db = firestoreForUser("user-1");
+    const eightDaysAgo = Timestamp.fromMillis(Date.now() - 8 * 24 * 60 * 60 * 1000);
+
+    await assertFails(
+      setDoc(
+        doc(db, "users", "user-1"),
+        userProfile("user-1", { createdAt: eightDaysAgo }),
+      ),
+    );
+  });
+
+  it("allows a profile update that keeps createdAt as it was", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+
+    // Like UserRepositoryFirestore.saveUser: the whole profile, with createdAt read back
+    await assertSucceeds(
+      setDoc(
+        doc(db, "users", "user-1"),
+        userProfile("user-1", { name: "Alex", createdAt: SEEDED_CREATED_AT }),
+      ),
+    );
+  });
+
+  it("denies a profile update that changes createdAt, earlier or later", async () => {
+    await seedUser("user-1");
+    const profile = doc(firestoreForUser("user-1"), "users", "user-1");
+    const day = 24 * 60 * 60 * 1000;
+
+    for (const millis of [SEEDED_CREATED_AT.toMillis() - 7 * day, SEEDED_CREATED_AT.toMillis() + day]) {
+      await assertFails(updateDoc(profile, { createdAt: Timestamp.fromMillis(millis) }));
+    }
+    await assertFails(updateDoc(profile, { createdAt: serverTimestamp() }));
+  });
+
+  it("denies a profile update that removes createdAt", async () => {
+    await seedUser("user-1");
+    const db = firestoreForUser("user-1");
+
+    await assertFails(updateDoc(doc(db, "users", "user-1"), { createdAt: deleteField() }));
   });
 
   it("denies profile updates that omit required or invalid fields", async () => {
@@ -816,6 +887,15 @@ describe("Firestore alert access rules", () => {
 
     await assertFails(
       updateDoc(doc(db, "alerts", "alert-1"), { status: "OPEN", closedAtMillis: null })
+    );
+  });
+
+  it("close: a closed alert can't get a new closing time", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 3000000 })
     );
   });
 
@@ -2529,8 +2609,327 @@ describe("Firestore block list rules", () => {
   });
 });
 
+describe("Firestore vote rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  const daysAgo = (days) => Timestamp.fromMillis(Date.now() - days * DAY);
+  /** [count] vote times, one per hour, the latest one hour ago (oldest first). */
+  const hourlyVotes = (count) =>
+    Array.from({ length: count }, (_, i) => Timestamp.fromMillis(Date.now() - (count - i) * HOUR));
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+
+  const seed = (documentPath, data) =>
+    testEnvironment.withSecurityRulesDisabled((context) =>
+      setDoc(doc(context.firestore(), documentPath), data),
+    );
+
+  /**
+   * sighting-1 by reporter-1 on alert-1 (owned by owner-1), and a voter who meets every condition
+   * unless overridden: an account 30 days old, Trusted (score 0.5, 3 judged sightings).
+   */
+  async function seedEligibleVoter(
+    voterId,
+    { createdAt = daysAgo(30), score = 0.5, judged = 3, trust = true, user = true } = {},
+  ) {
+    await seed("alerts/alert-1", { id: "alert-1", ownerId: "owner-1", status: "OPEN" });
+    await seed("sightings/sighting-1", {
+      id: "sighting-1",
+      reporterId: "reporter-1",
+      location: { latitude: 46.5, longitude: 6.6 },
+      seenAtMillis: 1000000,
+      species: "DOG",
+      alertId: "alert-1",
+      status: "PENDING",
+    });
+    if (user) {
+      await seed(`users/${voterId}`, {
+        uid: voterId,
+        name: "Voter",
+        phone: "",
+        email: "voter@example.com",
+        homeArea: "",
+        createdAt,
+      });
+    }
+    if (trust) {
+      await seed(`trust/${voterId}`, { score, judged, lastSightingId: "old-sighting" });
+    }
+  }
+
+  /** Seeds the voter's quota with votes at these [times] (oldest first). */
+  const seedQuota = (voterId, times) =>
+    seed(`voteQuota/${voterId}`, {
+      recent: times.slice(0, -1),
+      last: times[times.length - 1],
+      lastSightingId: "older-sighting",
+    });
+
+  /**
+   * The write of VoteRepositoryFirestore.castVote: the vote and the voter's quota, in one batch.
+   * [overrides] change the vote document, [quotaOverrides] the quota document.
+   */
+  async function castVote(
+    userId,
+    {
+      sightingId = "sighting-1",
+      voterId = userId,
+      overrides = {},
+      quotaOverrides = {},
+      withQuota = true,
+    } = {},
+  ) {
+    let before = [];
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const quota = await getDoc(doc(context.firestore(), "voteQuota", voterId));
+      if (quota.exists()) before = [...quota.data().recent, quota.data().last];
+    });
+    const db = firestoreForUser(userId);
+    const batch = writeBatch(db);
+    batch.set(doc(db, "sightings", sightingId, "votes", voterId), {
+      voterId,
+      votedAt: serverTimestamp(),
+      ...overrides,
+    });
+    if (withQuota) {
+      batch.set(doc(db, "voteQuota", voterId), {
+        recent: before.slice(-9),
+        last: serverTimestamp(),
+        lastSightingId: sightingId,
+        ...quotaOverrides,
+      });
+    }
+    return batch.commit();
+  }
+
+  it("vote create: an eligible voter can vote on someone else's sighting", async () => {
+    await seedEligibleVoter("voter-1");
+
+    await assertSucceeds(castVote("voter-1"));
+  });
+
+  it("vote create: the reporter cannot vote on their own sighting", async () => {
+    await seedEligibleVoter("reporter-1");
+
+    await assertFails(castVote("reporter-1"));
+  });
+
+  it("vote create: a vote on a sighting that does not exist is denied", async () => {
+    await seedEligibleVoter("voter-1");
+
+    await assertFails(castVote("voter-1", { sightingId: "missing-sighting" }));
+  });
+
+  it("vote create: only your own vote (document id and voterId are your uid)", async () => {
+    await seedEligibleVoter("voter-1");
+    await seedEligibleVoter("voter-2");
+
+    await assertFails(castVote("voter-1", { voterId: "voter-2" }));
+    await assertFails(castVote("voter-1", { overrides: { voterId: "voter-2" } }));
+    await assertFails(castVote(null, { voterId: "voter-1" }));
+  });
+
+  it("vote: one per user per sighting, never changed or deleted", async () => {
+    await seedEligibleVoter("voter-1");
+    await assertSucceeds(castVote("voter-1"));
+    const vote = doc(firestoreForUser("voter-1"), "sightings/sighting-1/votes/voter-1");
+
+    await assertFails(castVote("voter-1"));
+    await assertFails(updateDoc(vote, { votedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(vote));
+  });
+
+  it("vote create: the app cannot send a weight or any other field", async () => {
+    await seedEligibleVoter("voter-1");
+
+    await assertFails(castVote("voter-1", { overrides: { weight: 1 } }));
+    await assertFails(castVote("voter-1", { overrides: { status: "VOTED_FALSE" } }));
+  });
+
+  it("vote create: votedAt must be the server time", async () => {
+    await seedEligibleVoter("voter-1");
+
+    await assertFails(castVote("voter-1", { overrides: { votedAt: daysAgo(1) } }));
+  });
+
+  it("vote create: an account 8 days old is allowed, 6 days old is denied", async () => {
+    await seedEligibleVoter("old-voter", { createdAt: daysAgo(8) });
+    await seedEligibleVoter("new-voter", { createdAt: daysAgo(6) });
+
+    await assertSucceeds(castVote("old-voter"));
+    await assertFails(castVote("new-voter"));
+  });
+
+  it("vote create: a user without a profile is denied", async () => {
+    await seedEligibleVoter("no-profile", { user: false });
+
+    await assertFails(castVote("no-profile"));
+  });
+
+  it("vote create: Trusted at the lowest score (0.4, 3 judged) is allowed", async () => {
+    await seedEligibleVoter("voter-1", { score: 0.4, judged: 3 });
+
+    await assertSucceeds(castVote("voter-1"));
+  });
+
+  it("vote create: a score below Trusted is denied", async () => {
+    await seedEligibleVoter("voter-1", { score: 0.39, judged: 10 });
+
+    await assertFails(castVote("voter-1"));
+  });
+
+  it("vote create: fewer than 3 judged sightings (level New) is denied", async () => {
+    await seedEligibleVoter("voter-1", { score: 0.9, judged: 2 });
+
+    await assertFails(castVote("voter-1"));
+  });
+
+  it("vote create: a user without a trust score (never judged) is denied", async () => {
+    await seedEligibleVoter("voter-1", { trust: false });
+
+    await assertFails(castVote("voter-1"));
+  });
+
+  it("vote create: the 10th vote in 24 hours is allowed", async () => {
+    await seedEligibleVoter("voter-1");
+    await seedQuota("voter-1", hourlyVotes(9));
+
+    await assertSucceeds(castVote("voter-1"));
+  });
+
+  it("vote create: an 11th vote in 24 hours is denied", async () => {
+    await seedEligibleVoter("voter-1");
+    await seedQuota("voter-1", hourlyVotes(10));
+
+    await assertFails(castVote("voter-1"));
+  });
+
+  it("vote create: allowed again once the oldest of the last 10 votes is over 24 hours old", async () => {
+    await seedEligibleVoter("voter-1");
+    const times = hourlyVotes(10);
+    times[0] = Timestamp.fromMillis(Date.now() - 25 * HOUR);
+    await seedQuota("voter-1", times);
+
+    await assertSucceeds(castVote("voter-1"));
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const quota = (await getDoc(doc(context.firestore(), "voteQuota/voter-1"))).data();
+      assert.equal(quota.recent.length, 9);
+      assert.ok(quota.recent[0].isEqual(times[1]));
+    });
+  });
+
+  it("vote create: a vote that does not update the quota is denied", async () => {
+    await seedEligibleVoter("voter-1");
+
+    await assertFails(castVote("voter-1", { withQuota: false }));
+  });
+
+  it("vote create: two votes counted as one in the quota are denied", async () => {
+    await seedEligibleVoter("voter-1");
+    await seed("sightings/sighting-2", {
+      id: "sighting-2",
+      reporterId: "reporter-1",
+      location: { latitude: 46.5, longitude: 6.6 },
+      seenAtMillis: 1000000,
+      species: "DOG",
+      alertId: "alert-1",
+      status: "PENDING",
+    });
+    const db = firestoreForUser("voter-1");
+    const vote = (sightingId) => doc(db, "sightings", sightingId, "votes", "voter-1");
+    const batch = writeBatch(db);
+    batch.set(vote("sighting-1"), { voterId: "voter-1", votedAt: serverTimestamp() });
+    batch.set(vote("sighting-2"), { voterId: "voter-1", votedAt: serverTimestamp() });
+    batch.set(doc(db, "voteQuota", "voter-1"), {
+      recent: [],
+      last: serverTimestamp(),
+      lastSightingId: "sighting-1",
+    });
+
+    await assertFails(batch.commit());
+    // Each vote on its own, with its quota update, is allowed
+    await assertSucceeds(castVote("voter-1", { sightingId: "sighting-1" }));
+    await assertSucceeds(castVote("voter-1", { sightingId: "sighting-2" }));
+  });
+
+  it("quota: its history cannot be erased, even in the same write as a vote", async () => {
+    await seedEligibleVoter("voter-1");
+    // Not full, so the daily limit allows a vote and only the history check can refuse it
+    await seedQuota("voter-1", hourlyVotes(3));
+
+    await assertFails(castVote("voter-1", { quotaOverrides: { recent: [] } }));
+    await assertSucceeds(castVote("voter-1"));
+  });
+
+  it("quota: cannot be reset, changed or deleted, and only its owner can read it", async () => {
+    await seedEligibleVoter("voter-1");
+    const times = hourlyVotes(3);
+    await seedQuota("voter-1", times);
+    const quota = doc(firestoreForUser("voter-1"), "voteQuota", "voter-1");
+
+    // Without a vote, even with the history kept as it should be
+    await assertFails(
+      setDoc(quota, { recent: times, last: serverTimestamp(), lastSightingId: "sighting-1" }),
+    );
+    await assertFails(deleteDoc(quota));
+    await assertFails(getDoc(doc(firestoreForUser("voter-2"), "voteQuota", "voter-1")));
+    await assertSucceeds(getDoc(quota));
+  });
+
+  it("vote read: signed-in users can read and count votes, signed-out users cannot", async () => {
+    await seedEligibleVoter("voter-1");
+    await assertSucceeds(castVote("voter-1"));
+    const votes = (userId) => collection(firestoreForUser(userId), "sightings/sighting-1/votes");
+
+    const snapshot = await assertSucceeds(getDocs(votes("owner-1")));
+    assert.equal(snapshot.size, 1);
+    const count = await assertSucceeds(getCountFromServer(votes("reporter-1")));
+    assert.equal(count.data().count, 1);
+    await assertFails(getDocs(votes(null)));
+  });
+
+  it("sighting status: nobody can set VOTED_FALSE directly, not even the alert owner", async () => {
+    await seedEligibleVoter("voter-1");
+
+    for (const userId of ["owner-1", "reporter-1", "voter-1"]) {
+      await assertFails(
+        updateDoc(doc(firestoreForUser(userId), "sightings", "sighting-1"), {
+          status: "VOTED_FALSE",
+        }),
+      );
+    }
+  });
+});
+
 describe("Firestore thanks rules", () => {
-  const { getCountFromServer } = require("firebase/firestore");
   let testEnvironment;
 
   before(async () => {

@@ -70,6 +70,8 @@ class AlertDetailViewModel(
                       alert = alert,
                       isLoading = false,
                       notFound = alert == null,
+                      isOwnAlert =
+                          alert != null && alert.ownerId == authRepository?.currentUser?.value?.uid,
                       ageYears = alert?.let { found -> ageInYears(found.petBirthYear, now()) },
                   )
                 }
