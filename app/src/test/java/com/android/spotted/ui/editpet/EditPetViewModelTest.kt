@@ -19,6 +19,7 @@ import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.photo.FakePhotoRepository
 import com.android.spotted.model.photo.PhotoRepository
+import com.android.spotted.ui.components.PetDetailsInput
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -95,11 +96,11 @@ class EditPetViewModelTest {
         assertEquals("Quiet home", state.description)
         assertEquals(2018, state.birthYear)
         assertEquals("tabby", state.breedId)
-        assertEquals(Sex.FEMALE, state.sex)
-        assertEquals(Neutered.YES, state.neutered)
-        assertEquals(PetSize.SMALL, state.size)
-        assertEquals(Lifestyle.INDOOR_ONLY, state.lifestyle)
-        assertEquals(Microchipped.YES, state.microchipped)
+        assertEquals(Sex.FEMALE, state.details.sex)
+        assertEquals(Neutered.YES, state.details.neutered)
+        assertEquals(PetSize.SMALL, state.details.size)
+        assertEquals(Lifestyle.INDOOR_ONLY, state.details.lifestyle)
+        assertEquals(Microchipped.YES, state.details.microchipped)
         assertTrue(state.canSave)
       }
 
@@ -166,11 +167,15 @@ class EditPetViewModelTest {
         val viewModel = loadedViewModel(pet)
         viewModel.onBirthYearChanged(2020)
         viewModel.onBreedSelected("breed-1", "Golden Retriever")
-        viewModel.onSexChanged(Sex.FEMALE)
-        viewModel.onNeuteredChanged(Neutered.YES)
-        viewModel.onSizeChanged(PetSize.LARGE)
-        viewModel.onLifestyleChanged(Lifestyle.INDOOR_AND_OUTDOOR)
-        viewModel.onMicrochippedChanged(Microchipped.YES)
+        viewModel.onDetailsChanged(
+            PetDetailsInput(
+                sex = Sex.FEMALE,
+                neutered = Neutered.YES,
+                size = PetSize.LARGE,
+                lifestyle = Lifestyle.INDOOR_AND_OUTDOOR,
+                microchipped = Microchipped.YES,
+            )
+        )
 
         viewModel.save()
         advanceUntilIdle()
