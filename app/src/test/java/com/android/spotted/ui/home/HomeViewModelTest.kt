@@ -16,8 +16,10 @@ import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.fakes.FakeNotificationRepository
 import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.LocationException
+import com.android.spotted.model.notification.SightingNotification
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -696,6 +698,87 @@ class HomeViewModelTest {
         lostPets = viewModel.uiState.value.lostPetsNearby
         assertNull(lostPets.errorMessage)
         assertEquals(listOf(first), lostPets.items)
+      }
+
+  // ===================== Bell badge =====================
+
+  private fun viewModelWithNotifications(notifications: FakeNotificationRepository) =
+      HomeViewModel(
+          authRepository = authRepository,
+          userRepository = userRepository,
+          petRepository = petRepository,
+          alertRepository = alertRepository,
+          searchCenter = CENTER,
+          radiusKm = RADIUS_KM,
+          now = { NOW },
+          notificationRepository = notifications,
+      )
+
+  private fun pending(count: Int) =
+      List(count) { SightingNotification("s-$it", "alert-1", "Milo", null, NOW) }
+
+  @Test
+  fun badge_countsThePendingSightings_live() =
+      runTest(testDispatcher) {
+        val notifications = FakeNotificationRepository()
+        notifications.setPending(ALICE.uid, pending(2))
+        signIn(ALICE)
+        val viewModel = viewModelWithNotifications(notifications)
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.pendingSightings)
+
+        notifications.setPending(ALICE.uid, pending(3))
+        advanceUntilIdle()
+        assertEquals(3, viewModel.uiState.value.pendingSightings)
+      }
+
+  @Test
+  fun badge_failureKeepsTheLastCount() =
+      runTest(testDispatcher) {
+        val notifications = FakeNotificationRepository()
+        notifications.setPending(ALICE.uid, pending(2))
+        signIn(ALICE)
+        val viewModel = viewModelWithNotifications(notifications)
+        advanceUntilIdle()
+
+        notifications.setFailure(ALICE.uid, IllegalStateException("offline"))
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.pendingSightings)
+      }
+
+  @Test
+  fun badge_followsTheSignedInUser_andIsClearedOnSignOut() =
+      runTest(testDispatcher) {
+        val notifications = FakeNotificationRepository()
+        notifications.setPending(ALICE.uid, pending(4))
+        signIn(ALICE)
+        val viewModel = viewModelWithNotifications(notifications)
+        advanceUntilIdle()
+
+        signIn(BOB)
+        // A late update for Alice must not reach Bob's badge
+        notifications.setPending(ALICE.uid, pending(5))
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.pendingSightings)
+
+        notifications.setPending(BOB.uid, pending(1))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.pendingSightings)
+
+        authRepository.currentUser.value = null
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.pendingSightings)
+      }
+
+  @Test
+  fun badge_withoutANotificationRepository_staysAtZero() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.pendingSightings)
       }
 
   private companion object {

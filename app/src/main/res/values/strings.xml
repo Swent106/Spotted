@@ -28,6 +28,17 @@
         <item quantity="one">%d year</item>
         <item quantity="other">%d years</item>
     </plurals>
+
+    <!-- How and where the pet got lost, shown as chips on Alert detail -->
+    <string name="loss_cause_escaped_from_home">Escaped from home</string>
+    <string name="loss_cause_during_a_walk">Lost during a walk</string>
+    <string name="loss_cause_scared_by_noise">Ran off, scared by a noise</string>
+    <string name="loss_cause_during_move_or_trip">Lost during a move or trip</string>
+    <string name="loss_cause_stolen">Stolen</string>
+    <string name="loss_environment_city_centre">City centre</string>
+    <string name="loss_environment_suburb">Suburb</string>
+    <string name="loss_environment_village_or_rural">Village or countryside</string>
+    <string name="loss_environment_forest_or_mountain">Forest or mountain</string>
     <string name="add_pets_photo_section">PHOTO</string>
     <string name="add_pets_description_section">DESCRIPTION</string>
     <string name="add_pets_description_placeholder">Colour, size, collar…</string>

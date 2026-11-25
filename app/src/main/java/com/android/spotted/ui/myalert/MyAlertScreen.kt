@@ -125,7 +125,9 @@ fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
       onDismiss = viewModel::dismiss,
       onMarkFound = viewModel::markFound,
       // The system share sheet, launched from the View
-      onShare = { state.alert?.let { context.shareText(alertShareText(it, state.placeName)) } },
+      onShare = {
+        state.alert?.let { alertShareText(it, state.placeName).onSuccess(context::shareText) }
+      },
   )
 }
 

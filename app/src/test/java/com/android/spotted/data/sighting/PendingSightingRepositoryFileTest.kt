@@ -13,6 +13,7 @@ import com.android.spotted.model.sighting.PlaceType
 import com.android.spotted.model.sighting.Sighting
 import java.io.File
 import java.io.FileNotFoundException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -34,6 +35,7 @@ class PendingSightingRepositoryFileTest {
 
   @get:Rule val folder = TemporaryFolder()
 
+  @OptIn(ExperimentalCoroutinesApi::class)
   private val testScope = TestScope(UnconfinedTestDispatcher())
   private val directory by lazy { File(folder.root, "pending") }
 
@@ -42,6 +44,7 @@ class PendingSightingRepositoryFileTest {
   private var sendsScheduled = 0
 
   /** A new repository on the same folder: what the app sees after it was closed and reopened. */
+  @OptIn(ExperimentalCoroutinesApi::class)
   private fun openRepository() =
       PendingSightingRepositoryFile(
           directory = directory,
