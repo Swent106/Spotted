@@ -144,9 +144,7 @@ class VoteViewModel(
                       alreadyVoted = failure is AlreadyVotedException,
                       canVote = failure !is AlreadyVotedException && it.canVote,
                       notEligibleReason = reason ?: it.notEligibleReason,
-                      errorMessage =
-                          if (failure is AlreadyVotedException) null
-                          else VOTE_FAILED,
+                      errorMessage = if (failure is AlreadyVotedException) null else VOTE_FAILED,
                   )
                 }
               },
