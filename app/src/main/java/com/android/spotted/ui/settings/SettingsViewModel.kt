@@ -6,8 +6,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.android.spotted.data.Pet.PetRepositoryFirestore
+import com.android.spotted.data.alert.AlertRepositoryFirestore
+import com.android.spotted.data.photo.PhotoRepositoryFirestore
+import com.android.spotted.data.user.UserRepositoryFirestore
+import com.android.spotted.model.Pet.PetRepository
+import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
+import com.android.spotted.model.user.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,19 +22,27 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel of the Settings screen.
+ * ViewModel of the Settings screen: signing out and deleting the account.
  *
- * Signing out clears the signed-in user, so MainViewModel sends the app back to Sign in; this
- * ViewModel does not navigate itself.
+ * Both clear the signed-in user, so MainViewModel sends the app back to Sign in; this ViewModel
+ * does not navigate itself.
  *
- * @property authRepository signs the user out.
+ * @property authRepository gives the signed-in user, signs out and deletes the account.
+ * @property userRepository deletes the user's profile with the account.
+ * @property petRepository deletes the user's pets with the account.
+ * @property alertRepository deletes the user's alerts with the account.
  */
-class SettingsViewModel(private val authRepository: AuthRepository) : ViewModel() {
+class SettingsViewModel(
+    private val authRepository: AuthRepository,
+    private val userRepository: UserRepository,
+    private val petRepository: PetRepository,
+    private val alertRepository: AlertRepository,
+) : ViewModel() {
 
   private val _uiState = MutableStateFlow(SettingsUiState())
   val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-  /** Signs out; the profile is kept for the next sign-in. Ignored while already signing out. */
+  /** Signs out; the profile is kept for the next sign-in. Ignored while already leaving. */
   fun signOut() {
     if (_uiState.value.isLeaving) return
     _uiState.update { it.copy(isLeaving = true, errorMessage = null) }
@@ -38,11 +53,74 @@ class SettingsViewModel(private val authRepository: AuthRepository) : ViewModel(
     }
   }
 
+  /** Asks the user to confirm before [deleteAccount]; deletes nothing. */
+  fun requestDeleteAccount() {
+    if (_uiState.value.isLeaving) return
+    _uiState.update { it.copy(isDeleteConfirmationVisible = true) }
+  }
+
+  /** Hides the confirmation; deletes nothing. */
+  fun cancelDeleteAccount() {
+    _uiState.update { it.copy(isDeleteConfirmationVisible = false) }
+  }
+
+  /**
+   * Deletes the user's alerts, pets and profile, then their account, so the next sign-in starts
+   * from a new, empty profile. If Firebase refuses to delete the account (signed in too long ago),
+   * the profile is already gone, so the user is signed out instead: the next sign-in still asks for
+   * a new profile. Ignored while already leaving.
+   */
+  fun deleteAccount() {
+    if (_uiState.value.isLeaving) return
+    val user = authRepository.currentUser.value ?: return
+    _uiState.update {
+      it.copy(isLeaving = true, errorMessage = null, isDeleteConfirmationVisible = false)
+    }
+    viewModelScope.launch {
+      // Alerts and pets first: otherwise they would come back with the next profile of this
+      // Google account. Alerts before pets, as an alert points to its pet
+      val dataDeleted =
+          alertRepository.deleteAlertsByOwner(user.uid).isSuccess &&
+              deleteAllPetsOf(user.uid) &&
+              userRepository.deleteUser(user.uid).isSuccess
+      if (!dataDeleted) {
+        _uiState.update { it.copy(isLeaving = false, errorMessage = DELETE_FAILED) }
+        return@launch
+      }
+      authRepository.deleteAccount().onFailure {
+        authRepository.signOut().onFailure {
+          _uiState.update { it.copy(isLeaving = false, errorMessage = SIGN_OUT_FAILED) }
+        }
+      }
+    }
+  }
+
+  /** Deletes every pet of [uid]; false if one of them couldn't be loaded or deleted. */
+  private suspend fun deleteAllPetsOf(uid: String): Boolean {
+    val pets =
+        petRepository.getPetsByOwner(uid).getOrElse {
+          return false
+        }
+    return pets.all { petRepository.deletePet(it.id).isSuccess }
+  }
+
   companion object {
     const val SIGN_OUT_FAILED = "Couldn't sign you out. Please try again."
+    const val DELETE_FAILED = "Couldn't delete your account. Please try again."
 
     val Factory: ViewModelProvider.Factory = viewModelFactory {
-      initializer { SettingsViewModel(AuthRepositoryProvider.authRepository) }
+      initializer {
+        val photoRepository =
+            PhotoRepositoryFirestore(
+                this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]!!
+            )
+        SettingsViewModel(
+            authRepository = AuthRepositoryProvider.authRepository,
+            userRepository = UserRepositoryFirestore(),
+            petRepository = PetRepositoryFirestore(photoRepository = photoRepository),
+            alertRepository = AlertRepositoryFirestore(),
+        )
+      }
     }
   }
 }
