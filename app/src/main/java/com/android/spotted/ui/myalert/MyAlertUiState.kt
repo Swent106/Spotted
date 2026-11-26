@@ -3,6 +3,7 @@
 package com.android.spotted.ui.myalert
 
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.sighting.LikelyArea
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingStatus
@@ -19,6 +20,9 @@ import com.android.spotted.model.trust.TrustLevel
  * @property errorMessage Message to show, or null. Set with an [alert] when an action on it failed.
  * @property isClosed True once the owner said the pet is home; the screen then navigates away.
  * @property placeName Where the pet was last seen, e.g. "Ouchy, Lausanne"; null while unknown.
+ *
+ * "Mark as found" goes through four states: idle ([canMarkFound]), closing ([isClosing]), closed
+ * ([isClosed], the hook the thanks and found form flows start from) and failure ([errorMessage]).
  */
 data class MyAlertUiState(
     val alert: Alert? = null,
@@ -33,10 +37,19 @@ data class MyAlertUiState(
      */
     val isClosed: Boolean = false,
     val placeName: String? = null,
+    /** True while [MyAlertViewModel.markFound] is closing the alert. */
+    val isClosing: Boolean = false,
 ) {
   /** Hidden sightings that the owner can restore. */
   val hiddenSightings: List<Sighting>
     get() = sightings.filter { it.status == SightingStatus.VOTED_FALSE }
+
+  /**
+   * The owner can say the pet is home: the alert is open and not being closed. Only the owner gets
+   * an [alert] (anyone else gets an error instead), so this is never true for someone else.
+   */
+  val canMarkFound: Boolean
+    get() = alert?.status == AlertStatus.OPEN && !isClosed && !isClosing
 
   /**
    * Sightings drawn on the map: dismissed ones and those voted false are hidden there, but stay in

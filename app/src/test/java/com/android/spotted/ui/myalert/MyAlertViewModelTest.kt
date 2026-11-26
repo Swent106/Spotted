@@ -6,6 +6,7 @@ package com.android.spotted.ui.myalert
 import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
+import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.fakes.FakeAddressRepository
@@ -17,11 +18,13 @@ import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.trust.Verdict
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -423,7 +426,7 @@ class MyAlertViewModelTest {
       }
 
   @Test
-  fun markFoundFailure_showsErrorAndStaysOpen() =
+  fun markFound_failure_showsErrorAndStaysOpen() =
       runTest(testDispatcher) {
         signIn()
         val alert = alert()
@@ -438,6 +441,9 @@ class MyAlertViewModelTest {
         assertEquals("offline", viewModel.uiState.value.errorMessage)
         assertFalse(viewModel.uiState.value.isClosed)
         assertEquals(AlertStatus.OPEN, viewModel.uiState.value.alert?.status)
+        // Back to idle: the owner can try again
+        assertFalse(viewModel.uiState.value.isClosing)
+        assertTrue(viewModel.uiState.value.canMarkFound)
       }
 
   @Test
@@ -558,7 +564,7 @@ class MyAlertViewModelTest {
       }
 
   @Test
-  fun markFoundClosesAlertAndSetsNavigationFlag() =
+  fun markFound_success_closesAlertAndSetsNavigationFlag() =
       runTest(testDispatcher) {
         signIn()
         val alert = alert()
@@ -572,7 +578,109 @@ class MyAlertViewModelTest {
         assertTrue(viewModel.uiState.value.isClosed)
         assertEquals(AlertStatus.CLOSED, viewModel.uiState.value.alert?.status)
         assertEquals(NOW, viewModel.uiState.value.alert?.closedAtMillis)
+        assertFalse(viewModel.uiState.value.isClosing)
+        assertFalse(viewModel.uiState.value.canMarkFound)
       }
+
+  @Test
+  fun markFound_whileClosing_setsIsClosingAndDisablesMarkFound() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        alertRepository.publishAlert(alert)
+        val gated = GatedCloseRepository(alertRepository)
+        val viewModel = viewModel(alert.id, alertRepository = gated)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.canMarkFound)
+
+        viewModel.markFound()
+        runCurrent()
+
+        // closeAlert has been called and is still waiting for the gate
+        assertEquals(1, gated.closeCalls)
+        assertTrue(viewModel.uiState.value.isClosing)
+        assertFalse(viewModel.uiState.value.canMarkFound)
+        assertFalse(viewModel.uiState.value.isClosed)
+
+        gated.gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isClosing)
+        assertTrue(viewModel.uiState.value.isClosed)
+      }
+
+  @Test
+  fun markFound_doubleTap_closesTheAlertOnce() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        alertRepository.publishAlert(alert)
+        val gated = GatedCloseRepository(alertRepository)
+        val viewModel = viewModel(alert.id, alertRepository = gated)
+        advanceUntilIdle()
+
+        viewModel.markFound()
+        runCurrent()
+        // The first close is in flight: only the isClosing guard can reject this tap
+        viewModel.markFound()
+        gated.gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, gated.closeCalls)
+        assertTrue(viewModel.uiState.value.isClosed)
+        assertFalse(viewModel.uiState.value.isClosing)
+      }
+
+  @Test
+  fun confirmAndDismiss_whileClosing_areIgnored() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert()
+        val sighting = sighting(status = SightingStatus.PENDING)
+        alertRepository.publishAlert(alert)
+        sightingRepository.reportSighting(sighting)
+        val gated = GatedCloseRepository(alertRepository)
+        val viewModel = viewModel(alert.id, alertRepository = gated)
+        advanceUntilIdle()
+
+        viewModel.markFound()
+        runCurrent()
+        viewModel.confirm(sighting.id)
+        viewModel.dismiss(sighting.id)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isClosing)
+        assertEquals(SightingStatus.PENDING, sightingRepository.reportedSightings.single().status)
+        gated.gate.complete(Unit)
+      }
+
+  @Test
+  fun canMarkFound_alreadyClosedAlert_isFalse() =
+      runTest(testDispatcher) {
+        signIn()
+        val alert = alert().copy(status = AlertStatus.CLOSED, closedAtMillis = NOW - 1)
+        alertRepository.publishAlert(alert)
+        val viewModel = viewModel(alert.id)
+
+        advanceUntilIdle()
+
+        // Loaded, so it is false because the alert is closed, not because it is missing
+        assertEquals(alert, viewModel.uiState.value.alert)
+        assertFalse(viewModel.uiState.value.canMarkFound)
+      }
+
+  /** Delegates to [delegate], but [closeAlert] waits for [gate], so a close stays in flight. */
+  private class GatedCloseRepository(private val delegate: AlertRepository) :
+      AlertRepository by delegate {
+    val gate = CompletableDeferred<Unit>()
+    var closeCalls = 0
+
+    override suspend fun closeAlert(alertId: String): Result<Unit> {
+      closeCalls++
+      gate.await()
+      return delegate.closeAlert(alertId)
+    }
+  }
 
   @Test
   fun placeName_isWhereThePetWasLastSeen() =
@@ -603,7 +711,11 @@ class MyAlertViewModelTest {
     authRepository.signInWithGoogle("token")
   }
 
-  private fun viewModel(alertId: String, addressRepository: FakeAddressRepository? = null) =
+  private fun viewModel(
+      alertId: String,
+      addressRepository: FakeAddressRepository? = null,
+      alertRepository: AlertRepository = this.alertRepository,
+  ) =
       MyAlertViewModel(
           alertId = alertId,
           alertRepository = alertRepository,
