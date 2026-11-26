@@ -338,7 +338,6 @@ fun NavGraphBuilder.homeDestinations(
       HomeScreen(
           onReportMissingClick = navigation.onReportMissingClick,
           onAlertClick = navigation.onAlertClick,
-          onSeenPetClick = navigation.onSeenPetClick,
           onAddPetClick = navigation.onAddPetClick,
           onPetClick = navigation.onPetClick,
           onMissingPetClick = navigation.onMissingPetClick,
@@ -452,9 +451,6 @@ fun NavGraphBuilder.homeDestinations(
             onAlertClick = { alertId ->
               if (entry.isResumed()) navController.navigate(Route.alertDetail(alertId))
             },
-            onSeenPetClick = { alertId ->
-              if (entry.isResumed()) navController.navigate(Route.reportSighting(alertId))
-            },
             onAddPetClick = dropUnlessResumed { navController.navigate(Route.ADD_PET) },
             onPetClick = { petId ->
               if (entry.isResumed()) navController.navigate(Route.petProfile(petId))
@@ -556,7 +552,6 @@ fun NavGraphBuilder.homeDestinations(
 data class HomeNavigation(
     val onReportMissingClick: () -> Unit,
     val onAlertClick: (alertId: String) -> Unit,
-    val onSeenPetClick: (alertId: String) -> Unit,
     val onAddPetClick: () -> Unit = {},
     val onPetClick: (petId: String) -> Unit = {},
     /** Opens My alert for one of the user's missing pets. */

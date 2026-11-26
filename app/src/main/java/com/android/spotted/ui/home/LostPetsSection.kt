@@ -4,21 +4,14 @@ package com.android.spotted.ui.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.spotted.R
-import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
 
@@ -55,14 +47,16 @@ internal fun areaLabel(
   return if (homeArea.isBlank()) radius else "${homeArea.trim().uppercase()} · $radius"
 }
 
-/** "Lost near you": title with the count, then the alerts, newest first. */
+/**
+ * "Lost near you": title with the number of cards, then the [AlertCarousel] of
+ * [HomeUiState.carouselAlerts], nearest first (Figma "05f · Home · Lost pets carousel").
+ */
 internal fun LazyListScope.lostPetsSection(
     state: HomeUiState,
     onAlertClick: (String) -> Unit,
-    onSeenPetClick: (String) -> Unit,
     onRetryClick: () -> Unit,
 ) {
-  val lostPets = state.lostPetsNearby
+  val lostPets = state.carouselAlerts
   val error = lostPets.errorMessage
 
   item(key = "alertsTitle") {
@@ -87,17 +81,16 @@ internal fun LazyListScope.lostPetsSection(
     item(key = "alertsOfflineBanner") { OfflineBanner(onRetryClick) }
   }
 
-  // The first alert is the newest (HomeViewModel sorts them): it is highlighted, like Milo in Figma
-  itemsIndexed(lostPets.items, key = { _, alert -> "alert_${alert.id}" }) { index, alert ->
-    AlertCard(
-        alert,
-        featured = index == 0,
-        state.nowMillis,
-        state.distanceTexts[alert.id],
-        onAlertClick,
-        onSeenPetClick,
-        Modifier.padding(top = if (index == 0) 10.dp else 16.dp),
-    )
+  if (lostPets.items.isNotEmpty()) {
+    item(key = "alertCarousel") {
+      AlertCarousel(
+          lostPets.items,
+          state.nowMillis,
+          state.distanceTexts,
+          onAlertClick,
+          Modifier.padding(top = 14.dp),
+      )
+    }
   }
   if (error != null && lostPets.items.isNotEmpty()) {
     item(key = "alertsError") { AlertsError(error, onRetryClick) }
@@ -181,101 +174,6 @@ private fun LostPetsTitle(homeArea: String, alertRadiusKm: Int, count: Int) {
           style = jakarta(17, 22f, FontWeight.ExtraBold, SpottedTheme.colors.ink),
           modifier = Modifier.testTag(HomeScreenTestTags.ALERTS_TITLE),
       )
-    }
-  }
-}
-
-/**
- * One lost pet: photo, name, species, time lost, distance when known; the featured one has "I have
- * seen this pet".
- */
-@Composable
-private fun AlertCard(
-    alert: Alert,
-    featured: Boolean,
-    nowMillis: Long,
-    distanceText: String?,
-    onAlertClick: (String) -> Unit,
-    onSeenPetClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-  Column(
-      verticalArrangement = Arrangement.spacedBy(14.dp),
-      modifier =
-          modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(22.dp))
-              .background(SpottedTheme.colors.surface)
-              .clickable(onClickLabel = "See ${alert.petName}'s alert") { onAlertClick(alert.id) }
-              .padding(16.dp)
-              .testTag(HomeScreenTestTags.alertCard(alert.id)),
-  ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      PetPhoto(
-          alert.petPhotoUrl,
-          Modifier.size(if (featured) 78.dp else 58.dp)
-              .clip(RoundedCornerShape(if (featured) 18.dp else 15.dp))
-              .background(
-                  if (featured) SpottedTheme.colors.featuredPhotoBackground
-                  else SpottedTheme.colors.avatarBackground
-              ),
-      )
-      Spacer(Modifier.width(14.dp))
-      Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
-          Text(
-              alert.petName,
-              style =
-                  if (featured) jakarta(20, 26f, FontWeight.SemiBold, SpottedTheme.colors.ink)
-                  else jakarta(17, 22f, FontWeight.SemiBold, SpottedTheme.colors.ink),
-          )
-          if (featured) {
-            Spacer(Modifier.width(9.dp))
-            Text(
-                "More info",
-                style = jakarta(14, 18f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
-            )
-          }
-        }
-        Text(
-            alert.petSpecies.name.lowercase().replaceFirstChar { it.uppercase() },
-            style = jakarta(14, 18f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
-        )
-        Text(
-            "Lost ${timeAgo(alert.lostAtMillis, nowMillis)}",
-            style =
-                jakarta(
-                    13,
-                    17f,
-                    FontWeight.SemiBold,
-                    if (featured) SpottedTheme.colors.lostRed
-                    else SpottedTheme.colors.textSecondary,
-                ),
-        )
-        if (distanceText != null) {
-          Text(
-              distanceText,
-              style = jakarta(13, 17f, FontWeight.Medium, SpottedTheme.colors.textSecondary),
-              modifier = Modifier.testTag(HomeScreenTestTags.alertDistance(alert.id)),
-          )
-        }
-      }
-    }
-    if (featured) {
-      Button(
-          onClick = { onSeenPetClick(alert.id) },
-          shape = RoundedCornerShape(14.dp),
-          colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
-          modifier =
-              Modifier.fillMaxWidth()
-                  .height(50.dp)
-                  .testTag(HomeScreenTestTags.seenButton(alert.id)),
-      ) {
-        Text(
-            "I have seen this pet",
-            style = jakarta(15, 20f, FontWeight.SemiBold, SpottedTheme.colors.onAccent),
-        )
-      }
     }
   }
 }

@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.ui.addpets.AddPetsScreenTestTags
+import com.android.spotted.ui.alertdetail.AlertDetailTestTags
 import com.android.spotted.ui.authentification.SignInScreenTestTags
 import com.android.spotted.ui.components.MapPickerTestTags
 import com.android.spotted.ui.home.HomeScreenTestTags
@@ -156,17 +157,24 @@ class OwnerFlowTest : EndToEndTest() {
           .fetchSemanticsNodes()
           .isNotEmpty()
 
-  /** The passerby finds the alert on Home and reports seeing the pet. Returns the sighting's id. */
+  /**
+   * The passerby finds the alert in the Home carousel, opens it, and reports seeing the pet from
+   * Alert detail. Returns the sighting's id.
+   */
   private fun reportSightingOf(alertId: String, reporterId: String): String {
     val card = HomeScreenTestTags.alertCard(alertId)
     waitUntil("The passerby should see the alert in \"Lost near you\"") {
       runCatching {
-            node(HomeScreenTestTags.BODY).performScrollToNode(hasTestTag(card))
+            node(HomeScreenTestTags.BODY)
+                .performScrollToNode(hasTestTag(HomeScreenTestTags.ALERT_CAROUSEL))
+            node(HomeScreenTestTags.ALERT_CAROUSEL).performScrollToNode(hasTestTag(card))
             true
           }
           .getOrDefault(false)
     }
-    node(HomeScreenTestTags.seenButton(alertId)).scrollToAndClick()
+    node(card).performClick()
+    waitFor(AlertDetailTestTags.REPORT_SIGHTING, "Tapping the card should open Alert detail")
+    node(AlertDetailTestTags.REPORT_SIGHTING).scrollToAndClick()
     waitFor(ReportSightingScreenTestTags.SCREEN, "\"I have seen this pet\" should open the form")
     // The alert comes preselected: its pet is listed in the form
     waitFor(
@@ -183,7 +191,10 @@ class OwnerFlowTest : EndToEndTest() {
         .performScrollTo()
         .assertIsEnabled()
         .performClick()
-    waitFor(HomeScreenTestTags.SCREEN, "Home should show again once the sighting is sent")
+    // The form closes back to where it was opened from: Alert detail, then back to Home
+    waitFor(AlertDetailTestTags.SCREEN, "Alert detail should show again once the sighting is sent")
+    node(AlertDetailTestTags.BACK).performClick()
+    waitFor(HomeScreenTestTags.SCREEN, "Home should show again after leaving Alert detail")
 
     val sighting = documents("sightings", "reporterId", reporterId).single()
     assertEquals("The sighting should be for the alert", alertId, sighting["alertId"])
