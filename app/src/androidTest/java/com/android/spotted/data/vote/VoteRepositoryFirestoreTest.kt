@@ -115,6 +115,9 @@ class VoteRepositoryFirestoreTest {
   fun castVote_reachingTheThreshold_hidesTheSightingAndPenalisesTheReporter() = runTest {
     seedEligibleVoter()
     val sightingId = seedSighting(voteWeight = 1.5)
+    val reporterId = reporterOf(sightingId)
+    val beforePenalty = TrustScore(0.6, 5, falseSightings = 1, penaltiesApplied = 2)
+    seedTrust(reporterId, beforePenalty)
 
     repository.castVote(sightingId, voterId()).getOrThrow()
 
@@ -122,10 +125,38 @@ class VoteRepositoryFirestoreTest {
     assertEquals("VOTED_FALSE", sighting.getString("status"))
     assertEquals("FALSE", sighting.getString("trustVerdict"))
     assertEquals(2.0, sighting.getDouble("voteWeight")!!, 1e-9)
+    // The trust just before the penalty, which the restore needs to cancel it
+    assertEquals(penaltyOf(beforePenalty), sighting.get("penalty"))
     assertEquals(
-        TrustScore.INITIAL.after(Verdict.FALSE),
-        trustRepository().getTrust(sighting.getString("reporterId")!!).getOrThrow(),
+        beforePenalty.after(Verdict.FALSE),
+        trustRepository().getTrust(reporterId).getOrThrow(),
     )
+  }
+
+  @Test
+  fun castVote_onASightingAlreadyHiddenByVotes_onlyAddsWeight() = runTest {
+    seedEligibleVoter()
+    val beforePenalty = TrustScore(0.6, 5)
+    val sightingId =
+        seedSighting(
+            voteWeight = 2.0,
+            status = "VOTED_FALSE",
+            trustVerdict = "FALSE",
+            extraFields = mapOf("penalty" to mapValueOf(beforePenalty)),
+        )
+    val reporterId = reporterOf(sightingId)
+    val penalised = beforePenalty.after(Verdict.FALSE)
+    seedTrust(reporterId, penalised)
+
+    repository.castVote(sightingId, voterId()).getOrThrow()
+
+    val sighting = sightingSnapshot(sightingId)
+    assertEquals(2.5, sighting.getDouble("voteWeight")!!, 1e-9)
+    assertEquals("VOTED_FALSE", sighting.getString("status"))
+    assertEquals("FALSE", sighting.getString("trustVerdict"))
+    assertEquals(penaltyOf(beforePenalty), sighting.get("penalty"))
+    // Penalised once: a second penalty would halve the score again
+    assertEquals(penalised, trustRepository().getTrust(reporterId).getOrThrow())
   }
 
   @Test
@@ -204,6 +235,7 @@ class VoteRepositoryFirestoreTest {
       voteWeight: Double? = null,
       status: String = "PENDING",
       trustVerdict: String? = null,
+      extraFields: Map<String, Any> = emptyMap(),
   ): String {
     val sightingId = "sighting-${UUID.randomUUID()}"
     val reporterId = "reporter-${UUID.randomUUID()}"
@@ -234,13 +266,48 @@ class VoteRepositoryFirestoreTest {
             "seenAtMillis" to mapOf("integerValue" to "1000000"),
             "species" to stringValue("DOG"),
             "status" to stringValue(status),
-        ) + optional,
+        ) + optional + extraFields,
     )
     seededDocuments += "trust/$reporterId"
     // The vote cast by a test, if any, is deleted with it
     seededDocuments += "sightings/$sightingId/votes/${voterId()}"
     return sightingId
   }
+
+  private suspend fun reporterOf(sightingId: String): String =
+      checkNotNull(sightingSnapshot(sightingId).getString("reporterId"))
+
+  /** Writes [trust] as the trust of [uid], bypassing the rules (no client may write it). */
+  private suspend fun seedTrust(uid: String, trust: TrustScore) {
+    seedDocument(
+        "trust",
+        uid,
+        trustFields(trust) + ("lastSightingId" to stringValue("an-older-sighting")),
+    )
+  }
+
+  /** [trust] as a Firestore REST map value, as `castVote` saves it in a sighting's `penalty`. */
+  private fun mapValueOf(trust: TrustScore): Map<String, Any> =
+      mapOf("mapValue" to mapOf("fields" to trustFields(trust)))
+
+  private fun trustFields(trust: TrustScore): Map<String, Any> =
+      mapOf(
+          "score" to mapOf("doubleValue" to trust.score),
+          "judged" to integerValue(trust.judged),
+          "falseSightings" to integerValue(trust.falseSightings),
+          "penaltiesApplied" to integerValue(trust.penaltiesApplied),
+      )
+
+  /** The `penalty` of a sighting penalised when its reporter's trust was [trust], as read back. */
+  private fun penaltyOf(trust: TrustScore): Map<String, Any> =
+      mapOf(
+          "score" to trust.score,
+          "judged" to trust.judged.toLong(),
+          "falseSightings" to trust.falseSightings.toLong(),
+          "penaltiesApplied" to trust.penaltiesApplied.toLong(),
+      )
+
+  private fun integerValue(value: Int): Map<String, Any> = mapOf("integerValue" to value.toString())
 
   private suspend fun seedDocument(collection: String, id: String, fields: Map<String, Any>) {
     val response =

@@ -20,6 +20,12 @@ service cloud.firestore {
     // trustVerdict (CONFIRMED or FALSE) is set once, when the sighting moves its
     // reporter's trust score (see trust/{uid}).
 
+    // Total vote weight that hides a sighting (#463): VoteRules.THRESHOLD in
+    // model/vote/VoteRules.kt. VoteRulesTest fails if the two differ.
+    function voteThreshold() {
+      return 2.0;
+    }
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -475,7 +481,7 @@ service cloud.firestore {
       // The "This looks false" votes (#463, VoteRepositoryFirestore.castVote). In the same write as
       // their new vote (whose own rules check who may vote), a voter adds their trust score to
       // voteWeight (VoteRules.weightAfter). The vote that brings it to the threshold
-      // (VoteRules.THRESHOLD, 2.0) hides the sighting: VOTED_FALSE, a FALSE verdict, and the
+      // (voteThreshold()) hides the sighting: VOTED_FALSE, a FALSE verdict, and the
       // reporter's trust before it (penalty), in the same write as the trust update it causes
       // (see trust/{uid}). It must hide it, unless the sighting was already judged: then the
       // votes only add weight, so a sighting is penalised once.
@@ -490,7 +496,7 @@ service cloud.firestore {
       }
 
       function reachesThreshold(weight) {
-        return weight >= 2.0;
+        return weight >= voteThreshold();
       }
 
       function hidesForVotes() {
@@ -660,7 +666,7 @@ service cloud.firestore {
 
       // The sighting named by lastSightingId: reported by this user, not judged before this write,
       // and hidden by it with a FALSE verdict, by the vote of the signed-in user that brings its
-      // weight to the threshold (VoteRules.THRESHOLD; the weight itself is checked on the
+      // weight to the threshold (voteThreshold(); the weight itself is checked on the
       // sighting). It saves the trust before the penalty, which a restore needs.
       function penalisesForVotesNow() {
         let before = get(judgedSightingPath()).data;
@@ -669,7 +675,7 @@ service cloud.firestore {
         return before.reporterId == uid
           && !('trustVerdict' in before)
           && after.get('trustVerdict', null) == 'FALSE'
-          && after.get('voteWeight', 0) >= 2.0
+          && after.get('voteWeight', 0) >= voteThreshold()
           && !exists(votePath) && existsAfter(votePath)
           && after.get('penalty', null) == {
                'score': scoreBefore(),

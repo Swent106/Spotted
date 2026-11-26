@@ -3163,7 +3163,11 @@ describe("Firestore vote rules", () => {
   });
 
   it("vote threshold: a judged sighting only gains weight, it is never penalised twice", async () => {
-    for (const judged of [{ status: "CONFIRMED", trustVerdict: "CONFIRMED" }]) {
+    for (const judged of [
+      { status: "CONFIRMED", trustVerdict: "CONFIRMED" },
+      // Already hidden by the votes: one more vote must not penalise the reporter again
+      { status: "VOTED_FALSE", trustVerdict: "FALSE", penalty: trustOf(0.6, 5) },
+    ]) {
       await testEnvironment.clearFirestore();
       await seedVotedSighting(1.5, judged);
       await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });

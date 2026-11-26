@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
  * Each vote adds the voter's trust score to the sighting's `voteWeight` ([VoteRules.weightAfter]),
  * in the same transaction. The vote that brings it to [VoteRules.THRESHOLD] also hides the sighting
  * (`VOTED_FALSE`) and applies a false verdict to its reporter's trust, once per sighting: a judged
- * sighting (e.g. confirmed by the owner, or already hidden and restored) only gains weight.
+ * sighting (confirmed by the owner, or already hidden by the votes) only gains weight.
  *
  * Each vote also updates the voter's `voteQuota/{voterId}`, the times of their last 10 votes, in
  * the same transaction: the Firestore rules read it to allow at most 10 votes in 24 hours, and
