@@ -226,7 +226,7 @@ private fun AlertDetails(
     shareErrorMessage?.let { message ->
       Text(
           text = message,
-          color = MaterialTheme.colorScheme.error,
+          color = SpottedTheme.colors.error,
           modifier =
               Modifier.fillMaxWidth()
                   .background(SpottedTheme.colors.surface)

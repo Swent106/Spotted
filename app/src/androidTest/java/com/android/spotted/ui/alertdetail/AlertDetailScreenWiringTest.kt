@@ -115,19 +115,19 @@ class AlertDetailScreenWiringTest {
 
   @Test
   fun shareButton_opensTheShareSheetWithThePetAndPlace() {
-      setScreen()
+    setScreen()
 
-      composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).performClick()
-      composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).performClick()
+    composeTestRule.waitForIdle()
 
-      val chooser = context.started.single()
-      assertEquals(Intent.ACTION_CHOOSER, chooser.action)
-      @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
-      assertEquals(Intent.ACTION_SEND, send.action)
-      assertEquals("text/plain", send.type)
-      val text = send.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-      assertTrue(text, text.startsWith("Luna is missing near 46.5197, 6.6323."))
-      assertTrue(text, text.endsWith(buildAlertLink(alert.id).getOrThrow()))
+    val chooser = context.started.single()
+    assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+    @Suppress("DEPRECATION") val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+    assertEquals(Intent.ACTION_SEND, send.action)
+    assertEquals("text/plain", send.type)
+    val text = send.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+    assertTrue(text, text.startsWith("Luna is missing near 46.5197, 6.6323."))
+    assertTrue(text, text.endsWith(buildAlertLink(alert.id).getOrThrow()))
   }
 
   @Test
