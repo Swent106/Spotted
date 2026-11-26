@@ -3,8 +3,10 @@ package com.android.spotted.model.vote
 
 import com.android.spotted.model.trust.TrustScore
 import com.android.spotted.model.vote.VoteRules.THRESHOLD
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,6 +55,24 @@ class VoteRulesTest {
     val total = (1..5).fold(0.0) { weight, _ -> VoteRules.weightAfter(weight, voter(0.4)) }
 
     assertTrue(VoteRules.reachesThreshold(total))
+  }
+
+  // The Firestore rules recompute the threshold on their own: they must use the same value
+  @Test
+  fun threshold_isTheOneTheFirestoreRulesUse() {
+    val rulesFile =
+        generateSequence(File(System.getProperty("user.dir")).absoluteFile) { it.parentFile }
+            .map { File(it, "firebase/firestore.rules") }
+            .firstOrNull { it.exists() }
+    assertNotNull("firebase/firestore.rules not found", rulesFile)
+
+    val rulesThreshold =
+        Regex("""function voteThreshold\(\) \{\s*return ([0-9.]+);""")
+            .find(rulesFile!!.readText())
+            ?.groupValues
+            ?.get(1)
+    assertNotNull("voteThreshold() not found in firestore.rules", rulesThreshold)
+    assertEquals(THRESHOLD, rulesThreshold!!.toDouble(), 0.0)
   }
 
   private fun voter(score: Double) = TrustScore(score, judged = 5)

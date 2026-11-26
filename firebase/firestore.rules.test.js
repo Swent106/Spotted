@@ -890,6 +890,15 @@ describe("Firestore alert access rules", () => {
     );
   });
 
+  it("close: a closed alert can't get a new closing time", async () => {
+    await seedAlert(closing);
+    const db = firestoreForUser("owner-1");
+
+    await assertFails(
+      updateDoc(doc(db, "alerts", "alert-1"), { status: "CLOSED", closedAtMillis: 3000000 })
+    );
+  });
+
   it("update: owner cannot move a closed alert", async () => {
     await seedAlert(closing);
     const db = firestoreForUser("owner-1");
@@ -3165,6 +3174,9 @@ describe("Firestore vote rules", () => {
   it("vote threshold: a judged sighting only gains weight, it is never penalised twice", async () => {
     for (const judged of [
       { status: "CONFIRMED", trustVerdict: "CONFIRMED" },
+      // Already hidden by the votes: one more vote must not penalise the reporter again
+      { status: "VOTED_FALSE", trustVerdict: "FALSE", penalty: trustOf(0.6, 5) },
+      // Hidden, then restored: the votes can never hide it again
       { status: "PENDING", trustVerdict: "FALSE", penaltyCancelled: true },
     ]) {
       await testEnvironment.clearFirestore();
@@ -3298,5 +3310,277 @@ describe("Firestore vote rules", () => {
 
     await assertSucceeds(updateDoc(sighting, { status: "CONFIRMED" }));
     await assertSucceeds(updateDoc(sighting, { status: "DISMISSED" }));
+  });
+});
+
+describe("Firestore thanks rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  // alert-1 of owner-1, closed, for Milo; sighting-1 sent on it by helper-1
+  async function seed({ alert = {}, sighting = {} } = {}) {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const alertDoc = {
+        id: "alert-1",
+        ownerId: "owner-1",
+        status: "CLOSED",
+        petName: "Milo",
+        ...alert,
+      };
+      // A field set to undefined is left out (e.g. an alert stored without a status)
+      for (const key of Object.keys(alertDoc)) {
+        if (alertDoc[key] === undefined) delete alertDoc[key];
+      }
+      await setDoc(doc(db, "alerts", "alert-1"), alertDoc);
+      await setDoc(doc(db, "sightings", "sighting-1"), {
+        id: "sighting-1",
+        reporterId: "helper-1",
+        alertId: "alert-1",
+        ...sighting,
+      });
+    });
+  }
+
+  function thanksData(overrides = {}) {
+    return {
+      alertId: "alert-1",
+      ownerId: "owner-1",
+      helperId: "helper-1",
+      sightingId: "sighting-1",
+      petName: "Milo",
+      thankedAtMillis: 1000,
+      ...overrides,
+    };
+  }
+
+  const thank = (userId, overrides = {}, id = "alert-1_helper-1") =>
+    setDoc(doc(firestoreForUser(userId), "thanks", id), thanksData(overrides));
+
+  it("thanks: the owner of a closed alert can thank a helper who sent a sighting on it", async () => {
+    await seed();
+
+    await assertSucceeds(thank("owner-1"));
+  });
+
+  it("thanks: a helper can't be thanked twice for the same alert", async () => {
+    await seed();
+    await assertSucceeds(thank("owner-1"));
+
+    await assertFails(thank("owner-1", { thankedAtMillis: 2000 }));
+  });
+
+  it("thanks: an open alert or an alert without a status can't be thanked for", async () => {
+    await seed({ alert: { status: "OPEN" } });
+    await assertFails(thank("owner-1"));
+
+    await seed({ alert: { status: undefined } });
+    await assertFails(thank("owner-1"));
+  });
+
+  it("thanks: only the alert's owner can thank, and not signed out", async () => {
+    await seed();
+
+    await assertFails(thank("someone-else", { ownerId: "someone-else" }));
+    await assertFails(thank("someone-else"));
+    await assertFails(thank(null));
+    // Only the ownerId check refuses this one: the real owner can't store someone else as owner
+    await assertFails(thank("owner-1", { ownerId: "someone-else" }));
+  });
+
+  it("thanks: the helper must have sent the sighting, on this alert", async () => {
+    await seed({ sighting: { reporterId: "helper-2" } });
+    await assertFails(thank("owner-1"));
+
+    await seed({ sighting: { alertId: "alert-2" } });
+    await assertFails(thank("owner-1"));
+
+    await seed();
+    await assertFails(thank("owner-1", { sightingId: "missing" }));
+  });
+
+  it("thanks: the owner can't thank themselves", async () => {
+    await seed({ sighting: { reporterId: "owner-1" } });
+
+    await assertFails(thank("owner-1", { helperId: "owner-1" }, "alert-1_owner-1"));
+  });
+
+  it("thanks: a wrong id, pet name, time or extra field is denied", async () => {
+    await seed();
+
+    await assertFails(thank("owner-1", {}, "another-id"));
+    await assertFails(thank("owner-1", { petName: "Rex" }));
+    await assertFails(thank("owner-1", { thankedAtMillis: Date.now() + 10 * 60 * 1000 }));
+    await assertFails(thank("owner-1", { thankedAtMillis: "yesterday" }));
+    await assertFails(thank("owner-1", { message: "Merci !" }));
+  });
+
+  it("thanks: a thanks can be neither changed nor deleted", async () => {
+    await seed();
+    await assertSucceeds(thank("owner-1"));
+
+    for (const userId of ["owner-1", "helper-1"]) {
+      const ref = doc(firestoreForUser(userId), "thanks", "alert-1_helper-1");
+      await assertFails(updateDoc(ref, { petName: "Rex" }));
+      await assertFails(deleteDoc(ref));
+    }
+  });
+
+  it("thanks read: any signed-in user can read and count a helper's thanks", async () => {
+    await seed();
+    await assertSucceeds(thank("owner-1"));
+
+    const helperThanks = (db) =>
+      query(collection(db, "thanks"), where("helperId", "==", "helper-1"));
+    const anyone = firestoreForUser("anyone");
+    await assertSucceeds(getDoc(doc(anyone, "thanks", "alert-1_helper-1")));
+    await assertSucceeds(getDocs(helperThanks(anyone)));
+    const count = await assertSucceeds(getCountFromServer(helperThanks(anyone)));
+    assert.equal(count.data().count, 1);
+
+    const signedOut = firestoreForUser(null);
+    await assertFails(getDoc(doc(signedOut, "thanks", "alert-1_helper-1")));
+    await assertFails(getCountFromServer(helperThanks(signedOut)));
+  });
+});
+describe("Firestore user report rules", () => {
+  let testEnvironment;
+
+  before(async () => {
+    const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080").split(":");
+
+    testEnvironment = await initializeTestEnvironment({
+      projectId: "demo-spotted-rules",
+      firestore: {
+        host,
+        port: Number(port),
+        rules: fs.readFileSync(path.join(__dirname, "firestore.rules"), "utf8"),
+      },
+    });
+  });
+
+  beforeEach(async () => {
+    await testEnvironment.clearFirestore();
+  });
+
+  after(async () => {
+    await testEnvironment.cleanup();
+  });
+
+  function firestoreForUser(userId) {
+    return userId === null
+      ? testEnvironment.unauthenticatedContext().firestore()
+      : testEnvironment.authenticatedContext(userId).firestore();
+  }
+
+  const MINUTE = 60 * 1000;
+
+  const validReport = (overrides = {}) => ({
+    reporterId: "alice",
+    reportedUserId: "spammer",
+    targetId: "sighting-1",
+    reason: "FAKE_SIGHTING",
+    createdAtMillis: Date.now(),
+    ...overrides,
+  });
+
+  /** reports/{reporterId_targetId}, the id ReportRepositoryFirestore writes. */
+  const reportDoc = (db, report) => doc(db, "reports", `${report.reporterId}_${report.targetId}`);
+
+  const send = (userId, report) => setDoc(reportDoc(firestoreForUser(userId), report), report);
+
+  it("report: a signed-in user can report someone else, for every reason", async () => {
+    for (const reason of ["FAKE_SIGHTING", "SPAM", "INAPPROPRIATE", "OTHER"]) {
+      await assertSucceeds(send("alice", validReport({ reason, targetId: `sighting-${reason}` })));
+    }
+  });
+
+  it("report: the same target only once per reporter, but other users can report it", async () => {
+    await assertSucceeds(send("alice", validReport()));
+
+    await assertFails(send("alice", validReport({ reason: "SPAM" })));
+    await assertSucceeds(send("bob", validReport({ reporterId: "bob" })));
+    await assertSucceeds(send("alice", validReport({ targetId: "sighting-2" })));
+  });
+
+  it("report: an id that isn't reporterId_targetId is denied", async () => {
+    const db = firestoreForUser("alice");
+
+    await assertFails(setDoc(doc(db, "reports", "random-id"), validReport()));
+    await assertFails(setDoc(doc(db, "reports", "alice_sighting-2"), validReport()));
+    await assertFails(setDoc(doc(db, "reports", "bob_sighting-1"), validReport()));
+  });
+
+  it("report: signed out, in someone else's name, or about yourself is denied", async () => {
+    await assertFails(send(null, validReport()));
+    await assertFails(send("bob", validReport()));
+    await assertFails(send("alice", validReport({ reportedUserId: "alice" })));
+  });
+
+  it("report: a missing or extra field, or a wrong value, is denied", async () => {
+    const { reason, ...withoutReason } = validReport();
+
+    for (const data of [
+      withoutReason,
+      validReport({ comment: "rude" }),
+      validReport({ reason: "BORING" }),
+      validReport({ reportedUserId: "" }),
+      validReport({ targetId: "" }),
+      validReport({ createdAtMillis: "yesterday" }),
+    ]) {
+      await assertFails(send("alice", data));
+    }
+  });
+
+  it("report: the time must be now, give or take 5 minutes", async () => {
+    const at = (offset, targetId) =>
+      validReport({ createdAtMillis: Date.now() + offset, targetId });
+
+    await assertSucceeds(send("alice", at(4 * MINUTE, "t1")));
+    await assertSucceeds(send("alice", at(-4 * MINUTE, "t2")));
+    await assertFails(send("alice", at(6 * MINUTE, "t3")));
+    await assertFails(send("alice", at(-6 * MINUTE, "t4")));
+    await assertFails(send("alice", validReport({ createdAtMillis: 1, targetId: "t5" })));
+  });
+
+  it("report: nobody can read, list, change or delete a report", async () => {
+    const report = validReport();
+    await testEnvironment.withSecurityRulesDisabled((context) =>
+      setDoc(reportDoc(context.firestore(), report), report),
+    );
+
+    for (const userId of ["alice", "spammer", "bob", null]) {
+      const db = firestoreForUser(userId);
+      await assertFails(getDoc(reportDoc(db, report)));
+      await assertFails(getDocs(collection(db, "reports")));
+      await assertFails(updateDoc(reportDoc(db, report), { reason: "SPAM" }));
+      await assertFails(deleteDoc(reportDoc(db, report)));
+    }
   });
 });

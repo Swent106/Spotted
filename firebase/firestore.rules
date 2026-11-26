@@ -20,6 +20,12 @@ service cloud.firestore {
     // trustVerdict (CONFIRMED or FALSE) is set once, when the sighting moves its
     // reporter's trust score (see trust/{uid}).
 
+    // Total vote weight that hides a sighting (#463): VoteRules.THRESHOLD in
+    // model/vote/VoteRules.kt. VoteRulesTest fails if the two differ.
+    function voteThreshold() {
+      return 2.0;
+    }
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -105,6 +111,34 @@ service cloud.firestore {
           && blockedUid != userId
           && request.resource.data.keys().hasOnly(['blockedUid'])
           && request.resource.data.blockedUid == blockedUid;
+    }
+
+    // reports/{reporterId_targetId}: a user reported to the moderators, written by
+    // ReportRepositoryFirestore. A signed-in user can only create a report as themselves, about
+    // someone else. The id is fixed by the reporter and the target, so a user reports a given alert
+    // or sighting once: a second report would be an update, which is denied. Reports are for the
+    // moderators (Firebase console): nobody can read, change or delete one from the app.
+    // Whether the target belongs to the reported user is left to the moderators (one read less).
+    match /reports/{reportId} {
+      function validReport(d) {
+        return d.keys().hasOnly(['reporterId', 'reportedUserId', 'targetId', 'reason', 'createdAtMillis'])
+            && d.keys().hasAll(['reporterId', 'reportedUserId', 'targetId', 'reason', 'createdAtMillis'])
+            && d.reporterId == request.auth.uid
+            && d.reportedUserId is string && d.reportedUserId.size() > 0
+            && d.reportedUserId.size() <= 128
+            && d.reportedUserId != request.auth.uid
+            && d.targetId is string && d.targetId.size() > 0 && d.targetId.size() <= 128
+            && d.reason in ['FAKE_SIGHTING', 'SPAM', 'INAPPROPRIATE', 'OTHER']
+            // Now, give or take 5 minutes (clocks are not always in sync)
+            && d.createdAtMillis is int
+            && d.createdAtMillis >= request.time.toMillis() - 300000
+            && d.createdAtMillis <= request.time.toMillis() + 300000;
+      }
+
+      allow create: if isAuthenticated()
+          && validReport(request.resource.data)
+          && reportId == request.auth.uid + '_' + request.resource.data.targetId;
+      allow read, update, delete: if false;
     }
 
     match /pets/{petId} {
@@ -474,7 +508,7 @@ service cloud.firestore {
       // The "This looks false" votes (#463, VoteRepositoryFirestore.castVote). In the same write as
       // their new vote (whose own rules check who may vote), a voter adds their trust score to
       // voteWeight (VoteRules.weightAfter). The vote that brings it to the threshold
-      // (VoteRules.THRESHOLD, 2.0) hides the sighting: VOTED_FALSE, a FALSE verdict, and the
+      // (voteThreshold()) hides the sighting: VOTED_FALSE, a FALSE verdict, and the
       // reporter's trust before it (penalty), in the same write as the trust update it causes
       // (see trust/{uid}). It must hide it, unless the sighting was already judged: then the
       // votes only add weight, so a sighting is penalised once and a restored one stays visible.
@@ -489,7 +523,7 @@ service cloud.firestore {
       }
 
       function reachesThreshold(weight) {
-        return weight >= 2.0;
+        return weight >= voteThreshold();
       }
 
       function hidesForVotes() {
@@ -682,7 +716,7 @@ service cloud.firestore {
 
       // The sighting named by lastSightingId: reported by this user, not judged before this write,
       // and hidden by it with a FALSE verdict, by the vote of the signed-in user that brings its
-      // weight to the threshold (VoteRules.THRESHOLD; the weight itself is checked on the
+      // weight to the threshold (voteThreshold(); the weight itself is checked on the
       // sighting). It saves the trust before the penalty, which a restore needs.
       function penalisesForVotesNow() {
         let before = get(judgedSightingPath()).data;
@@ -691,7 +725,7 @@ service cloud.firestore {
         return before.reporterId == uid
           && !('trustVerdict' in before)
           && after.get('trustVerdict', null) == 'FALSE'
-          && after.get('voteWeight', 0) >= 2.0
+          && after.get('voteWeight', 0) >= voteThreshold()
           && !exists(votePath) && existsAfter(votePath)
           && after.get('penalty', null) == {
                'score': scoreBefore(),
@@ -749,6 +783,50 @@ service cloud.firestore {
               || (penalisesForVotesNow() && appliesOneVerdict('FALSE'))
               || (restoresSightingNow()
                   && cancelsPenalty(get(judgedSightingPath()).data.penalty)));
+    }
+
+    // thanks/{alertId}_{helperId}: a thank-you from the owner of a closed alert to a helper who
+    // sent a sighting on it (ThanksRepositoryFirestore). The id makes it once per alert and helper.
+    // Any signed-in user can read them, so the thanks count shows on a helper's profile. A thanks
+    // is never changed or removed.
+    match /thanks/{thanksId} {
+      function validThanks(d) {
+        return d.keys().hasAll(
+                ['alertId', 'ownerId', 'helperId', 'sightingId', 'petName', 'thankedAtMillis'])
+          && d.keys().hasOnly(
+                ['alertId', 'ownerId', 'helperId', 'sightingId', 'petName', 'thankedAtMillis'])
+          && d.alertId is string && d.alertId.size() > 0 && d.alertId.size() <= 128
+          && d.helperId is string && d.helperId.size() > 0 && d.helperId.size() <= 128
+          && d.sightingId is string && d.sightingId.size() > 0 && d.sightingId.size() <= 128
+          && thanksId == d.alertId + '_' + d.helperId
+          // The time comes from the phone: a minute of clock difference is accepted
+          && d.thankedAtMillis is int && d.thankedAtMillis <= request.time.toMillis() + 60000;
+      }
+
+      // The alert is the signed-in user's, it is closed, and the pet name is the alert's
+      function closedAlertOfOwner(d) {
+        let alertPath = /databases/$(database)/documents/alerts/$(d.alertId);
+        return exists(alertPath)
+          && get(alertPath).data.ownerId == request.auth.uid
+          && get(alertPath).data.get('status', 'OPEN') == 'CLOSED'
+          && d.petName == get(alertPath).data.petName;
+      }
+
+      // The sighting proves the helper helped: they sent it, on this alert
+      function helperSentSighting(d) {
+        let sightingPath = /databases/$(database)/documents/sightings/$(d.sightingId);
+        return exists(sightingPath)
+          && get(sightingPath).data.reporterId == d.helperId
+          && get(sightingPath).data.get('alertId', null) == d.alertId;
+      }
+
+      allow get, list: if isAuthenticated();
+      allow create: if isAuthenticated()
+          && validThanks(request.resource.data)
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.helperId != request.auth.uid
+          && closedAlertOfOwner(request.resource.data)
+          && helperSentSighting(request.resource.data);
     }
 
     // sightings/{sightingId}/votes/{voterId}: a "This looks false" vote (US-T2 #385), written by

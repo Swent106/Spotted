@@ -224,6 +224,7 @@ fun MyAlertContent(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           Button(
               onClick = { askPetHome = true },
+              enabled = state.canMarkFound,
               colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
               shape = RoundedCornerShape(16.dp),
               modifier =

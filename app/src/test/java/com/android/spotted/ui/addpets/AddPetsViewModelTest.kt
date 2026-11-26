@@ -1,13 +1,21 @@
 // Portions of this code were generated with the help of Copilot.
+// Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.addpets
 
 import com.android.spotted.model.Pet.Behavior
+import com.android.spotted.model.Pet.Lifestyle
+import com.android.spotted.model.Pet.Microchipped
+import com.android.spotted.model.Pet.Neutered
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.PetRepository
 import com.android.spotted.model.Pet.PetRepositoryLocal
+import com.android.spotted.model.Pet.PetSize
+import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.auth.User
 import com.android.spotted.model.photo.FakePhotoRepository
+import com.android.spotted.ui.components.PetDetailsInput
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -24,6 +32,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * Mid-June 2035: a year far from the real one, so the tests fail if the ViewModel reads the system
+ * clock instead of `now`. Mid-June is also far from New Year in any time zone.
+ */
+private val MID_2035 = Instant.parse("2035-06-15T12:00:00Z").toEpochMilli()
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddPetsViewModelTest {
   private val testDispatcher = StandardTestDispatcher()
@@ -37,7 +51,7 @@ class AddPetsViewModelTest {
     Dispatchers.setMain(testDispatcher)
     petRepository = PetRepositoryLocal()
     photoRepository = FakePhotoRepository()
-    viewModel = AddPetsViewModel(user, petRepository, photoRepository)
+    viewModel = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2035 })
   }
 
   @After
@@ -370,6 +384,19 @@ class AddPetsViewModelTest {
   }
 
   @Test
+  fun finish_withRefusedBirthYear_staysAndSavesNothing() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onBirthYearChanged(2036)
+    assertFalse(viewModel.uiState.value.canFinish)
+
+    viewModel.finish()
+    advanceUntilIdle()
+
+    assertFalse(viewModel.uiState.value.isDone)
+    assertTrue(savedPets().isEmpty())
+  }
+
+  @Test
   fun finish_whenSaveFails_staysOnStep() = runTest {
     viewModel = viewModelWithFailingSave(IllegalStateException("Denied"))
     fillForm(name = "Rex", species = Species.DOG)
@@ -382,6 +409,168 @@ class AddPetsViewModelTest {
         AddPetsMessage.Resource(com.android.spotted.R.string.add_pets_save_error),
         viewModel.uiState.value.errorMessage,
     )
+  }
+
+  @Test
+  fun newFieldChanges_areReflectedInState() {
+    viewModel.onBirthYearChanged(2021)
+    viewModel.onBreedIdChanged("beagle")
+    val details =
+        PetDetailsInput(
+            sex = Sex.FEMALE,
+            neutered = Neutered.YES,
+            size = PetSize.MEDIUM,
+            lifestyle = Lifestyle.INDOOR_AND_OUTDOOR,
+            microchipped = Microchipped.NO,
+        )
+    viewModel.onDetailsChanged(details)
+
+    val state = viewModel.uiState.value
+    assertEquals(2021, state.birthYear)
+    assertNull(state.birthYearError)
+    assertEquals("beagle", state.breedId)
+    assertEquals(details, state.details)
+  }
+
+  @Test
+  fun eachNewField_countsAsFormInput_andBlocksFinishWithoutNameAndSpecies() {
+    val setters: List<AddPetsViewModel.() -> Unit> =
+        listOf(
+            { onBirthYearChanged(2021) },
+            { onBreedIdChanged("beagle") },
+            { onDetailsChanged(PetDetailsInput(sex = Sex.MALE)) },
+            { onDetailsChanged(PetDetailsInput(neutered = Neutered.NO)) },
+            { onDetailsChanged(PetDetailsInput(size = PetSize.LARGE)) },
+            { onDetailsChanged(PetDetailsInput(lifestyle = Lifestyle.OUTDOOR_ONLY)) },
+            { onDetailsChanged(PetDetailsInput(microchipped = Microchipped.YES)) },
+        )
+    setters.forEach { set ->
+      val fresh = AddPetsViewModel(user, petRepository, photoRepository, now = { MID_2035 })
+      fresh.set()
+      assertTrue(fresh.uiState.value.hasFormInput)
+      // Started but without a name and species: the step can't end without losing it
+      assertFalse(fresh.uiState.value.canFinish)
+    }
+  }
+
+  @Test
+  fun savePet_sendsTheNewFieldsAndClearsThem() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onBirthYearChanged(2021)
+    viewModel.onBreedIdChanged("beagle")
+    viewModel.onDetailsChanged(
+        PetDetailsInput(
+            sex = Sex.MALE,
+            neutered = Neutered.YES,
+            size = PetSize.LARGE,
+            lifestyle = Lifestyle.INDOOR_ONLY,
+            microchipped = Microchipped.YES,
+        )
+    )
+
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    val saved = savedPets().single()
+    assertEquals(2021, saved.birthYear)
+    assertEquals("beagle", saved.breedId)
+    assertEquals(Sex.MALE, saved.sex)
+    assertEquals(Neutered.YES, saved.neutered)
+    assertEquals(PetSize.LARGE, saved.size)
+    assertEquals(Lifestyle.INDOOR_ONLY, saved.lifestyle)
+    assertEquals(Microchipped.YES, saved.microchipped)
+    val state = viewModel.uiState.value
+    assertNull(state.birthYear)
+    assertNull(state.breedId)
+    assertEquals(PetDetailsInput(), state.details)
+    assertFalse(state.hasFormInput)
+  }
+
+  @Test
+  fun savePet_withNoneOfTheNewFields_savesThemAsUnknown() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+
+    viewModel.savePet()
+    advanceUntilIdle()
+
+    val saved = savedPets().single()
+    assertNull(saved.birthYear)
+    assertNull(saved.breedId)
+    assertEquals(Sex.UNKNOWN, saved.sex)
+    assertEquals(Neutered.UNKNOWN, saved.neutered)
+    assertEquals(PetSize.UNKNOWN, saved.size)
+    assertEquals(Lifestyle.UNKNOWN, saved.lifestyle)
+    assertEquals(Microchipped.UNKNOWN, saved.microchipped)
+  }
+
+  @Test
+  fun birthYear_inTheFuture_isRefusedAndBlocksSaving() = runTest {
+    fillForm(name = "Rex", species = Species.DOG)
+
+    viewModel.onBirthYearChanged(2036)
+
+    val state = viewModel.uiState.value
+    assertEquals(2036, state.birthYear)
+    assertEquals(
+        AddPetsMessage.Resource(
+            com.android.spotted.R.string.add_pets_birth_year_invalid,
+            listOf(AddPetsViewModel.MIN_BIRTH_YEAR, 2035),
+        ),
+        state.birthYearError,
+    )
+    assertFalse(state.canSave)
+
+    viewModel.savePet()
+    advanceUntilIdle()
+    assertTrue(savedPets().isEmpty())
+  }
+
+  @Test
+  fun birthYear_beforeTheMinimum_isRefused() {
+    fillForm(name = "Rex", species = Species.DOG)
+
+    viewModel.onBirthYearChanged(AddPetsViewModel.MIN_BIRTH_YEAR - 1)
+
+    assertNotNull(viewModel.uiState.value.birthYearError)
+    assertFalse(viewModel.uiState.value.canSave)
+  }
+
+  @Test
+  fun birthYear_atTheBounds_isAccepted() {
+    viewModel.onBirthYearChanged(AddPetsViewModel.MIN_BIRTH_YEAR)
+    assertNull(viewModel.uiState.value.birthYearError)
+
+    viewModel.onBirthYearChanged(2035)
+    assertNull(viewModel.uiState.value.birthYearError)
+  }
+
+  @Test
+  fun birthYear_fixedOrCleared_removesTheErrorAndAllowsSaving() {
+    fillForm(name = "Rex", species = Species.DOG)
+    viewModel.onBirthYearChanged(2040)
+    assertFalse(viewModel.uiState.value.canSave)
+
+    viewModel.onBirthYearChanged(2020)
+    assertNull(viewModel.uiState.value.birthYearError)
+    assertTrue(viewModel.uiState.value.canSave)
+
+    viewModel.onBirthYearChanged(2040)
+    viewModel.onBirthYearChanged(null)
+    assertNull(viewModel.uiState.value.birthYear)
+    assertNull(viewModel.uiState.value.birthYearError)
+    assertTrue(viewModel.uiState.value.canSave)
+  }
+
+  @Test
+  fun changingTheSpecies_clearsBreed_sameSpeciesKeepsIt() {
+    viewModel.onSpeciesChanged(Species.DOG)
+    viewModel.onBreedIdChanged("beagle")
+
+    viewModel.onSpeciesChanged(Species.DOG)
+    assertEquals("beagle", viewModel.uiState.value.breedId)
+
+    viewModel.onSpeciesChanged(Species.CAT)
+    assertNull(viewModel.uiState.value.breedId)
   }
 
   private fun fillForm(name: String, species: Species) {
