@@ -2988,6 +2988,227 @@ describe("Firestore vote rules", () => {
       );
     }
   });
+
+  // #463: the weight of the votes, the threshold, the reporter's penalty and the restore
+
+  /** The trust fields of a user, as TrustRepositoryFirestore writes them. */
+  const trustOf = (score, judged, falseSightings = 0, penaltiesApplied = falseSightings) => ({
+    score,
+    judged,
+    falseSightings,
+    penaltiesApplied,
+  });
+
+  /**
+   * The full write of VoteRepositoryFirestore.castVote by [userId] on sighting-1: the vote, the
+   * quota, [sightingChange] on the sighting (none if null), and [reporterTrust] as the trust of
+   * reporter-1 (none if null).
+   */
+  async function weighedVote(userId, { sightingChange = null, reporterTrust = null } = {}) {
+    const db = firestoreForUser(userId);
+    const batch = writeBatch(db);
+    batch.set(doc(db, "sightings", "sighting-1", "votes", userId), {
+      voterId: userId,
+      votedAt: serverTimestamp(),
+    });
+    batch.set(doc(db, "voteQuota", userId), {
+      recent: [],
+      last: serverTimestamp(),
+      lastSightingId: "sighting-1",
+    });
+    if (sightingChange !== null) batch.update(doc(db, "sightings", "sighting-1"), sightingChange);
+    if (reporterTrust !== null) {
+      batch.set(doc(db, "trust", "reporter-1"), { ...reporterTrust, lastSightingId: "sighting-1" });
+    }
+    return batch.commit();
+  }
+
+  /** The changes of the vote that hides sighting-1, when reporter-1's trust was [before]. */
+  const hidingChange = (voteWeight, before) => ({
+    voteWeight,
+    status: "VOTED_FALSE",
+    trustVerdict: "FALSE",
+    penalty: before,
+  });
+
+  /** voter-1 (score 0.5) is eligible, and sighting-1 already has [weight] from other votes. */
+  async function seedVotedSighting(weight, sightingOverrides = {}) {
+    await seedEligibleVoter("voter-1");
+    await testEnvironment.withSecurityRulesDisabled((context) =>
+      updateDoc(doc(context.firestore(), "sightings", "sighting-1"), {
+        voteWeight: weight,
+        ...sightingOverrides,
+      }),
+    );
+  }
+
+  it("vote weight: a vote adds the voter's score to the weight of the sighting", async () => {
+    await seedEligibleVoter("voter-1");
+
+    await assertSucceeds(weighedVote("voter-1", { sightingChange: { voteWeight: 0.5 } }));
+  });
+
+  it("vote weight: any other weight is denied", async () => {
+    await seedVotedSighting(1.0);
+
+    for (const voteWeight of [1.0, 1.4, 1.6, 0.5]) {
+      await assertFails(weighedVote("voter-1", { sightingChange: { voteWeight } }));
+    }
+  });
+
+  it("vote weight: it only changes with a new vote of the same user", async () => {
+    await seedVotedSighting(1.0);
+    const sighting = (userId) => doc(firestoreForUser(userId), "sightings", "sighting-1");
+
+    await assertFails(updateDoc(sighting("voter-1"), { voteWeight: 1.5 }));
+    await assertFails(updateDoc(sighting("owner-1"), { voteWeight: 1.5 }));
+    await assertFails(updateDoc(sighting("reporter-1"), { voteWeight: 0 }));
+  });
+
+  it("vote weight: a voter cannot change anything else on the sighting", async () => {
+    await seedVotedSighting(1.0);
+
+    await assertFails(
+      weighedVote("voter-1", { sightingChange: { voteWeight: 1.5, status: "DISMISSED" } }),
+    );
+  });
+
+  it("vote weight: the reporter cannot create a sighting with vote fields", async () => {
+    await seedEligibleVoter("voter-1");
+    const db = firestoreForUser("reporter-2");
+    const base = {
+      id: "sighting-2",
+      reporterId: "reporter-2",
+      location: { latitude: 46.5, longitude: 6.6 },
+      seenAtMillis: 1000000,
+      species: "DOG",
+      status: "PENDING",
+    };
+
+    await assertSucceeds(setDoc(doc(db, "sightings", "sighting-2"), base));
+    for (const extra of [{ voteWeight: 0 }, { penaltyCancelled: true }, { penalty: {} }]) {
+      await assertFails(setDoc(doc(db, "sightings", "sighting-3"), { ...base, id: "sighting-3", ...extra }));
+    }
+  });
+
+  it("vote threshold: the vote that reaches it hides the sighting and penalises the reporter", async () => {
+    await seedVotedSighting(1.5);
+    await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });
+
+    await assertSucceeds(
+      weighedVote("voter-1", {
+        sightingChange: hidingChange(2.0, trustOf(0.6, 5)),
+        reporterTrust: trustOf(0.3, 6, 1, 1),
+      }),
+    );
+  });
+
+  it("vote threshold: a reporter with no trust yet starts from the initial score", async () => {
+    await seedVotedSighting(1.5);
+
+    await assertSucceeds(
+      weighedVote("voter-1", {
+        sightingChange: hidingChange(2.0, trustOf(0.3, 0)),
+        reporterTrust: trustOf(0.15, 1, 1, 1),
+      }),
+    );
+  });
+
+  it("vote threshold: the vote that reaches it must hide the sighting", async () => {
+    await seedVotedSighting(1.5);
+
+    await assertFails(weighedVote("voter-1", { sightingChange: { voteWeight: 2.0 } }));
+  });
+
+  it("vote threshold: just below it, the sighting cannot be hidden", async () => {
+    await seedVotedSighting(1.4);
+
+    await assertFails(
+      weighedVote("voter-1", {
+        sightingChange: hidingChange(1.9, trustOf(0.3, 0)),
+        reporterTrust: trustOf(0.15, 1, 1, 1),
+      }),
+    );
+    await assertSucceeds(weighedVote("voter-1", { sightingChange: { voteWeight: 1.9 } }));
+  });
+
+  it("vote threshold: hiding without the reporter's penalty is denied", async () => {
+    await seedVotedSighting(1.5);
+
+    await assertFails(
+      weighedVote("voter-1", { sightingChange: hidingChange(2.0, trustOf(0.3, 0)) }),
+    );
+  });
+
+  it("vote threshold: a penalty other than one false verdict is denied", async () => {
+    await seedVotedSighting(1.5);
+    await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });
+
+    for (const reporterTrust of [
+      trustOf(0.1, 6, 1, 1), // a lower score
+      trustOf(0.3, 6, 0, 0), // the false sighting not counted
+      trustOf(0.3, 6, 1, 0), // the penalty not counted
+      trustOf(0.3, 7, 1, 1), // two verdicts
+    ]) {
+      await assertFails(
+        weighedVote("voter-1", {
+          sightingChange: hidingChange(2.0, trustOf(0.6, 5)),
+          reporterTrust,
+        }),
+      );
+    }
+  });
+
+  it("vote threshold: the saved trust must be the reporter's trust before the penalty", async () => {
+    await seedVotedSighting(1.5);
+    await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });
+
+    // A higher saved trust would give the reporter more than they lost when restored
+    await assertFails(
+      weighedVote("voter-1", {
+        sightingChange: hidingChange(2.0, trustOf(0.9, 5)),
+        reporterTrust: trustOf(0.3, 6, 1, 1),
+      }),
+    );
+  });
+
+  it("vote threshold: a judged sighting only gains weight, it is never penalised twice", async () => {
+    for (const judged of [
+      { status: "CONFIRMED", trustVerdict: "CONFIRMED" },
+      // Already hidden by the votes: one more vote must not penalise the reporter again
+      { status: "VOTED_FALSE", trustVerdict: "FALSE", penalty: trustOf(0.6, 5) },
+    ]) {
+      await testEnvironment.clearFirestore();
+      await seedVotedSighting(1.5, judged);
+      await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });
+
+      await assertFails(
+        weighedVote("voter-1", {
+          sightingChange: { ...hidingChange(2.0, trustOf(0.6, 5)), trustVerdict: "FALSE" },
+          reporterTrust: trustOf(0.3, 6, 1, 1),
+        }),
+      );
+      await assertSucceeds(weighedVote("voter-1", { sightingChange: { voteWeight: 2.0 } }));
+    }
+  });
+
+  it("vote threshold: the alert owner cannot apply a false verdict alone", async () => {
+    await seedVotedSighting(1.5);
+    await seed("trust/reporter-1", { ...trustOf(0.6, 5), lastSightingId: "old" });
+    const db = firestoreForUser("owner-1");
+    const batch = writeBatch(db);
+    batch.update(doc(db, "sightings", "sighting-1"), {
+      status: "VOTED_FALSE",
+      trustVerdict: "FALSE",
+      penalty: trustOf(0.6, 5),
+    });
+    batch.set(doc(db, "trust", "reporter-1"), {
+      ...trustOf(0.3, 6, 1, 1),
+      lastSightingId: "sighting-1",
+    });
+
+    await assertFails(batch.commit());
+  });
 });
 
 describe("Firestore thanks rules", () => {

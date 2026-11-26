@@ -28,9 +28,9 @@ import kotlinx.coroutines.withContext
  * A judged sighting gets a `trustVerdict` field, so it is counted once. The Firestore rules only
  * accept a trust write made together with that field, by the owner of the sighting's alert, and
  * with the score [TrustScore.after] gives. That write must also confirm the sighting, with a
- * confirmed verdict ([confirmSighting]); false verdicts will come from the votes (#463).
- * `trustVerdict` (what counted) is kept apart from `status` (what the owner sees): the status may
- * change later, the verdict cannot.
+ * confirmed verdict ([confirmSighting]); a false verdict comes from the votes
+ * (`VoteRepositoryFirestore`). `trustVerdict` (what counted) is kept apart from `status` (what the
+ * owner sees): the status may change later, the verdict cannot.
  */
 class TrustRepositoryFirestore(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),

@@ -18,8 +18,8 @@ interface TrustRepository {
    * Confirms the sighting [sightingId] (its status becomes confirmed) and, the first time it is
    * judged, applies a [Verdict.CONFIRMED] to the trust of its reporter, in the same write.
    *
-   * This is the only way to change a trust score: in S6 only confirmations move it (#384), so one
-   * owner cannot lower a reporter's score. [Verdict.FALSE] will come with the votes of US-T2.
+   * This is the only way an owner changes a trust score: one owner cannot lower a reporter's score.
+   * [Verdict.FALSE] comes only from the votes of other users (#463).
    *
    * A sighting counts once: confirming it again, e.g. after dismissing it, only changes its status.
    * Both changes are made or neither is, and two confirmations at the same time are both counted.
