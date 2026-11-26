@@ -3228,6 +3228,7 @@ describe("Firestore user report rules", () => {
       validReport({ comment: "rude" }),
       validReport({ reason: "BORING" }),
       validReport({ reportedUserId: "" }),
+      validReport({ targetId: "" }),
       validReport({ createdAtMillis: "yesterday" }),
     ]) {
       await assertFails(send("alice", data));
