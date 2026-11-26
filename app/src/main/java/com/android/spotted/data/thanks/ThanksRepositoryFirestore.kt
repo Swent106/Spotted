@@ -63,7 +63,10 @@ class ThanksRepositoryFirestore(
       thanksUpdates(helperId).conflate()
 
   private fun thanksUpdates(helperId: String): Flow<Result<List<Thanks>>> = callbackFlow {
-    // Called with the current list, then after every change, off the main thread
+    // Called with the current list, then after every change, off the main thread.
+    // No limit in the query: every thanks of the helper is downloaded, then cut to
+    // MAX_THANKS_RECEIVED below. Fine for the counts we expect; if it grows, use
+    // orderBy(thankedAtMillis) + limit(MAX_THANKS_RECEIVED) with a composite index instead.
     val registration =
         thanksCollection.whereEqualTo(HELPER_ID, helperId).addSnapshotListener(
             Dispatchers.Default.asExecutor()
@@ -109,17 +112,23 @@ class ThanksRepositoryFirestore(
           THANKED_AT_MILLIS to thankedAtMillis,
       )
 
-  /** The thanks in this document, or null if a field is missing (it is then left out). */
-  private fun DocumentSnapshot.toThanks(): Thanks? {
-    return Thanks(
-        alertId = getString(ALERT_ID) ?: return null,
-        ownerId = getString(OWNER_ID) ?: return null,
-        helperId = getString(HELPER_ID) ?: return null,
-        sightingId = getString(SIGHTING_ID) ?: return null,
-        petName = getString(PET_NAME) ?: return null,
-        thankedAtMillis = getLong(THANKED_AT_MILLIS) ?: return null,
-    )
-  }
+  /**
+   * The thanks in this document, or null if a field is missing or has the wrong type (it is then
+   * left out). getString and getLong throw on a wrong type, which would otherwise crash the app.
+   */
+  private fun DocumentSnapshot.toThanks(): Thanks? =
+      try {
+        Thanks(
+            alertId = getString(ALERT_ID) ?: return null,
+            ownerId = getString(OWNER_ID) ?: return null,
+            helperId = getString(HELPER_ID) ?: return null,
+            sightingId = getString(SIGHTING_ID) ?: return null,
+            petName = getString(PET_NAME) ?: return null,
+            thankedAtMillis = getLong(THANKED_AT_MILLIS) ?: return null,
+        )
+      } catch (exception: RuntimeException) {
+        null
+      }
 
   private companion object {
     const val THANKS_COLLECTION = "thanks"
