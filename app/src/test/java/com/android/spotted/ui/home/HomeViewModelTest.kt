@@ -219,16 +219,36 @@ class HomeViewModelTest {
                   "near-$index",
                   ownerId = "owner-$index",
                   location = Location(CENTER.latitude + index * 0.001, CENTER.longitude),
-                  lostAtMillis = (20 - index).toLong(),
+                  // The nearest alerts are the oldest, so recency sorting cannot pass this test.
+                  lostAtMillis = index.toLong(),
               )
             }
         publish(own, blocked, *nearby.toTypedArray())
 
-        val viewModel = viewModel()
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = CENTER))
         advanceUntilIdle()
 
         assertEquals(nearby.take(10), viewModel.uiState.value.carouselAlerts.items)
         assertNull(viewModel.uiState.value.carouselAlerts.errorMessage)
+      }
+
+  @Test
+  fun carouselAlerts_blockListFailure_onlyFailsTheCarousel() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val nearby = alert("nearby")
+        publish(nearby)
+        blockRepository.failure = IllegalStateException("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(nearby), viewModel.uiState.value.lostPetsNearby.items)
+        assertNull(viewModel.uiState.value.lostPetsNearby.errorMessage)
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            viewModel.uiState.value.carouselAlerts.errorMessage,
+        )
       }
 
   @Test
@@ -993,6 +1013,7 @@ class HomeViewModelTest {
           now = { NOW },
           addressRepository = addressRepository,
           locationRepository = locationRepository,
+          blockRepository = blockRepository,
       )
 
   @Test
@@ -1008,6 +1029,30 @@ class HomeViewModelTest {
         assertEquals(
             mapOf("geneva" to formatDistance(DEVICE.distanceKm(NEARBY))),
             viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun carouselAlerts_areSortedFromTheSameDeviceOriginAsDistanceLabels() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE.copy(homeLocation = CENTER))
+        val nearestToDevice =
+            alert("device-near", location = Location(46.2105, 6.1432), lostAtMillis = 1)
+        val nearestToHome =
+            alert("home-near", location = Location(46.2050, 6.1432), lostAtMillis = 2)
+        publish(nearestToDevice, nearestToHome)
+
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = DEVICE))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(nearestToDevice, nearestToHome),
+            viewModel.uiState.value.carouselAlerts.items,
+        )
+        assertEquals(
+            formatDistance(DEVICE.distanceKm(nearestToDevice.lastKnownLocation)),
+            viewModel.uiState.value.distanceTexts[nearestToDevice.id],
         )
       }
 

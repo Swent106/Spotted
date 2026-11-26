@@ -171,8 +171,9 @@ class HomeViewModel(
         val profile = loadProfile(uid)
         val radius = profile?.alertRadiusKm?.toDouble() ?: radiusKm
         val home = homePositionOf(profile)
-        val alerts = loadLostPetsNearby(uid, home ?: searchCenter, radius)
-        if (alerts != null) loadDistances(uid, alerts, home)
+        val distanceOrigin = locationRepository?.getCurrentLocation()?.getOrNull() ?: home
+        val alerts = loadLostPetsNearby(uid, home ?: searchCenter, radius, distanceOrigin)
+        if (alerts != null) loadDistances(uid, alerts, distanceOrigin)
       }
     }
   }
@@ -206,8 +207,7 @@ class HomeViewModel(
    * Shows how far each of [alerts] is from the device; from [home] when the position can't be read
    * (permission denied, no fix). Without either, the alerts show no distance.
    */
-  private suspend fun loadDistances(uid: String, alerts: List<Alert>, home: Location?) {
-    val origin = locationRepository?.getCurrentLocation()?.getOrNull() ?: home
+  private suspend fun loadDistances(uid: String, alerts: List<Alert>, origin: Location?) {
     val texts =
         if (origin == null) emptyMap()
         else alerts.associate { it.id to formatDistance(origin.distanceKm(it.lastKnownLocation)) }
@@ -224,6 +224,7 @@ class HomeViewModel(
       uid: String,
       center: Location,
       radiusKm: Double,
+      distanceOrigin: Location?,
   ): List<Alert>? {
     // The user's own lost pets are not "near you" for them: they are loaded apart, for the map.
     // Sorted here, not in the screen, so the newest alert is featured whatever the repository
@@ -259,7 +260,10 @@ class HomeViewModel(
                 displayedResult
                     .getOrThrow()
                     .filterNot { it.ownerId in blocked }
-                    .sortedBy { center.distanceKm(it.lastKnownLocation) }
+                    .let { alerts ->
+                      if (distanceOrigin == null) alerts
+                      else alerts.sortedBy { distanceOrigin.distanceKm(it.lastKnownLocation) }
+                    }
                     .take(CAROUSEL_ALERTS_LIMIT)
             )
           }
