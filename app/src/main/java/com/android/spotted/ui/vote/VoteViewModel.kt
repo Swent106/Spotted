@@ -13,7 +13,6 @@ import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.sighting.SightingRepository
-import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.TrustLevel
 import com.android.spotted.model.trust.TrustRepository
 import com.android.spotted.model.vote.AlreadyVotedException
@@ -75,11 +74,11 @@ class VoteViewModel(
                 }
                 loadVoteState(uid, found)
               },
-              onFailure = { failure ->
+              onFailure = { _ ->
                 _uiState.update {
                   it.copy(
                       isLoading = false,
-                      errorMessage = failure.localizedMessage ?: LOAD_FAILED,
+                      errorMessage = LOAD_FAILED,
                   )
                 }
               },
@@ -96,7 +95,7 @@ class VoteViewModel(
     val notEligibleReason =
         when {
           already -> ALREADY_VOTED
-          found.reporterId == uid -> NOT_REPORTER
+          found.reporterId == uid -> OWN_SIGHTING
           trust.getOrNull()?.level in setOf(TrustLevel.NEW, TrustLevel.LOW) -> NOT_TRUSTED
           else -> null
         }
@@ -111,13 +110,10 @@ class VoteViewModel(
                   trust.isSuccess &&
                   notEligibleReason == null,
           notEligibleReason = notEligibleReason,
-          hiddenSightings =
-              if (found.status == SightingStatus.VOTED_FALSE) listOf(found) else emptyList(),
           isLoading = false,
           errorMessage =
-              alreadyVoted.exceptionOrNull()?.localizedMessage
-                  ?: voteCount.exceptionOrNull()?.localizedMessage
-                  ?: trust.exceptionOrNull()?.localizedMessage,
+              if (alreadyVoted.isFailure || voteCount.isFailure || trust.isFailure) LOAD_FAILED
+              else null,
       )
     }
   }
@@ -150,31 +146,8 @@ class VoteViewModel(
                       notEligibleReason = reason ?: it.notEligibleReason,
                       errorMessage =
                           if (failure is AlreadyVotedException) null
-                          else failure.localizedMessage ?: VOTE_FAILED,
+                          else VOTE_FAILED,
                   )
-                }
-              },
-          )
-    }
-  }
-
-  fun restore() {
-    if (!_uiState.value.hiddenSightings.any { it.id == sightingId }) return
-    viewModelScope.launch {
-      sightingRepository
-          .setSightingStatus(sightingId, SightingStatus.PENDING)
-          .fold(
-              onSuccess = {
-                _uiState.update {
-                  it.copy(
-                      hiddenSightings =
-                          it.hiddenSightings.filterNot { sighting -> sighting.id == sightingId }
-                  )
-                }
-              },
-              onFailure = { failure ->
-                _uiState.update {
-                  it.copy(errorMessage = failure.localizedMessage ?: RESTORE_FAILED)
                 }
               },
           )
@@ -185,11 +158,10 @@ class VoteViewModel(
     const val SIGN_IN_REQUIRED = "Sign in to vote."
     const val SIGHTING_NOT_FOUND = "Sighting not found."
     const val ALREADY_VOTED = "You already voted on this sighting."
-    const val NOT_REPORTER = "You cannot vote on your own sighting."
+    const val OWN_SIGHTING = "You cannot vote on your own sighting."
     const val NOT_TRUSTED = "You are not trusted enough to vote."
     const val LOAD_FAILED = "Couldn't load the sighting. Please try again."
     const val VOTE_FAILED = "Couldn't vote. Please try again."
-    const val RESTORE_FAILED = "Couldn't restore the sighting. Please try again."
 
     val Factory: (String, String) -> ViewModelProvider.Factory = { sightingId, alertId ->
       viewModelFactory {

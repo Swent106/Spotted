@@ -86,7 +86,7 @@ class VoteViewModelTest {
       }
 
   @Test
-  fun reporterCannotVote() =
+  fun reporterCannotVoteOnTheirOwnSighting() =
       runTest(dispatcher) {
         signIn()
         sightingRepository.reportSighting(sighting(reporterId = USER_ID))
@@ -102,7 +102,7 @@ class VoteViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.canVote)
-        assertEquals(VoteViewModel.NOT_REPORTER, viewModel.uiState.value.notEligibleReason)
+        assertEquals(VoteViewModel.OWN_SIGHTING, viewModel.uiState.value.notEligibleReason)
       }
 
   @Test
@@ -117,34 +117,6 @@ class VoteViewModelTest {
       }
 
   @Test
-  fun hiddenSightingCanBeRestored() =
-      runTest(dispatcher) {
-        signIn()
-        sightingRepository.reportSighting(sighting(status = SightingStatus.VOTED_FALSE))
-        val viewModel =
-            VoteViewModel(
-                SIGHTING_ID,
-                ALERT_ID,
-                voteRepository,
-                sightingRepository,
-                trustRepository,
-                authRepository,
-            )
-        advanceUntilIdle()
-
-        assertEquals(1, viewModel.uiState.value.hiddenSightings.size)
-
-        viewModel.restore()
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.hiddenSightings.isEmpty())
-        assertEquals(
-            SightingStatus.PENDING,
-            sightingRepository.reportedSightings.single().status,
-        )
-      }
-
-  @Test
   fun loadAndActionFailuresAreReported() =
       runTest(dispatcher) {
         signIn()
@@ -153,7 +125,7 @@ class VoteViewModelTest {
         val viewModel = eligibleViewModel()
         advanceUntilIdle()
 
-        assertEquals("network down", viewModel.uiState.value.errorMessage)
+        assertEquals(VoteViewModel.LOAD_FAILED, viewModel.uiState.value.errorMessage)
         assertFalse(viewModel.uiState.value.canVote)
 
         voteRepository.failure = null
