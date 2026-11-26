@@ -74,6 +74,24 @@ class TrustRepositoryFirestoreTest {
   }
 
   @Test
+  fun getTrust_readsTheFalseSightingsAndPenalties() = runTest {
+    val helperId =
+        seedTrust(score = doubleValue(0.3), judged = 6, falseSightings = 1, penaltiesApplied = 2)
+
+    assertEquals(TrustScore(0.3, 6, 1, 2), repository.getTrust(helperId).getOrThrow())
+  }
+
+  @Test
+  fun getTrust_withoutFalseCounts_hasNoFalseSighting() = runTest {
+    val helperId = seedTrust(score = doubleValue(0.6), judged = 5)
+
+    val trust = repository.getTrust(helperId).getOrThrow()
+
+    assertEquals(0, trust.falseSightings)
+    assertEquals(0, trust.penaltiesApplied)
+  }
+
+  @Test
   fun getTrust_ofAUserWithNoDocument_isInitial() = runTest {
     val helperId = "helper-${UUID.randomUUID()}"
 
@@ -84,9 +102,13 @@ class TrustRepositoryFirestoreTest {
   fun getTrust_ofAnInvalidDocument_fails() = runTest {
     val outOfRange = seedTrust(score = doubleValue(1.5), judged = 3)
     val withoutScore = seedTrust(score = null, judged = 3)
+    val withoutJudged = seedTrust(score = doubleValue(0.5), judged = null)
+    val moreFalseThanJudged = seedTrust(score = doubleValue(0.5), judged = 1, falseSightings = 2)
 
     assertTrue(repository.getTrust(outOfRange).isFailure)
     assertTrue(repository.getTrust(withoutScore).isFailure)
+    assertTrue(repository.getTrust(withoutJudged).isFailure)
+    assertTrue(repository.getTrust(moreFalseThanJudged).isFailure)
   }
 
   @Test
@@ -351,17 +373,28 @@ class TrustRepositoryFirestoreTest {
 
   private fun stringValue(value: String): Map<String, Any> = mapOf("stringValue" to value)
 
+  private fun integerValue(value: Long): Map<String, Any> =
+      mapOf("integerValue" to value.toString())
+
   private fun <K, V> mapOfNotNull(vararg pairs: Pair<K, V>?): Map<K, V> =
       pairs.filterNotNull().toMap()
 
   private fun doubleValue(value: Double): Map<String, Any> = mapOf("doubleValue" to value)
 
   /** Writes a trust document for a new uid, bypassing the rules (no client may write it). */
-  private suspend fun seedTrust(score: Map<String, Any>?, judged: Long): String {
+  private suspend fun seedTrust(
+      score: Map<String, Any>?,
+      judged: Long?,
+      falseSightings: Long? = null,
+      penaltiesApplied: Long? = falseSightings,
+  ): String {
     val uid = "helper-${UUID.randomUUID()}"
     val fields = buildMap {
       score?.let { put("score", it) }
-      put("judged", mapOf("integerValue" to judged.toString()))
+      judged?.let { put("judged", integerValue(it)) }
+      falseSightings?.let { put("falseSightings", integerValue(it)) }
+      penaltiesApplied?.let { put("penaltiesApplied", integerValue(it)) }
+      if (falseSightings != null) put("lastSightingId", stringValue("a-judged-sighting"))
     }
     val response =
         emulatorRequest("POST", "trust?documentId=$uid", JSONObject(mapOf("fields" to fields)))

@@ -534,12 +534,14 @@ service cloud.firestore {
           && resource.data.ownerId == request.auth.uid;
     }
 
-    // trust/{uid}: score (0..1) and judged (count of judged sightings) of a user, and
-    // lastSightingId, the sighting judged last. Kept apart from users/{uid}, which holds private
-    // contact details, so any signed-in user can see how reliable a helper is.
-    // Only TrustRepositoryFirestore (applyVerdict, confirmSighting) writes it: in one transaction,
-    // the owner of an alert judges a sighting linked to it (its trustVerdict) and applies that
-    // verdict to the trust of its reporter. The constants match TrustRules in model/trust/TrustScore.kt.
+    // trust/{uid}: score (0..1), judged (count of judged sightings), falseSightings (how many of
+    // them count as false), penaltiesApplied (false verdicts ever applied, cancelled ones included)
+    // of a user, and lastSightingId, the sighting judged last. Kept apart from users/{uid}, which
+    // holds private contact details, so any signed-in user can see how reliable a helper is.
+    // Only TrustRepositoryFirestore.confirmSighting writes it: in one transaction, the owner of an
+    // alert confirms a sighting linked to it (its trustVerdict) and applies that verdict to the
+    // trust of its reporter. False verdicts, and their cancelling, come with the votes (#463).
+    // The constants match TrustRules in model/trust/TrustScore.kt.
     match /trust/{uid} {
       function judgedSightingPath() {
         return /databases/$(database)/documents/sightings/$(request.resource.data.lastSightingId);
@@ -555,6 +557,14 @@ service cloud.firestore {
         return resource == null ? 0 : resource.data.judged;
       }
 
+      function falseBefore() {
+        return resource == null ? 0 : resource.data.get('falseSightings', 0);
+      }
+
+      function penaltiesBefore() {
+        return resource == null ? 0 : resource.data.get('penaltiesApplied', falseBefore());
+      }
+
       // TrustScore.after: a confirmed sighting closes 10% of the gap to 1, a false one halves it.
       // Same operations in the same order as in Kotlin, so the doubles are equal.
       function scoreAfter(verdict) {
@@ -564,31 +574,41 @@ service cloud.firestore {
       }
 
       function validTrust(d) {
-        return d.keys().hasAll(['score', 'judged', 'lastSightingId'])
-          && d.keys().hasOnly(['score', 'judged', 'lastSightingId'])
+        let keys = ['score', 'judged', 'falseSightings', 'penaltiesApplied', 'lastSightingId'];
+        return d.keys().hasAll(keys)
+          && d.keys().hasOnly(keys)
           && d.score is number && d.score >= 0 && d.score <= 1
           && d.judged is int
+          && d.falseSightings is int && d.falseSightings >= 0 && d.falseSightings <= d.judged
+          && d.penaltiesApplied is int && d.penaltiesApplied >= d.falseSightings
           && d.lastSightingId is string
           && d.lastSightingId.size() > 0 && d.lastSightingId.size() <= 128;
       }
 
-      // The sighting named by lastSightingId: reported by this user, linked to an alert of the
-      // signed-in user, not judged before this write and judged by it.
-      function judgesSightingNow() {
-        let before = get(judgedSightingPath()).data;
-        let alertPath = /databases/$(database)/documents/alerts/$(before.get('alertId', ''));
-        return before.reporterId == uid
-          && !('trustVerdict' in before)
-          && exists(alertPath)
-          && get(alertPath).data.ownerId == request.auth.uid
-          && 'trustVerdict' in getAfter(judgedSightingPath()).data;
+      // True if the signed-in user owns the alert of the sighting [s]
+      function ownsAlertOf(s) {
+        let alertPath = /databases/$(database)/documents/alerts/$(s.get('alertId', ''));
+        return exists(alertPath) && get(alertPath).data.ownerId == request.auth.uid;
       }
 
-      // One verdict at a time: judged goes up by one and the score is the one it gives
-      function appliesOneVerdict() {
+      // The sighting named by lastSightingId: reported by this user, linked to an alert of the
+      // signed-in user, not judged before this write and confirmed by it.
+      function judgesSightingNow() {
+        let before = get(judgedSightingPath()).data;
+        return before.reporterId == uid
+          && !('trustVerdict' in before)
+          && ownsAlertOf(before)
+          && getAfter(judgedSightingPath()).data.get('trustVerdict', null) == 'CONFIRMED';
+      }
+
+      // One verdict at a time: judged goes up by one, a FALSE one also counts a false sighting
+      // and a penalty, and the score is the one it gives
+      function appliesOneVerdict(verdict) {
+        let penalty = verdict == 'FALSE' ? 1 : 0;
         return request.resource.data.judged == judgedBefore() + 1
-          && request.resource.data.score
-               == scoreAfter(getAfter(judgedSightingPath()).data.trustVerdict);
+          && request.resource.data.falseSightings == falseBefore() + penalty
+          && request.resource.data.penaltiesApplied == penaltiesBefore() + penalty
+          && request.resource.data.score == scoreAfter(verdict);
       }
 
       allow get: if isAuthenticated();
@@ -596,7 +616,7 @@ service cloud.firestore {
           && validTrust(request.resource.data)
           && exists(judgedSightingPath())
           && judgesSightingNow()
-          && appliesOneVerdict();
+          && appliesOneVerdict('CONFIRMED');
     }
 
     // thanks/{alertId}_{helperId}: a thank-you from the owner of a closed alert to a helper who
