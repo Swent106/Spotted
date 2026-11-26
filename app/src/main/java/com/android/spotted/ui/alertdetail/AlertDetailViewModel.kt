@@ -13,6 +13,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.ageInYears
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
+import com.android.spotted.model.alert.alertShareText
 import com.android.spotted.model.auth.AuthRepository
 import com.android.spotted.model.auth.AuthRepositoryProvider
 import com.android.spotted.model.distanceKm
@@ -75,6 +76,7 @@ class AlertDetailViewModel(
                       ageYears = alert?.let { found -> ageInYears(found.petBirthYear, now()) },
                   )
                 }
+
                 if (alert != null) {
                   loadDistance(alert)
                   loadPlaceName(alert)
@@ -104,6 +106,16 @@ class AlertDetailViewModel(
     _uiState.update { it.copy(placeName = name) }
   }
 
+  /** Prepares the text opened by the system share sheet, or records a share failure. */
+  fun prepareShare(alert: Alert): Result<String> {
+    val result = alertShareText(alert, uiState.value.placeName)
+    result.fold(
+        onSuccess = { _uiState.update { it.copy(shareErrorMessage = null) } },
+        onFailure = { _uiState.update { it.copy(shareErrorMessage = SHARE_FAILED) } },
+    )
+    return result
+  }
+
   /** The signed-in user's home pin; else the place their home area names; else null. */
   private suspend fun homePosition(): Location? {
     val uid = authRepository?.currentUser?.value?.uid ?: return null
@@ -117,6 +129,7 @@ class AlertDetailViewModel(
 
   companion object {
     const val LOAD_FAILED = "Couldn't load the alert. Please try again."
+    const val SHARE_FAILED = "Couldn't prepare the alert link. Please try again."
 
     val Factory: ViewModelProvider.Factory =
         object : ViewModelProvider.Factory {
