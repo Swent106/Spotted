@@ -8,16 +8,12 @@ import com.android.spotted.model.moderation.UserReport
  * In-memory [ReportRepository] for ViewModel tests.
  * - [reports]: every report sent, in order.
  * - [failure]: set it to make [report] fail with it.
- * - Like the real one, reporting yourself fails.
+ * - Like the real one, reporting yourself fails, and so does reporting the same target twice.
  */
 class FakeReportRepository : ReportRepository {
-  private var nextId = 0
-
   val reports = mutableListOf<UserReport>()
 
   var failure: Throwable? = null
-
-  override fun getNewId(): String = "report-${nextId++}"
 
   override suspend fun report(report: UserReport): Result<Unit> {
     failure?.let {
@@ -25,6 +21,9 @@ class FakeReportRepository : ReportRepository {
     }
     if (report.reporterId == report.reportedUserId) {
       return Result.failure(IllegalArgumentException("A user can't report themselves"))
+    }
+    if (reports.any { it.reporterId == report.reporterId && it.targetId == report.targetId }) {
+      return Result.failure(IllegalStateException("Already reported"))
     }
     reports += report
     return Result.success(Unit)

@@ -7,12 +7,14 @@ import com.android.spotted.model.moderation.UserReport
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import java.util.UUID
+import java.util.concurrent.ExecutionException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.After
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -42,25 +44,36 @@ class ReportRepositoryFirestoreTest {
   private fun reportOf(
       reportedUserId: String = spammer,
       reporterId: String = me,
-      createdAtMillis: Long = System.currentTimeMillis(),
+      targetId: String = "sighting-${UUID.randomUUID()}",
   ) =
       UserReport(
-          id = repository.getNewId(),
           reporterId = reporterId,
           reportedUserId = reportedUserId,
-          targetId = "sighting-${UUID.randomUUID()}",
+          targetId = targetId,
           reason = ReportReason.FAKE_SIGHTING,
-          createdAtMillis = createdAtMillis,
+          createdAtMillis = System.currentTimeMillis(),
       )
 
-  @Test
-  fun getNewId_isUnique() {
-    assertNotEquals(repository.getNewId(), repository.getNewId())
+  /** Asserts that [error] is the rules refusing the request, not any other failure. */
+  private fun assertDenied(error: Throwable?) {
+    val cause = if (error is ExecutionException) error.cause else error
+    assertEquals(
+        FirebaseFirestoreException.Code.PERMISSION_DENIED,
+        (cause as? FirebaseFirestoreException)?.code,
+    )
   }
 
   @Test
   fun report_aboutSomeoneElse_succeeds() = runTest {
     assertTrue(repository.report(reportOf()).isSuccess)
+  }
+
+  @Test
+  fun reportingTheSameTargetTwice_isDenied() = runTest {
+    val report = reportOf()
+    assertTrue(repository.report(report).isSuccess)
+
+    assertDenied(repository.report(report.copy(reason = ReportReason.SPAM)).exceptionOrNull())
   }
 
   @Test
@@ -72,7 +85,9 @@ class ReportRepositoryFirestoreTest {
 
   @Test
   fun reportingInSomeoneElsesName_isDenied() = runTest {
-    assertTrue(repository.report(reportOf(reporterId = "other-${UUID.randomUUID()}")).isFailure)
+    val report = reportOf(reporterId = "other-${UUID.randomUUID()}")
+
+    assertDenied(repository.report(report).exceptionOrNull())
   }
 
   @Test
@@ -80,11 +95,11 @@ class ReportRepositoryFirestoreTest {
     val report = reportOf()
     assertTrue(repository.report(report).isSuccess)
 
-    val document = firestore.collection("reports").document(report.id)
+    val document = firestore.collection("reports").document("${me}_${report.targetId}")
     val read = runCatching { withContext(Dispatchers.IO) { Tasks.await(document.get()) } }
     val delete = runCatching { withContext(Dispatchers.IO) { Tasks.await(document.delete()) } }
 
-    assertTrue(read.isFailure)
-    assertTrue(delete.isFailure)
+    assertDenied(read.exceptionOrNull())
+    assertDenied(delete.exceptionOrNull())
   }
 }

@@ -107,9 +107,12 @@ service cloud.firestore {
           && request.resource.data.blockedUid == blockedUid;
     }
 
-    // reports/{reportId}: a user reported to the moderators, written by ReportRepositoryFirestore.
-    // A signed-in user can only create a report as themselves, about someone else. Reports are for
-    // the moderators (Firebase console): nobody can read, change or delete one from the app.
+    // reports/{reporterId_targetId}: a user reported to the moderators, written by
+    // ReportRepositoryFirestore. A signed-in user can only create a report as themselves, about
+    // someone else. The id is fixed by the reporter and the target, so a user reports a given alert
+    // or sighting once: a second report would be an update, which is denied. Reports are for the
+    // moderators (Firebase console): nobody can read, change or delete one from the app.
+    // Whether the target belongs to the reported user is left to the moderators (one read less).
     match /reports/{reportId} {
       function validReport(d) {
         return d.keys().hasOnly(['reporterId', 'reportedUserId', 'targetId', 'reason', 'createdAtMillis'])
@@ -120,12 +123,15 @@ service cloud.firestore {
             && d.reportedUserId != request.auth.uid
             && d.targetId is string && d.targetId.size() > 0 && d.targetId.size() <= 128
             && d.reason in ['FAKE_SIGHTING', 'SPAM', 'INAPPROPRIATE', 'OTHER']
-            // At most 5 minutes in the future (clocks are not always in sync)
-            && d.createdAtMillis is int && d.createdAtMillis > 0
+            // Now, give or take 5 minutes (clocks are not always in sync)
+            && d.createdAtMillis is int
+            && d.createdAtMillis >= request.time.toMillis() - 300000
             && d.createdAtMillis <= request.time.toMillis() + 300000;
       }
 
-      allow create: if isAuthenticated() && validReport(request.resource.data);
+      allow create: if isAuthenticated()
+          && validReport(request.resource.data)
+          && reportId == request.auth.uid + '_' + request.resource.data.targetId;
       allow read, update, delete: if false;
     }
 

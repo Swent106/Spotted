@@ -13,9 +13,8 @@ enum class ReportReason {
 
 /**
  * A report of a user, for the moderators. Only the app writes it; nobody can read or change it from
- * the app.
+ * the app. A user reports a given alert or sighting once.
  *
- * @property id unique id, from [ReportRepository.getNewId].
  * @property reporterId uid of the user who reports.
  * @property reportedUserId uid of the user reported; never [reporterId].
  * @property targetId id of what is reported: the alert or the sighting the reported user made.
@@ -23,7 +22,6 @@ enum class ReportReason {
  * @property createdAtMillis when the report was made, in epoch millis.
  */
 data class UserReport(
-    val id: String,
     val reporterId: String,
     val reportedUserId: String,
     val targetId: String,

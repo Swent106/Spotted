@@ -3176,7 +3176,7 @@ describe("Firestore user report rules", () => {
       : testEnvironment.authenticatedContext(userId).firestore();
   }
 
-  const reportDoc = (db, reportId) => doc(db, "reports", reportId);
+  const MINUTE = 60 * 1000;
 
   const validReport = (overrides = {}) => ({
     reporterId: "alice",
@@ -3187,56 +3187,76 @@ describe("Firestore user report rules", () => {
     ...overrides,
   });
 
-  const seedReport = (reportId) =>
-    testEnvironment.withSecurityRulesDisabled((context) =>
-      setDoc(reportDoc(context.firestore(), reportId), validReport()),
-    );
+  /** reports/{reporterId_targetId}, the id ReportRepositoryFirestore writes. */
+  const reportDoc = (db, report) => doc(db, "reports", `${report.reporterId}_${report.targetId}`);
+
+  const send = (userId, report) => setDoc(reportDoc(firestoreForUser(userId), report), report);
 
   it("report: a signed-in user can report someone else, for every reason", async () => {
+    for (const reason of ["FAKE_SIGHTING", "SPAM", "INAPPROPRIATE", "OTHER"]) {
+      await assertSucceeds(send("alice", validReport({ reason, targetId: `sighting-${reason}` })));
+    }
+  });
+
+  it("report: the same target only once per reporter, but other users can report it", async () => {
+    await assertSucceeds(send("alice", validReport()));
+
+    await assertFails(send("alice", validReport({ reason: "SPAM" })));
+    await assertSucceeds(send("bob", validReport({ reporterId: "bob" })));
+    await assertSucceeds(send("alice", validReport({ targetId: "sighting-2" })));
+  });
+
+  it("report: an id that isn't reporterId_targetId is denied", async () => {
     const db = firestoreForUser("alice");
 
-    for (const reason of ["FAKE_SIGHTING", "SPAM", "INAPPROPRIATE", "OTHER"]) {
-      await assertSucceeds(setDoc(reportDoc(db, `report-${reason}`), validReport({ reason })));
-    }
+    await assertFails(setDoc(doc(db, "reports", "random-id"), validReport()));
+    await assertFails(setDoc(doc(db, "reports", "alice_sighting-2"), validReport()));
+    await assertFails(setDoc(doc(db, "reports", "bob_sighting-1"), validReport()));
   });
 
   it("report: signed out, in someone else's name, or about yourself is denied", async () => {
-    await assertFails(setDoc(reportDoc(firestoreForUser(null), "r1"), validReport()));
-    await assertFails(setDoc(reportDoc(firestoreForUser("bob"), "r1"), validReport()));
-    await assertFails(
-      setDoc(
-        reportDoc(firestoreForUser("alice"), "r1"),
-        validReport({ reportedUserId: "alice" }),
-      ),
-    );
+    await assertFails(send(null, validReport()));
+    await assertFails(send("bob", validReport()));
+    await assertFails(send("alice", validReport({ reportedUserId: "alice" })));
   });
 
   it("report: a missing or extra field, or a wrong value, is denied", async () => {
-    const db = firestoreForUser("alice");
-    const { targetId, ...withoutTarget } = validReport();
+    const { reason, ...withoutReason } = validReport();
 
     for (const data of [
-      withoutTarget,
+      withoutReason,
       validReport({ comment: "rude" }),
       validReport({ reason: "BORING" }),
       validReport({ reportedUserId: "" }),
-      validReport({ targetId: "" }),
       validReport({ createdAtMillis: "yesterday" }),
-      validReport({ createdAtMillis: Date.now() + 60 * 60 * 1000 }),
     ]) {
-      await assertFails(setDoc(reportDoc(db, "r1"), data));
+      await assertFails(send("alice", data));
     }
   });
 
+  it("report: the time must be now, give or take 5 minutes", async () => {
+    const at = (offset, targetId) =>
+      validReport({ createdAtMillis: Date.now() + offset, targetId });
+
+    await assertSucceeds(send("alice", at(4 * MINUTE, "t1")));
+    await assertSucceeds(send("alice", at(-4 * MINUTE, "t2")));
+    await assertFails(send("alice", at(6 * MINUTE, "t3")));
+    await assertFails(send("alice", at(-6 * MINUTE, "t4")));
+    await assertFails(send("alice", validReport({ createdAtMillis: 1, targetId: "t5" })));
+  });
+
   it("report: nobody can read, list, change or delete a report", async () => {
-    await seedReport("r1");
+    const report = validReport();
+    await testEnvironment.withSecurityRulesDisabled((context) =>
+      setDoc(reportDoc(context.firestore(), report), report),
+    );
 
     for (const userId of ["alice", "spammer", "bob", null]) {
       const db = firestoreForUser(userId);
-      await assertFails(getDoc(reportDoc(db, "r1")));
+      await assertFails(getDoc(reportDoc(db, report)));
       await assertFails(getDocs(collection(db, "reports")));
-      await assertFails(updateDoc(reportDoc(db, "r1"), { reason: "SPAM" }));
-      await assertFails(deleteDoc(reportDoc(db, "r1")));
+      await assertFails(updateDoc(reportDoc(db, report), { reason: "SPAM" }));
+      await assertFails(deleteDoc(reportDoc(db, report)));
     }
   });
 });

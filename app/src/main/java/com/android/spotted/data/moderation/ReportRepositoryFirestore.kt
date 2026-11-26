@@ -11,8 +11,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * [ReportRepository] storing each report in `reports/{id}`. The Firestore rules only let a
- * signed-in user create a report as themselves, about someone else; nobody can read, change or
+ * [ReportRepository] storing each report in `reports/{reporterId_targetId}`. The Firestore rules
+ * only let a signed-in user create a report as themselves, about someone else, and only once per
+ * target (a second one would overwrite the first, which is denied); nobody can read, change or
  * delete one from the app.
  */
 class ReportRepositoryFirestore(
@@ -21,15 +22,13 @@ class ReportRepositoryFirestore(
 
   private val reports = firestore.collection(REPORTS_COLLECTION)
 
-  override fun getNewId(): String = reports.document().id
-
   override suspend fun report(report: UserReport): Result<Unit> {
     if (report.reporterId == report.reportedUserId) {
       return Result.failure(IllegalArgumentException("A user can't report themselves"))
     }
     return try {
       withContext(Dispatchers.IO) {
-        Tasks.await(reports.document(report.id).set(toDocument(report)))
+        Tasks.await(reports.document(idOf(report)).set(toDocument(report)))
       }
       Result.success(Unit)
     } catch (exception: CancellationException) {
@@ -40,6 +39,8 @@ class ReportRepositoryFirestore(
       Result.failure(exception)
     }
   }
+
+  private fun idOf(report: UserReport) = "${report.reporterId}_${report.targetId}"
 
   private fun toDocument(report: UserReport): Map<String, Any> =
       mapOf(
