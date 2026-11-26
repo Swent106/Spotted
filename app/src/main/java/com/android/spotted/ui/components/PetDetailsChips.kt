@@ -2,23 +2,15 @@
 package com.android.spotted.ui.components
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.android.spotted.R
 import com.android.spotted.model.Pet.PetSize
 import com.android.spotted.model.Pet.Sex
 import com.android.spotted.ui.addpets.ChipFlow
-import com.android.spotted.ui.theme.SpottedTheme
-import com.android.spotted.ui.theme.jakarta
 
 /** Test tags of the [PetDetailsChips], built from the prefix of the screen that shows them. */
 object PetDetailsChipsTestTags {
@@ -62,19 +54,7 @@ fun PetDetailsChips(ageYears: Int?, sex: Sex, size: PetSize, testTagPrefix: Stri
   }
   if (chips.isEmpty()) return
 
-  ChipFlow {
-    chips.forEach { (tag, label) ->
-      Text(
-          label,
-          style = jakarta(12, 15f, 600, SpottedTheme.colors.inkSoft),
-          modifier =
-              Modifier.clip(RoundedCornerShape(100.dp))
-                  .background(SpottedTheme.colors.inputBackground)
-                  .padding(horizontal = 11.dp, vertical = 5.dp)
-                  .testTag(tag),
-      )
-    }
-  }
+  ChipFlow { chips.forEach { (tag, label) -> InfoChip(label, Modifier.testTag(tag)) } }
 }
 
 @Composable

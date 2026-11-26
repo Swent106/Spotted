@@ -1,3 +1,4 @@
+<!-- Portions of this code were generated with the help of Claude (Anthropic). -->
 <resources>
     <string name="app_name">Spotted</string>
     <string name="title_activity_main">@string/app_name</string>
@@ -28,11 +29,23 @@
         <item quantity="one">%d year</item>
         <item quantity="other">%d years</item>
     </plurals>
+
+    <!-- How and where the pet got lost, shown as chips on Alert detail -->
+    <string name="loss_cause_escaped_from_home">Escaped from home</string>
+    <string name="loss_cause_during_a_walk">Lost during a walk</string>
+    <string name="loss_cause_scared_by_noise">Ran off, scared by a noise</string>
+    <string name="loss_cause_during_move_or_trip">Lost during a move or trip</string>
+    <string name="loss_cause_stolen">Stolen</string>
+    <string name="loss_environment_city_centre">City centre</string>
+    <string name="loss_environment_suburb">Suburb</string>
+    <string name="loss_environment_village_or_rural">Village or countryside</string>
+    <string name="loss_environment_forest_or_mountain">Forest or mountain</string>
     <string name="add_pets_photo_section">PHOTO</string>
     <string name="add_pets_description_section">DESCRIPTION</string>
     <string name="add_pets_description_placeholder">Colour, size, collar…</string>
     <string name="add_pets_age_section">AGE</string>
     <string name="add_pets_age_placeholder">e.g. 4 years</string>
+    <string name="add_pets_birth_year_invalid">Enter a birth year between %1$d and %2$d</string>
     <string name="add_pets_characteristics_section">CHARACTERISTICS</string>
     <string name="add_pets_behavior_stressed_in_crowds">Stressed in crowds</string>
     <string name="add_pets_behavior_doesnt_like_being_touched">Doesn\'t like being touched</string>
@@ -176,4 +189,32 @@
     <string name="link_tag_nfc_disabled">NFC is turned off. Turn it on to link the tag.</string>
     <string name="link_tag_nfc_unsupported">This phone can\'t write NFC tags.</string>
     <string name="link_tag_open_nfc_settings">Open NFC settings</string>
+
+    <!-- Report missing: the optional "What happened?" step -->
+    <string name="report_missing_what_happened_title">What happened?</string>
+    <string name="report_missing_what_happened_subtitle">Optional · it helps finders know where to look</string>
+    <string name="report_missing_cause_section">How did it get lost?</string>
+    <string name="report_missing_environment_section">Where did it happen?</string>
+    <string name="report_missing_cause_escaped_from_home">Escaped from home</string>
+    <string name="report_missing_cause_during_a_walk">During a walk</string>
+    <string name="report_missing_cause_scared_by_noise">Scared by a noise</string>
+    <string name="report_missing_cause_during_move_or_trip">During a move or trip</string>
+    <string name="report_missing_cause_stolen">Stolen</string>
+    <string name="report_missing_environment_city_centre">City centre</string>
+    <string name="report_missing_environment_suburb">Suburb</string>
+    <string name="report_missing_environment_village_or_rural">Village or countryside</string>
+    <string name="report_missing_environment_forest_or_mountain">Forest or mountain</string>
+    <string name="report_missing_unknown">Unknown</string>
+    <string name="report_missing_skip">Skip and publish</string>
+    <string name="report_missing_next">Next</string>
+    <string name="report_missing_publish">Publish alert</string>
+
+    <!-- Breed picker -->
+    <string name="breed_mixed">Mixed</string>
+    <string name="breed_unknown">Unknown</string>
+    <string name="breed_picker_label">Breed</string>
+    <string name="breed_picker_placeholder">Select a breed</string>
+    <string name="breed_picker_title">Choose a breed</string>
+    <string name="breed_picker_search_placeholder">Labrador</string>
+    <string name="breed_picker_no_match">No breed matches \"%1$s\"</string>
 </resources>

@@ -15,9 +15,12 @@ import com.android.spotted.model.auth.User
 import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
 import com.android.spotted.model.fakes.FakeAlertRepository
+import com.android.spotted.model.fakes.FakeBlockRepository
 import com.android.spotted.model.fakes.FakeLocationRepository
+import com.android.spotted.model.fakes.FakeNotificationRepository
 import com.android.spotted.model.formatDistance
 import com.android.spotted.model.location.LocationException
+import com.android.spotted.model.notification.SightingNotification
 import com.android.spotted.model.user.FakeUserRepository
 import com.android.spotted.model.user.UserProfile
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +56,7 @@ class HomeViewModelTest {
   private lateinit var userRepository: FakeUserRepository
   private lateinit var petRepository: ControllablePetRepository
   private lateinit var alertRepository: FakeAlertRepository
+  private lateinit var blockRepository: FakeBlockRepository
 
   @Before
   fun setUp() {
@@ -62,6 +66,7 @@ class HomeViewModelTest {
     userRepository = FakeUserRepository()
     petRepository = ControllablePetRepository()
     alertRepository = FakeAlertRepository()
+    blockRepository = FakeBlockRepository()
   }
 
   @After
@@ -75,16 +80,10 @@ class HomeViewModelTest {
   private class SwitchableAuthRepository : AuthRepository {
     override val currentUser = MutableStateFlow<User?>(null)
 
-    /** When set, [signOut] fails with it and the user stays signed in. */
-    var signOutFailure: Throwable? = null
-
     override suspend fun signInWithGoogle(idToken: String): Result<User> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun signOut(): Result<Unit> {
-      signOutFailure?.let {
-        return Result.failure(it)
-      }
       currentUser.value = null
       return Result.success(Unit)
     }
@@ -128,6 +127,7 @@ class HomeViewModelTest {
           searchCenter = CENTER,
           radiusKm = RADIUS_KM,
           now = { NOW },
+          blockRepository = blockRepository,
       )
 
   // ===================== Your pets =====================
@@ -201,6 +201,51 @@ class HomeViewModelTest {
       }
 
   @Test
+  fun carouselAlerts_nearestFirst_limitedAndExcludesOwnAndBlockedUsers() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        blockRepository.block(ALICE.uid, "blocked-owner")
+        val own = alert("mine", ownerId = ALICE.uid)
+        val blocked = alert("blocked", ownerId = "blocked-owner")
+        val nearby =
+            (1..12).map { index ->
+              alert(
+                  "near-$index",
+                  ownerId = "owner-$index",
+                  location = Location(CENTER.latitude + index * 0.001, CENTER.longitude),
+                  // The nearest alerts are the oldest, so recency sorting cannot pass this test.
+                  lostAtMillis = index.toLong(),
+              )
+            }
+        publish(own, blocked, *nearby.toTypedArray())
+
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = CENTER))
+        advanceUntilIdle()
+
+        assertEquals(nearby.take(10), viewModel.uiState.value.carouselAlerts.items)
+        assertNull(viewModel.uiState.value.carouselAlerts.errorMessage)
+      }
+
+  @Test
+  fun carouselAlerts_blockListFailure_onlyFailsTheCarousel() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val nearby = alert("nearby")
+        publish(nearby)
+        blockRepository.failure = IllegalStateException("offline")
+
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(nearby), viewModel.uiState.value.lostPetsNearby.items)
+        assertNull(viewModel.uiState.value.lostPetsNearby.errorMessage)
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            viewModel.uiState.value.carouselAlerts.errorMessage,
+        )
+      }
+
+  @Test
   fun lostPets_empty_whenNoAlertIsNearby() =
       runTest(testDispatcher) {
         signIn(ALICE)
@@ -210,6 +255,7 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.lostPetsNearby.isEmpty)
+        assertTrue(viewModel.uiState.value.carouselAlerts.isEmpty)
       }
 
   @Test
@@ -223,6 +269,10 @@ class HomeViewModelTest {
 
         val lostPets = viewModel.uiState.value.lostPetsNearby
         assertEquals(HomeViewModel.LOST_PETS_LOAD_FAILED, lostPets.errorMessage)
+        assertEquals(
+            HomeViewModel.LOST_PETS_LOAD_FAILED,
+            viewModel.uiState.value.carouselAlerts.errorMessage,
+        )
         assertFalse(lostPets.isEmpty)
         assertFalse(viewModel.uiState.value.isOffline)
       }
@@ -435,42 +485,6 @@ class HomeViewModelTest {
             HomeUiState(errorMessage = HomeViewModel.NOT_SIGNED_IN),
             viewModel.uiState.value,
         )
-      }
-
-  @Test
-  fun signOut_fromTheViewModel_signsTheUserOutAndClearsTheirData() =
-      runTest(testDispatcher) {
-        signIn(ALICE)
-        addPets(LUNA)
-        val viewModel = viewModel()
-        advanceUntilIdle()
-
-        viewModel.signOut()
-        advanceUntilIdle()
-
-        assertNull(authRepository.currentUser.value)
-        assertEquals(
-            HomeUiState(errorMessage = HomeViewModel.NOT_SIGNED_IN),
-            viewModel.uiState.value,
-        )
-      }
-
-  @Test
-  fun signOut_failure_keepsTheUserAndTheirPets_andShowsAnError() =
-      runTest(testDispatcher) {
-        signIn(ALICE)
-        addPets(LUNA)
-        val viewModel = viewModel()
-        advanceUntilIdle()
-        authRepository.signOutFailure = Exception("offline")
-
-        viewModel.signOut()
-        advanceUntilIdle()
-
-        assertEquals(ALICE, authRepository.currentUser.value)
-        val state = viewModel.uiState.value
-        assertEquals(HomeViewModel.SIGN_OUT_FAILED, state.errorMessage)
-        assertEquals(listOf(LUNA), state.pets.items)
       }
 
   @Test
@@ -698,6 +712,87 @@ class HomeViewModelTest {
         assertEquals(listOf(first), lostPets.items)
       }
 
+  // ===================== Bell badge =====================
+
+  private fun viewModelWithNotifications(notifications: FakeNotificationRepository) =
+      HomeViewModel(
+          authRepository = authRepository,
+          userRepository = userRepository,
+          petRepository = petRepository,
+          alertRepository = alertRepository,
+          searchCenter = CENTER,
+          radiusKm = RADIUS_KM,
+          now = { NOW },
+          notificationRepository = notifications,
+      )
+
+  private fun pending(count: Int) =
+      List(count) { SightingNotification("s-$it", "alert-1", "Milo", null, NOW) }
+
+  @Test
+  fun badge_countsThePendingSightings_live() =
+      runTest(testDispatcher) {
+        val notifications = FakeNotificationRepository()
+        notifications.setPending(ALICE.uid, pending(2))
+        signIn(ALICE)
+        val viewModel = viewModelWithNotifications(notifications)
+        advanceUntilIdle()
+        assertEquals(2, viewModel.uiState.value.pendingSightings)
+
+        notifications.setPending(ALICE.uid, pending(3))
+        advanceUntilIdle()
+        assertEquals(3, viewModel.uiState.value.pendingSightings)
+      }
+
+  @Test
+  fun badge_failureKeepsTheLastCount() =
+      runTest(testDispatcher) {
+        val notifications = FakeNotificationRepository()
+        notifications.setPending(ALICE.uid, pending(2))
+        signIn(ALICE)
+        val viewModel = viewModelWithNotifications(notifications)
+        advanceUntilIdle()
+
+        notifications.setFailure(ALICE.uid, IllegalStateException("offline"))
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.pendingSightings)
+      }
+
+  @Test
+  fun badge_followsTheSignedInUser_andIsClearedOnSignOut() =
+      runTest(testDispatcher) {
+        val notifications = FakeNotificationRepository()
+        notifications.setPending(ALICE.uid, pending(4))
+        signIn(ALICE)
+        val viewModel = viewModelWithNotifications(notifications)
+        advanceUntilIdle()
+
+        signIn(BOB)
+        // A late update for Alice must not reach Bob's badge
+        notifications.setPending(ALICE.uid, pending(5))
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.pendingSightings)
+
+        notifications.setPending(BOB.uid, pending(1))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.pendingSightings)
+
+        authRepository.currentUser.value = null
+        advanceUntilIdle()
+        assertEquals(0, viewModel.uiState.value.pendingSightings)
+      }
+
+  @Test
+  fun badge_withoutANotificationRepository_staysAtZero() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.pendingSightings)
+      }
+
   private companion object {
     const val NOW = 1_700_000_000_000L
     const val SLOW_MILLIS = 1_000L
@@ -876,6 +971,7 @@ class HomeViewModelTest {
           now = { NOW },
           addressRepository = addressRepository,
           locationRepository = locationRepository,
+          blockRepository = blockRepository,
       )
 
   @Test
@@ -891,6 +987,30 @@ class HomeViewModelTest {
         assertEquals(
             mapOf("geneva" to formatDistance(DEVICE.distanceKm(NEARBY))),
             viewModel.uiState.value.distanceTexts,
+        )
+      }
+
+  @Test
+  fun carouselAlerts_areSortedFromTheSameDeviceOriginAsDistanceLabels() =
+      runTest(testDispatcher) {
+        signIn(ALICE)
+        saveProfile(ALICE_PROFILE.copy(homeLocation = CENTER))
+        val nearestToDevice =
+            alert("device-near", location = Location(46.2105, 6.1432), lostAtMillis = 1)
+        val nearestToHome =
+            alert("home-near", location = Location(46.2050, 6.1432), lostAtMillis = 2)
+        publish(nearestToDevice, nearestToHome)
+
+        val viewModel = viewModelWithLocation(FakeLocationRepository(location = DEVICE))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(nearestToDevice, nearestToHome),
+            viewModel.uiState.value.carouselAlerts.items,
+        )
+        assertEquals(
+            formatDistance(DEVICE.distanceKm(nearestToDevice.lastKnownLocation)),
+            viewModel.uiState.value.distanceTexts[nearestToDevice.id],
         )
       }
 

@@ -50,7 +50,6 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
-import com.android.spotted.model.alert.alertShareText
 import com.android.spotted.ui.components.PetDetailsChips
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.components.SpottedBackButton
@@ -72,6 +71,7 @@ object AlertDetailTestTags {
   /** Prefix of the age, sex and size chips: `alertDetail_age`, `_sex`, `_size`. */
   const val DETAILS_PREFIX = "alertDetail"
   const val LOST_AT = "alertDetail_lostAt"
+  const val LOSS_SUMMARY = "alertDetail_lossSummary"
   const val MAP = "alertDetail_map"
   const val LOCATION = "alertDetail_location"
   const val PLACE = "alertDetail_place"
@@ -105,7 +105,7 @@ fun AlertDetailScreen(
       modifier = modifier,
       onBack = onBack,
       // The system share sheet, launched from the View
-      onShare = { alert -> context.shareText(alertShareText(alert, state.placeName)) },
+      onShare = { alert -> viewModel.prepareShare(alert).onSuccess(context::shareText) },
   )
 }
 
@@ -143,8 +143,10 @@ fun AlertDetailContent(
             distanceText = state.distanceText,
             placeName = state.placeName,
             ageYears = state.ageYears,
+            canReportSighting = state.canReportSighting,
             onReportSighting = onReportSighting,
             onBack = onBack,
+            shareErrorMessage = state.shareErrorMessage,
             onShare = { onShare(state.alert) },
             modifier = modifier,
         )
@@ -180,8 +182,10 @@ private fun AlertDetails(
     distanceText: String?,
     placeName: String?,
     ageYears: Int?,
+    canReportSighting: Boolean,
     onReportSighting: () -> Unit,
     onBack: () -> Unit,
+    shareErrorMessage: String?,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -215,10 +219,21 @@ private fun AlertDetails(
       LastSeenArea(alert.lastKnownLocation, placeName)
     }
     BottomActions(
-        canReportSighting = alert.status == AlertStatus.OPEN,
+        canReportSighting = canReportSighting,
         onReportSighting = onReportSighting,
         onShare = onShare,
     )
+    shareErrorMessage?.let { message ->
+      Text(
+          text = message,
+          color = SpottedTheme.colors.error,
+          modifier =
+              Modifier.fillMaxWidth()
+                  .background(SpottedTheme.colors.surface)
+                  .padding(horizontal = 20.dp, vertical = 8.dp)
+                  .testTag(AlertDetailTestTags.ERROR),
+      )
+    }
   }
 }
 
@@ -316,6 +331,7 @@ private fun PetSummary(
         style = jakarta(12, 17f, 600, SpottedTheme.colors.lostRed),
         modifier = Modifier.testTag(AlertDetailTestTags.LOST_AT),
     )
+    LossSummaryChips(alert.lossCause, alert.lossEnvironment)
     if (distanceText != null) {
       Text(
           distanceText,

@@ -8,6 +8,7 @@ import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertRepository
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.buildAlertLink
 import com.android.spotted.model.auth.FakeAuthRepository
 import com.android.spotted.model.distanceKm
 import com.android.spotted.model.fakes.FakeAddressRepository
@@ -57,6 +58,69 @@ class AlertDetailViewModelTest {
   @After
   fun tearDown() {
     Dispatchers.resetMain()
+  }
+
+  @Test
+  fun prepareShare_validAlert_returnsTextWithLink() {
+    val viewModel = AlertDetailViewModel(alertRepository)
+    val alert =
+        alert("alert-477")
+            .copy(
+                petName = "Milo",
+                lastKnownLocation = Location(latitude = 46.5070, longitude = 6.6270),
+            )
+
+    val text = viewModel.prepareShare(alert).getOrThrow()
+
+    assertEquals(
+        "Milo is missing near 46.5070, 6.6270. Have you seen them? " +
+            buildAlertLink(alert.id).getOrThrow(),
+        text,
+    )
+    assertNull(viewModel.uiState.value.shareErrorMessage)
+  }
+
+  @Test
+  fun prepareShare_withNamedPlace_usesThePlaceInsteadOfCoordinates() =
+      runTest(testDispatcher) {
+        val alert = alert("alert-477").copy(petName = "Milo")
+        alertRepository.publishAlert(alert)
+        val viewModel =
+            AlertDetailViewModel(
+                alertRepository,
+                addressRepository = FakeAddressRepository(name = "Ouchy, Lausanne"),
+            )
+
+        viewModel.loadAlert(alert.id)
+        advanceUntilIdle()
+        val text = viewModel.prepareShare(alert).getOrThrow()
+
+        assertTrue(text.startsWith("Milo is missing near Ouchy, Lausanne."))
+        assertTrue(text.endsWith(buildAlertLink(alert.id).getOrThrow()))
+      }
+
+  @Test
+  fun prepareShare_afterFailure_successClearsTheShareError() {
+    val viewModel = AlertDetailViewModel(alertRepository)
+
+    assertTrue(viewModel.prepareShare(alert("invalid/alert")).isFailure)
+    assertEquals(AlertDetailViewModel.SHARE_FAILED, viewModel.uiState.value.shareErrorMessage)
+
+    assertTrue(viewModel.prepareShare(alert("alert-477")).isSuccess)
+    assertNull(viewModel.uiState.value.shareErrorMessage)
+  }
+
+  @Test
+  fun prepareShare_invalidAlertId_setsShareErrorWithoutThrowing() {
+    val viewModel = AlertDetailViewModel(alertRepository)
+
+    val result = viewModel.prepareShare(alert("invalid/alert"))
+
+    assertTrue(result.isFailure)
+    assertEquals(
+        AlertDetailViewModel.SHARE_FAILED,
+        viewModel.uiState.value.shareErrorMessage,
+    )
   }
 
   @Test
@@ -435,6 +499,42 @@ class AlertDetailViewModelTest {
       AlertDetailViewModel.Factory.create(OtherViewModel::class.java)
     }
   }
+
+  // ===================== Own alert =====================
+
+  @Test
+  fun ownAlert_cannotGetASightingFromItsOwner() =
+      runTest(testDispatcher) {
+        val owner = authRepository.signInWithGoogle("token").getOrThrow()
+        alertRepository.publishAlert(alert("alert-1").copy(ownerId = owner.uid))
+        val viewModel = AlertDetailViewModel(alertRepository, authRepository = authRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isOwnAlert)
+        assertFalse(viewModel.uiState.value.canReportSighting)
+      }
+
+  @Test
+  fun someoneElsesOpenAlert_canGetASighting_butNotOnceClosed() =
+      runTest(testDispatcher) {
+        authRepository.signInWithGoogle("token")
+        alertRepository.publishAlert(alert("alert-1"))
+        alertRepository.publishAlert(
+            alert("alert-2").copy(status = AlertStatus.CLOSED, closedAtMillis = 2L)
+        )
+        val viewModel = AlertDetailViewModel(alertRepository, authRepository = authRepository)
+
+        viewModel.loadAlert("alert-1")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isOwnAlert)
+        assertTrue(viewModel.uiState.value.canReportSighting)
+
+        viewModel.loadAlert("alert-2")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.canReportSighting)
+      }
 
   private fun alert(id: String) =
       Alert(

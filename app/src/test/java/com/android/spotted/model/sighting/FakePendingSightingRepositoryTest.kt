@@ -5,6 +5,7 @@ import com.android.spotted.model.Location
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.fakes.FakePendingSightingRepository
 import java.io.IOException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -58,6 +59,7 @@ class FakePendingSightingRepositoryTest {
     assertEquals(listOf("s2"), repository.pending.map { it.sighting.id })
   }
 
+  @OptIn(ExperimentalCoroutinesApi::class)
   @Test
   fun observeQueue_emitsTheQueueAfterEachChange() = runTest {
     val queues = mutableListOf<List<String>>()

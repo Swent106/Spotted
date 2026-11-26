@@ -1,22 +1,18 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.components
 
-import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.Pet.Pet
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.ui.petprofile.PetProfileContent
 import com.android.spotted.ui.petprofile.PetProfileScreenTestTags
 import com.android.spotted.ui.petprofile.PetProfileUiState
-import com.android.spotted.ui.profile.AccountOptionsDialog
-import com.android.spotted.ui.profile.HelperProfileTestTags
 import com.android.spotted.ui.sighting.ReportSightingContent
 import com.android.spotted.ui.sighting.ReportSightingScreenTestTags
 import com.android.spotted.ui.sighting.ReportSightingUiState
@@ -25,7 +21,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** The screens that had no back button get the shared one, and Sign out is easy to tap. */
+/** The screens that had no back button get the shared one. */
 @RunWith(AndroidJUnit4::class)
 class SharedBackButtonScreensTest {
 
@@ -67,15 +63,5 @@ class SharedBackButtonScreensTest {
     composeTestRule.onNodeWithTag(PetProfileScreenTestTags.BACK_BUTTON).performClick()
 
     assertEquals(1, backs)
-  }
-
-  @Test
-  fun signOut_is48dpHigh() {
-    composeTestRule.setContent {
-      AccountOptionsDialog(onSignOut = {}, onDeleteAccount = {}, onDismiss = {})
-    }
-
-    composeTestRule.onNodeWithTag(HelperProfileTestTags.SIGN_OUT).assertHeightIsAtLeast(48.dp)
-    composeTestRule.onNodeWithText("Sign out").assertExists()
   }
 }

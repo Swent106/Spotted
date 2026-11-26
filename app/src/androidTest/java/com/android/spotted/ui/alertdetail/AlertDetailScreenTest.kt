@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onChildAt
+import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -22,6 +24,8 @@ import com.android.spotted.model.Pet.Sex
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
+import com.android.spotted.model.alert.LossCause
+import com.android.spotted.model.alert.LossEnvironment
 import com.android.spotted.ui.components.PetDetailsChipsTestTags
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -36,6 +40,7 @@ class AlertDetailScreenTest {
   @Test
   fun openAlert_showsPetDetailsHighlightedNeedsAndReportAction() {
     var reportClicked = false
+    var shareClicked = false
     val alert =
         Alert(
             id = "alert-1",
@@ -54,6 +59,7 @@ class AlertDetailScreenTest {
       AlertDetailContent(
           state = AlertDetailUiState(alert = alert),
           onReportSighting = { reportClicked = true },
+          onShare = { shareClicked = true },
       )
     }
 
@@ -90,10 +96,13 @@ class AlertDetailScreenTest {
         .assertIsDisplayed()
         .performClick()
     assertTrue(reportClicked)
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).assertIsDisplayed().performClick()
+    assertTrue(shareClicked)
   }
 
   @Test
   fun closedAlert_showsFoundMessageAndHidesReportAction() {
+    var shareClicked = false
     val alert =
         Alert(
             id = "alert-closed",
@@ -108,13 +117,49 @@ class AlertDetailScreenTest {
         )
     val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-    composeTestRule.setContent { AlertDetailContent(state = AlertDetailUiState(alert = alert)) }
+    composeTestRule.setContent {
+      AlertDetailContent(
+          state = AlertDetailUiState(alert = alert),
+          onShare = { shareClicked = true },
+      )
+    }
 
     composeTestRule
         .onNodeWithTag(AlertDetailTestTags.FOUND_MESSAGE)
         .assertIsDisplayed()
         .assertTextEquals(context.getString(R.string.alert_detail_found_message, "Milo"))
     composeTestRule.onNodeWithTag(AlertDetailTestTags.REPORT_SIGHTING).assertDoesNotExist()
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.SHARE).assertIsDisplayed().performClick()
+    assertTrue(shareClicked)
+  }
+
+  @Test
+  fun shareError_isShownUnderAlertActions() {
+    val alert =
+        Alert(
+            id = "alert-1",
+            petId = "pet-1",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Luna",
+            petSpecies = Species.CAT,
+        )
+
+    composeTestRule.setContent {
+      AlertDetailContent(
+          state =
+              AlertDetailUiState(
+                  alert = alert,
+                  shareErrorMessage = AlertDetailViewModel.SHARE_FAILED,
+              )
+      )
+    }
+
+    composeTestRule
+        .onNodeWithTag(AlertDetailTestTags.ERROR)
+        .assertIsDisplayed()
+        .assertTextEquals(AlertDetailViewModel.SHARE_FAILED)
   }
 
   @Test
@@ -222,4 +267,49 @@ class AlertDetailScreenTest {
 
   private fun detail(tag: (String) -> String) =
       composeTestRule.onNodeWithTag(tag(AlertDetailTestTags.DETAILS_PREFIX))
+
+  @Test
+  fun lossSummary_bothKnown_showsTwoChips() {
+    showLoss(LossCause.DURING_A_WALK, LossEnvironment.SUBURB)
+
+    val chips = composeTestRule.onNodeWithTag(AlertDetailTestTags.LOSS_SUMMARY)
+    chips.assertIsDisplayed()
+    chips.onChildren().assertCountEquals(2)
+    chips.onChildAt(0).assertTextEquals("Lost during a walk")
+    chips.onChildAt(1).assertTextEquals("Suburb")
+  }
+
+  @Test
+  fun lossSummary_oneKnown_showsOnlyThatChip() {
+    showLoss(LossCause.UNKNOWN, LossEnvironment.CITY_CENTRE)
+
+    val chips = composeTestRule.onNodeWithTag(AlertDetailTestTags.LOSS_SUMMARY)
+    chips.assertIsDisplayed()
+    chips.onChildren().assertCountEquals(1)
+    chips.onChildAt(0).assertTextEquals("City centre")
+  }
+
+  @Test
+  fun lossSummary_noneKnown_isHidden() {
+    showLoss(LossCause.UNKNOWN, LossEnvironment.UNKNOWN)
+
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.LOST_AT).assertIsDisplayed()
+    composeTestRule.onNodeWithTag(AlertDetailTestTags.LOSS_SUMMARY).assertDoesNotExist()
+  }
+
+  private fun showLoss(cause: LossCause, environment: LossEnvironment) {
+    val alert =
+        Alert(
+            id = "alert-loss",
+            petId = "pet-loss",
+            ownerId = "owner-1",
+            lastKnownLocation = Location(46.5, 6.6),
+            lostAtMillis = 1_700_000_000_000L,
+            petName = "Rio",
+            petSpecies = Species.DOG,
+            lossCause = cause,
+            lossEnvironment = environment,
+        )
+    composeTestRule.setContent { AlertDetailContent(state = AlertDetailUiState(alert = alert)) }
+  }
 }

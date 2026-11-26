@@ -5,6 +5,8 @@ package com.android.spotted.ui.myalert
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -218,6 +220,28 @@ class MyAlertContentTest {
     node(MyAlertScreenTestTags.PET_HOME_BUTTON).performScrollTo().performClick()
     node(MyAlertScreenTestTags.PET_HOME_CONFIRM).performClick()
     assertTrue(markedFound)
+  }
+
+  @Test
+  fun petHome_whileClosing_isDisabled() {
+    var markedFound = false
+    setContent(
+        MyAlertUiState(isLoading = false, alert = MILO_ALERT, isClosing = true),
+        onMarkFound = { markedFound = true },
+    )
+
+    node(MyAlertScreenTestTags.PET_HOME_BUTTON).performScrollTo().assertIsNotEnabled()
+    node(MyAlertScreenTestTags.PET_HOME_BUTTON).performClick()
+
+    node(MyAlertScreenTestTags.PET_HOME_CONFIRM).assertDoesNotExist()
+    assertFalse(markedFound)
+  }
+
+  @Test
+  fun petHome_openAlert_isEnabled() {
+    setContent(MyAlertUiState(isLoading = false, alert = MILO_ALERT))
+
+    node(MyAlertScreenTestTags.PET_HOME_BUTTON).performScrollTo().assertIsEnabled()
   }
 
   @Test

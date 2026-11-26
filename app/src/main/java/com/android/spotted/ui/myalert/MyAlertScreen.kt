@@ -125,7 +125,9 @@ fun MyAlertScreen(viewModel: MyAlertViewModel, onBack: () -> Unit) {
       onDismiss = viewModel::dismiss,
       onMarkFound = viewModel::markFound,
       // The system share sheet, launched from the View
-      onShare = { state.alert?.let { context.shareText(alertShareText(it, state.placeName)) } },
+      onShare = {
+        state.alert?.let { alertShareText(it, state.placeName).onSuccess(context::shareText) }
+      },
   )
 }
 
@@ -222,6 +224,7 @@ fun MyAlertContent(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           Button(
               onClick = { askPetHome = true },
+              enabled = state.canMarkFound,
               colors = ButtonDefaults.buttonColors(containerColor = SpottedTheme.colors.blue),
               shape = RoundedCornerShape(16.dp),
               modifier =

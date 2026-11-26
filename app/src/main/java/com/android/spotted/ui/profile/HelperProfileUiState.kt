@@ -25,7 +25,7 @@ data class HelperProfileUiState(
     /** The user's own trust; null while it isn't loaded or if reading it failed. */
     val trust: TrustScore? = null,
     val isLoading: Boolean = false,
-    /** True while signing out or deleting the account. */
+    /** True while deleting the account (or signing out when Firebase refuses to delete it). */
     val isLeaving: Boolean = false,
     val errorMessage: String? = null,
     /** True while the "Delete your account?" confirmation is shown. */

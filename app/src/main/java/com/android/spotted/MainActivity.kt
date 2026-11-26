@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -34,7 +35,7 @@ import coil.ImageLoader
 import com.android.spotted.data.notification.SystemNotifier
 import com.android.spotted.data.notification.SystemNotifier.Companion.EXTRA_ROUTE
 import com.android.spotted.data.photo.FirestorePhotoFetcher
-import com.android.spotted.model.alert.alertIdFromLink
+import com.android.spotted.model.alert.parseAlertLink
 import com.android.spotted.resources.C
 import com.android.spotted.ui.MainViewModel
 import com.android.spotted.ui.NearbyAlertsViewModel
@@ -63,6 +64,7 @@ import com.android.spotted.ui.profile.HelperProfileNavigation
 import com.android.spotted.ui.profile.HelperProfileScreen
 import com.android.spotted.ui.report.ReportMissingScreen
 import com.android.spotted.ui.scantag.ScanTagScreen
+import com.android.spotted.ui.settings.SettingsScreen
 import com.android.spotted.ui.sighting.ReportSightingScreen
 import com.android.spotted.ui.sighting.ReportSightingViewModel
 import com.android.spotted.ui.theme.SpottedTheme
@@ -100,6 +102,8 @@ object Route {
   const val MY_ALERT = "$MY_ALERT_BASE/{$ALERT_ID}"
   /** New sightings on all the owner's alerts, opened from the Home bell. */
   const val NOTIFICATIONS = "notifications"
+  /** The app settings, opened from the Home gear. */
+  const val SETTINGS = "settings"
 
   fun petProfile(petId: String) = "$PET/$petId"
 
@@ -176,7 +180,7 @@ class MainActivity : ComponentActivity() {
     content.viewTreeObserver.addOnPreDrawListener(
         object : ViewTreeObserver.OnPreDrawListener {
           override fun onPreDraw(): Boolean {
-            if (mainViewModel.uiState.value == StartDestination.LOADING) return false
+            if (mainViewModel.uiState.value.destination == StartDestination.LOADING) return false
             content.viewTreeObserver.removeOnPreDrawListener(this)
             return true
           }
@@ -186,13 +190,14 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * The screen [intent] asks for: the route of a tapped notification, or the alert of a
- * `spotted://alert/<alertId>` link; null for any other intent (e.g. the launcher's). Like a
- * notification, a link reopened from Recents opens nothing.
+ * The screen [intent] asks for: the route of a tapped notification, or the alert of an alert link
+ * (see [parseAlertLink]); null for any other intent (e.g. the launcher's). Like a notification, a
+ * link reopened from Recents opens nothing.
  */
 fun routeOf(intent: Intent): String? {
   if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return null
-  return notificationRouteOf(intent) ?: alertIdFromLink(intent.dataString)?.let(Route::alertDetail)
+  return notificationRouteOf(intent)
+      ?: parseAlertLink(intent.dataString).getOrNull()?.let(Route::alertDetail)
 }
 
 /**
@@ -213,8 +218,15 @@ fun SpottedApp(
     notificationRoute: String? = null,
     onNotificationRouteOpened: () -> Unit = {},
 ) {
-  val destination by viewModel.uiState.collectAsState()
+  val state by viewModel.uiState.collectAsState()
+  val destination = state.destination
   val navController = rememberNavController()
+
+  // Watch the connection only while the app is in the foreground (started)
+  LifecycleStartEffect(viewModel) {
+    viewModel.startWatchingNetwork()
+    onStopOrDispose { viewModel.stopWatchingNetwork() }
+  }
 
   StartRouting(destination, navController)
   NotificationRouting(notificationRoute, destination, navController, onNotificationRouteOpened)
@@ -319,9 +331,9 @@ fun NavGraphBuilder.addPetsDestination(
  * Home, [petProfileContent] one of the user's pets, [reportSightingContent] Report sighting (for an
  * alert, or none from the Camera tab), [mapContent] the Map tab, [profileContent] the Helper
  * profile (Profile tab), [editProfileContent] the profile form it opens, [editPetContent] the edit
- * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, and [myAlertContent] the
- * owner's own alert, opened from a missing pet on Home; tests replace them to use hand-built states
- * instead of the real ViewModels.
+ * form of a pet, [linkTagContent] the screen linking an NFC tag to a pet, [myAlertContent] the
+ * owner's own alert, opened from a missing pet on Home, and [settingsContent] the Settings screen;
+ * tests replace them to use hand-built states instead of the real ViewModels.
  */
 fun NavGraphBuilder.homeDestinations(
     navController: NavController,
@@ -338,6 +350,7 @@ fun NavGraphBuilder.homeDestinations(
           onProfileClick = navigation.onProfileClick,
           onScanTagClick = navigation.onScanTagClick,
           onNotificationsClick = navigation.onNotificationsClick,
+          onSettingsClick = navigation.onSettingsClick,
       )
     },
     notificationsContent:
@@ -431,6 +444,9 @@ fun NavGraphBuilder.homeDestinations(
     editProfileContent: @Composable (onDone: () -> Unit) -> Unit = { onDone ->
       PersonalInfoScreen(onBack = onDone, onSaved = onDone)
     },
+    settingsContent: @Composable (onBack: () -> Unit) -> Unit = { onBack ->
+      SettingsScreen(onBack = onBack)
+    },
 ) {
   // Every click below is ignored while a transition is running (the screen is not RESUMED), so
   // two quick taps open one screen. Callbacks with an argument check the entry themselves, as
@@ -459,8 +475,12 @@ fun NavGraphBuilder.homeDestinations(
             onNotificationsClick =
                 dropUnlessResumed { navController.navigate(Route.NOTIFICATIONS) },
             onScanTagClick = dropUnlessResumed { navController.navigate(Route.SCAN_TAG) },
+            onSettingsClick = dropUnlessResumed { navController.navigate(Route.SETTINGS) },
         )
     )
+  }
+  composable(Route.SETTINGS) {
+    settingsContent(dropUnlessResumed { navController.popBackStackSafely() })
   }
   composable(Route.NOTIFICATIONS) { entry ->
     notificationsContent({ navController.popBackStackSafely() }) { alertId ->
@@ -558,4 +578,6 @@ data class HomeNavigation(
     val onScanTagClick: () -> Unit = {},
     /** Opens the Notifications screen (the bell). */
     val onNotificationsClick: () -> Unit = {},
+    /** Opens the Settings screen (the gear). */
+    val onSettingsClick: () -> Unit = {},
 )

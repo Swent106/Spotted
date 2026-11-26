@@ -188,16 +188,6 @@ class HomeWaitingSightingsContentTest {
   }
 
   @Test
-  fun otherSnackbars_keepTheirDefaultLook() {
-    setContent(HomeUiState())
-
-    node(HomeScreenTestTags.SETTINGS_BUTTON).performClick()
-
-    composeTestRule.onNodeWithText(HomeScreenTexts.SETTINGS_COMING_SOON).assertIsDisplayed()
-    node(HomeScreenTestTags.SENT_SNACKBAR).assertDoesNotExist()
-  }
-
-  @Test
   fun speciesName_isCapitalised() {
     assertEquals("Dog", speciesName(Species.DOG))
     assertEquals("Other", speciesName(Species.OTHER))
