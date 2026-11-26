@@ -182,6 +182,13 @@ class MyAlertViewModel(
           failedMessage = DISMISS_FAILED,
       )
 
+  /** Restores a sighting hidden by votes to the owner's review queue. */
+  fun restore(id: String) =
+      review(
+          update = { sightingRepository.setSightingStatus(id, SightingStatus.PENDING) },
+          failedMessage = RESTORE_FAILED,
+      )
+
   /**
    * Runs the review [update] of a sighting, then [onUpdated] if it succeeded. If it failed, shows
    * the error, or [failedMessage] if it has none.
@@ -273,6 +280,7 @@ class MyAlertViewModel(
     const val CONFIRM_FAILED =
         "Couldn't confirm the sighting or update the reporter's trust. Please try again."
     const val DISMISS_FAILED = "Couldn't dismiss the sighting. Please try again."
+    const val RESTORE_FAILED = "Couldn't restore the sighting. Please try again."
     const val LAST_SEEN_UPDATE_FAILED = "Couldn't update the last seen place. Please try again."
     const val CLOSE_FAILED = "Couldn't mark the alert as found. Please try again."
 

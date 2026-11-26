@@ -34,6 +34,10 @@ data class MyAlertUiState(
     val isClosed: Boolean = false,
     val placeName: String? = null,
 ) {
+  /** Hidden sightings that the owner can restore. */
+  val hiddenSightings: List<Sighting>
+    get() = sightings.filter { it.status == SightingStatus.VOTED_FALSE }
+
   /**
    * Sightings drawn on the map: dismissed ones and those voted false are hidden there, but stay in
    * the list (greyed, or labelled "Hidden").
