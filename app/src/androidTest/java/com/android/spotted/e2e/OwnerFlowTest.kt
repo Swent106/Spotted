@@ -288,7 +288,10 @@ class OwnerFlowTest : EndToEndTest() {
     // Sign out lives in Settings only (#504), which opens from Home
     node(HomeScreenTestTags.TAB_HOME).performClick()
     waitFor(HomeScreenTestTags.SCREEN, "The Home tab should open Home")
-    node(HomeScreenTestTags.SETTINGS_BUTTON).scrollToAndClick()
+    // Home keeps its scroll: after the carousel, the header with Settings is off screen
+    node(HomeScreenTestTags.BODY)
+        .performScrollToNode(hasTestTag(HomeScreenTestTags.SETTINGS_BUTTON))
+    node(HomeScreenTestTags.SETTINGS_BUTTON).performClick()
     waitFor(SettingsScreenTestTags.SCREEN, "The Settings button should open Settings")
     node(SettingsScreenTestTags.SIGN_OUT).scrollToAndClick()
     waitFor(SignInScreenTestTags.SCREEN, "The Sign in screen should show after signing out")
