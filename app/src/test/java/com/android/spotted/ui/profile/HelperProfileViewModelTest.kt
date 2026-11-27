@@ -93,14 +93,6 @@ class HelperProfileViewModelTest {
   }
 
   @Test
-  fun signOut_keepsTheProfile() = runTest {
-    viewModel().signOut()
-
-    assertNull(authRepository.currentUser.value)
-    assertTrue(userRepository.getUser(uid).isSuccess)
-  }
-
-  @Test
   fun deleteAccount_deletesTheProfileAndSignsOut() = runTest {
     viewModel().deleteAccount()
 
@@ -172,13 +164,13 @@ class HelperProfileViewModelTest {
   }
 
   @Test
-  fun requestDeleteAccount_whileSigningOut_showsNoConfirmation() {
-    val signingOut =
+  fun requestDeleteAccount_whileDeletingTheAccount_showsNoConfirmation() {
+    val deleting =
         object : AuthRepository by authRepository {
-          override suspend fun signOut(): Result<Unit> = awaitCancellation()
+          override suspend fun deleteAccount(): Result<Unit> = awaitCancellation()
         }
-    val viewModel = viewModel(signingOut)
-    viewModel.signOut()
+    val viewModel = viewModel(deleting)
+    viewModel.deleteAccount()
 
     viewModel.requestDeleteAccount()
 
@@ -225,21 +217,6 @@ class HelperProfileViewModelTest {
     assertEquals(HelperProfileViewModel.DELETE_FAILED, viewModel.uiState.value.errorMessage)
     // Not leaving any more: the user can try again
     assertFalse(viewModel.uiState.value.isLeaving)
-  }
-
-  @Test
-  fun signOut_whileTheConfirmationIsShown_hidesIt() {
-    val signingOut =
-        object : AuthRepository by authRepository {
-          override suspend fun signOut(): Result<Unit> = awaitCancellation()
-        }
-    val viewModel = viewModel(signingOut)
-    viewModel.requestDeleteAccount()
-
-    viewModel.signOut()
-
-    assertTrue(viewModel.uiState.value.isLeaving)
-    assertFalse(viewModel.uiState.value.isDeleteConfirmationVisible)
   }
 
   // ===================== Trust level =====================

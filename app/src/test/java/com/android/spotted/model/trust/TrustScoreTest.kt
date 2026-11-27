@@ -7,6 +7,7 @@ import com.android.spotted.model.trust.TrustRules.LOSS_FACTOR
 import com.android.spotted.model.trust.TrustRules.MIN_JUDGED_SIGHTINGS
 import com.android.spotted.model.trust.TrustRules.TRUSTED_MAX_SCORE
 import com.android.spotted.model.trust.TrustRules.TRUSTED_MIN_SCORE
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -118,6 +119,116 @@ class TrustScoreTest {
     assertEquals(TrustLevel.LOW, trust.level)
   }
 
+  // ===================== Penalties and restores =====================
+
+  @Test
+  fun falseVerdict_countsAFalseSightingAndAPenalty_confirmedDoesNot() {
+    val start = TrustScore(0.5, 4)
+
+    val afterFalse = start.after(Verdict.FALSE)
+    val afterConfirmed = start.after(Verdict.CONFIRMED)
+
+    assertEquals(1, afterFalse.falseSightings)
+    assertEquals(1, afterFalse.penaltiesApplied)
+    assertEquals(4, afterFalse.confirmed)
+    assertEquals(0, afterConfirmed.falseSightings)
+    assertEquals(0, afterConfirmed.penaltiesApplied)
+    assertEquals(5, afterConfirmed.confirmed)
+  }
+
+  @Test
+  fun withoutPenalty_rightAfterIt_givesBackTheTrustBefore() {
+    val before = TrustScore(0.6, 5)
+
+    val restored = before.after(Verdict.FALSE).withoutPenalty(before)
+
+    assertEquals(0.6, restored.score, EPS)
+    assertEquals(5, restored.judged)
+    assertEquals(0, restored.falseSightings)
+    // The cancelled penalty is still counted as applied
+    assertEquals(1, restored.penaltiesApplied)
+  }
+
+  @Test
+  fun withoutPenalty_afterAConfirmation_isTheScoreWithoutTheFalseVerdict() {
+    // 0.60, halved to 0.30, then confirmed: 0.37. Without the false verdict it would be 0.64
+    val before = TrustScore(0.6, 5)
+    val now = before.after(Verdict.FALSE).after(Verdict.CONFIRMED)
+
+    val restored = now.withoutPenalty(before)
+
+    assertEquals(0.37, now.score, EPS)
+    assertEquals(0.64, restored.score, EPS)
+    assertEquals(before.after(Verdict.CONFIRMED).score, restored.score, EPS)
+    assertEquals(6, restored.judged)
+  }
+
+  @Test
+  fun withoutPenalty_matchesTheHistoryReplayedWithoutIt() {
+    val random = Random(SEED)
+    repeat(200) {
+      val history = List(random.nextInt(1, 15)) { randomVerdict(random) }
+      val penaltyAt = random.nextInt(0, history.size + 1)
+      val beforePenalty = replay(history.take(penaltyAt))
+      val now = replay(history.take(penaltyAt) + Verdict.FALSE + history.drop(penaltyAt))
+
+      val restored = now.withoutPenalty(beforePenalty)
+
+      assertEquals(replay(history).score, restored.score, EPS)
+      assertEquals(replay(history).judged, restored.judged)
+      assertEquals(replay(history).falseSightings, restored.falseSightings)
+    }
+  }
+
+  // Exact only if no other penalty was cancelled in between: otherwise, a bit lower, never higher
+
+  @Test
+  fun withoutPenalty_twoPenaltiesRestoredInEitherOrder_isNeverAboveTheExactScore() {
+    val random = Random(SEED)
+    repeat(200) {
+      val history = List(random.nextInt(0, 10)) { randomVerdict(random) }
+      val oldAt = random.nextInt(0, history.size + 1)
+      val newAt = random.nextInt(oldAt, history.size + 1)
+      val withOld = history.take(oldAt) + Verdict.FALSE + history.drop(oldAt)
+      val beforeOld = replay(history.take(oldAt))
+      // The new penalty comes after the old one, so after its index in withOld
+      val beforeNew = replay(withOld.take(newAt + 1))
+      val now = replay(withOld.take(newAt + 1) + Verdict.FALSE + withOld.drop(newAt + 1))
+
+      val oldestFirst = now.withoutPenalty(beforeOld).withoutPenalty(beforeNew)
+      val newestFirst = now.withoutPenalty(beforeNew).withoutPenalty(beforeOld)
+
+      val exact = replay(history)
+      for (restored in listOf(oldestFirst, newestFirst)) {
+        assertTrue("${restored.score} > ${exact.score}", restored.score <= exact.score + EPS)
+        assertEquals(exact.judged, restored.judged)
+        assertEquals(exact.falseSightings, restored.falseSightings)
+      }
+    }
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun withoutPenalty_ofATrustWithNoFalseSighting_isRejected() {
+    val trust = TrustScore(0.6, 5).after(Verdict.CONFIRMED)
+
+    trust.withoutPenalty(TrustScore(0.6, 5))
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun withoutPenalty_withNoPenaltySince_isRejected() {
+    // A false sighting, but from before [beforePenalty]: no penalty was applied after it
+    val trust = TrustScore(0.6, 5).after(Verdict.FALSE)
+
+    trust.withoutPenalty(trust)
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun withoutPenalty_withALaterTrust_isRejected() {
+    val before = TrustScore(0.6, 5)
+
+    before.withoutPenalty(before.after(Verdict.FALSE))
+  }
+
   // ===================== NEW boundary =====================
 
   @Test
@@ -186,6 +297,16 @@ class TrustScoreTest {
     TrustScore(1.01, 5)
   }
 
+  @Test(expected = IllegalArgumentException::class)
+  fun moreFalseSightingsThanJudged_isRejected() {
+    TrustScore(0.5, 2, falseSightings = 3)
+  }
+
+  @Test(expected = IllegalArgumentException::class)
+  fun fewerPenaltiesThanFalseSightings_isRejected() {
+    TrustScore(0.5, 5, falseSightings = 2, penaltiesApplied = 1)
+  }
+
   @Test
   fun scoreOfExactlyZeroOrOne_isAccepted() {
     assertEquals(0.0, TrustScore(0.0, 5).score, EPS)
@@ -195,11 +316,19 @@ class TrustScoreTest {
   private fun TrustScore.afterAll(verdict: Verdict, times: Int): TrustScore =
       (1..times).fold(this) { trust, _ -> trust.after(verdict) }
 
+  /** The trust of a new user after the [verdicts], in order. */
+  private fun replay(verdicts: List<Verdict>): TrustScore =
+      verdicts.fold(TrustScore.INITIAL) { trust, verdict -> trust.after(verdict) }
+
+  private fun randomVerdict(random: Random): Verdict =
+      if (random.nextInt(4) == 0) Verdict.FALSE else Verdict.CONFIRMED
+
   /** A trust with [score] and enough judged sightings not to be NEW. */
   private fun judged(score: Double) = TrustScore(score, MIN_JUDGED_SIGHTINGS)
 
   private companion object {
     const val EPS = 1e-9
     const val STEP = 0.001
+    const val SEED = 463
   }
 }

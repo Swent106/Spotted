@@ -1,6 +1,10 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.data.trust
 
+import com.android.spotted.data.trust.TrustDocuments.TRUST_COLLECTION
+import com.android.spotted.data.trust.TrustDocuments.TRUST_VERDICT_FIELD
+import com.android.spotted.data.trust.TrustDocuments.judge
+import com.android.spotted.data.trust.TrustDocuments.toTrustScore
 import com.android.spotted.model.sighting.SightingStatus
 import com.android.spotted.model.trust.SightingNotFoundException
 import com.android.spotted.model.trust.TrustRepository
@@ -17,15 +21,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * [TrustRepository] storing `trust/{uid}` documents (`score`, `judged`, and `lastSightingId`, the
- * sighting whose verdict was applied last). A user without a document has no judged sighting yet
- * and reads as [TrustScore.INITIAL].
+ * [TrustRepository] storing `trust/{uid}` documents (`score`, `judged`, `falseSightings`,
+ * `penaltiesApplied`, and `lastSightingId`, the sighting whose verdict was applied last). A user
+ * without a document has no judged sighting yet and reads as [TrustScore.INITIAL].
  *
  * A judged sighting gets a `trustVerdict` field, so it is counted once. The Firestore rules only
  * accept a trust write made together with that field, by the owner of the sighting's alert, and
- * with the score [TrustScore.after] gives. In S6 that write must also confirm the sighting, with a
- * confirmed verdict ([confirmSighting]). `trustVerdict` (what counted) is kept apart from `status`
- * (what the owner sees): the status may change later, the verdict cannot.
+ * with the score [TrustScore.after] gives. That write must also confirm the sighting, with a
+ * confirmed verdict ([confirmSighting]); a false verdict comes from the votes
+ * (`VoteRepositoryFirestore`). `trustVerdict` (what counted) is kept apart from `status` (what the
+ * owner sees): the status may change later, the verdict cannot.
  */
 class TrustRepositoryFirestore(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -43,8 +48,8 @@ class TrustRepositoryFirestore(
         // Already counted (e.g. confirmed, dismissed, now confirmed again): only the status moves
         transaction.update(sighting.reference, STATUS_FIELD, SightingStatus.CONFIRMED.name)
       } else {
-        judge(
-            transaction,
+        transaction.judge(
+            firestore,
             sighting,
             Verdict.CONFIRMED,
             mapOf(STATUS_FIELD to SightingStatus.CONFIRMED.name),
@@ -98,45 +103,6 @@ class TrustRepositoryFirestore(
   }
 
   /**
-   * Applies [verdict] to the trust of the reporter of [sighting], and marks the sighting judged
-   * with it, together with the [otherSightingFields]. Returns the new trust.
-   */
-  private fun judge(
-      transaction: Transaction,
-      sighting: DocumentSnapshot,
-      verdict: Verdict,
-      otherSightingFields: Map<String, Any> = emptyMap(),
-  ): TrustScore {
-    val reporterId =
-        checkNotNull(sighting.getString(REPORTER_ID_FIELD)) {
-          "sightings/${sighting.id} has no reporterId"
-        }
-    val trustRef = trust.document(reporterId)
-    val next = transaction.get(trustRef).toTrustScore().after(verdict)
-    transaction.set(
-        trustRef,
-        mapOf(
-            SCORE_FIELD to next.score,
-            JUDGED_FIELD to next.judged,
-            LAST_SIGHTING_ID_FIELD to sighting.id,
-        ),
-    )
-    transaction.update(
-        sighting.reference,
-        otherSightingFields + (TRUST_VERDICT_FIELD to verdict.name),
-    )
-    return next
-  }
-
-  /** The stored trust, or [TrustScore.INITIAL] if there is no document. */
-  private fun DocumentSnapshot.toTrustScore(): TrustScore {
-    if (!exists()) return TrustScore.INITIAL
-    val score = checkNotNull(getDouble(SCORE_FIELD)) { "trust/$id has no score" }
-    val judged = checkNotNull(getLong(JUDGED_FIELD)) { "trust/$id has no judged" }
-    return TrustScore(score, judged.toInt())
-  }
-
-  /**
    * Runs [action] on [Dispatchers.IO] and returns its result. Errors become a [Result.failure];
    * what the transaction threw (e.g. [SightingNotFoundException]) is given back as it is, even when
    * Firestore wraps it.
@@ -155,13 +121,7 @@ class TrustRepositoryFirestore(
       }
 
   private companion object {
-    const val TRUST_COLLECTION = "trust"
     const val SIGHTINGS_COLLECTION = "sightings"
-    const val SCORE_FIELD = "score"
-    const val JUDGED_FIELD = "judged"
-    const val LAST_SIGHTING_ID_FIELD = "lastSightingId"
-    const val REPORTER_ID_FIELD = "reporterId"
-    const val TRUST_VERDICT_FIELD = "trustVerdict"
     const val STATUS_FIELD = "status"
 
     /** Enough for a few verdicts given at the same time on the same reporter. */

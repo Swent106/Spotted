@@ -14,6 +14,7 @@ import com.android.spotted.model.alert.AlertStatus
  *   when unknown.
  * @property isOwnAlert true when the signed-in user published [alert], e.g. opened from a link they
  *   shared.
+ * @property shareErrorMessage failure while preparing the alert share text; null otherwise.
  */
 data class AlertDetailUiState(
     val alert: Alert? = null,
@@ -24,6 +25,7 @@ data class AlertDetailUiState(
     val placeName: String? = null,
     val ageYears: Int? = null,
     val isOwnAlert: Boolean = false,
+    val shareErrorMessage: String? = null,
 ) {
   /** Only an open alert of someone else: the rules refuse a sighting on your own alert. */
   val canReportSighting: Boolean

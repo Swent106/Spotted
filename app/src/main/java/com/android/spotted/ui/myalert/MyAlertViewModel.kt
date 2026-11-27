@@ -182,6 +182,13 @@ class MyAlertViewModel(
           failedMessage = DISMISS_FAILED,
       )
 
+  /** Restores a sighting hidden by votes to the owner's review queue. */
+  fun restore(id: String) =
+      review(
+          update = { sightingRepository.setSightingStatus(id, SightingStatus.PENDING) },
+          failedMessage = RESTORE_FAILED,
+      )
+
   /**
    * Runs the review [update] of a sighting, then [onUpdated] if it succeeded. If it failed, shows
    * the error, or [failedMessage] if it has none.
@@ -233,10 +240,13 @@ class MyAlertViewModel(
         )
   }
 
-  /** Closes the alert after the owner has found their pet. */
+  /**
+   * Closes the alert after the owner has found their pet. Ignored while a close is already running,
+   * so a double tap closes it once.
+   */
   fun markFound() {
     if (!canManageAlert()) return
-    _uiState.update { it.copy(errorMessage = null) }
+    _uiState.update { it.copy(errorMessage = null, isClosing = true) }
     viewModelScope.launch {
       alertRepository
           .closeAlert(alertId)
@@ -250,11 +260,17 @@ class MyAlertViewModel(
                               closedAtMillis = now(),
                           ),
                       isClosed = true,
+                      isClosing = false,
                   )
                 }
               },
               onFailure = { failure ->
-                _uiState.update { it.copy(errorMessage = failure.localizedMessage ?: CLOSE_FAILED) }
+                _uiState.update {
+                  it.copy(
+                      errorMessage = failure.localizedMessage ?: CLOSE_FAILED,
+                      isClosing = false,
+                  )
+                }
               },
           )
     }
@@ -263,6 +279,7 @@ class MyAlertViewModel(
   private fun canManageAlert(): Boolean =
       _uiState.value.alert != null &&
           !_uiState.value.isClosed &&
+          !_uiState.value.isClosing &&
           authRepository.currentUser.value?.uid == _uiState.value.alert?.ownerId
 
   companion object {
@@ -273,6 +290,7 @@ class MyAlertViewModel(
     const val CONFIRM_FAILED =
         "Couldn't confirm the sighting or update the reporter's trust. Please try again."
     const val DISMISS_FAILED = "Couldn't dismiss the sighting. Please try again."
+    const val RESTORE_FAILED = "Couldn't restore the sighting. Please try again."
     const val LAST_SEEN_UPDATE_FAILED = "Couldn't update the last seen place. Please try again."
     const val CLOSE_FAILED = "Couldn't mark the alert as found. Please try again."
 

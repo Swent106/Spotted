@@ -43,7 +43,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,7 +86,6 @@ import com.android.spotted.model.alert.Alert
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.theme.SpottedTheme
 import com.android.spotted.ui.theme.jakarta
-import kotlinx.coroutines.launch
 
 /** Test tags of the Home screen (`<feature>_<element>`). */
 object HomeScreenTestTags {
@@ -139,7 +137,6 @@ object HomeScreenTexts {
   const val RETRY = "Retry"
   const val OFFLINE_ALERTS = "You're offline · showing the last 5 alerts"
   const val ADD_PET = "Add a pet"
-  const val SETTINGS_COMING_SOON = "Settings are coming soon"
 }
 
 /**
@@ -158,6 +155,7 @@ fun HomeScreen(
     onProfileClick: () -> Unit = {},
     onScanTagClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   // Home stays in the back stack: reload it when coming back, so a pet just reported missing or
@@ -179,14 +177,11 @@ fun HomeScreen(
       onAlertClick = onAlertClick,
       onRetryClick = viewModel::refresh,
       onNotificationsClick = onNotificationsClick,
+      onSettingsClick = onSettingsClick,
   )
 }
 
-/**
- * Stateless Home ("Near you") screen, from the Figma frame "01 · Near you".
- *
- * @param onSettingsClick opens Settings; while it is null, the button says Settings is coming soon.
- */
+/** Stateless Home ("Near you") screen, from the Figma frame "01 · Near you". */
 @Composable
 fun HomeScreenContent(
     state: HomeUiState,
@@ -196,7 +191,7 @@ fun HomeScreenContent(
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
     onMissingPetClick: (alertId: String) -> Unit = {},
-    onSettingsClick: (() -> Unit)? = null,
+    onSettingsClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
@@ -212,9 +207,7 @@ fun HomeScreenContent(
     lifecycleOwner.lifecycle.addObserver(observer)
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
-  // While Settings has no screen, say so instead of doing nothing (M1 feedback)
   val snackbarHostState = remember { SnackbarHostState() }
-  val scope = rememberCoroutineScope()
 
   Box(
       Modifier.fillMaxSize()
@@ -261,16 +254,7 @@ fun HomeScreenContent(
               onMissingPetClick(alertId)
             }
           },
-          onSettingsClick = {
-            if (onSettingsClick != null) {
-              onSettingsClick()
-            } else {
-              scope.launch {
-                snackbarHostState.currentSnackbarData?.dismiss()
-                snackbarHostState.showSnackbar(HomeScreenTexts.SETTINGS_COMING_SOON)
-              }
-            }
-          },
+          onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           onScanTagClick = onScanTagClick,
           modifier = Modifier.padding(innerPadding),

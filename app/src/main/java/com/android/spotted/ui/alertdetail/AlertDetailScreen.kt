@@ -50,7 +50,6 @@ import com.android.spotted.model.Pet.Behavior
 import com.android.spotted.model.Pet.Species
 import com.android.spotted.model.alert.Alert
 import com.android.spotted.model.alert.AlertStatus
-import com.android.spotted.model.alert.alertShareText
 import com.android.spotted.ui.components.PetDetailsChips
 import com.android.spotted.ui.components.RequestLocationPermissionOnce
 import com.android.spotted.ui.components.SpottedBackButton
@@ -106,7 +105,7 @@ fun AlertDetailScreen(
       modifier = modifier,
       onBack = onBack,
       // The system share sheet, launched from the View
-      onShare = { alert -> alertShareText(alert, state.placeName).onSuccess(context::shareText) },
+      onShare = { alert -> viewModel.prepareShare(alert).onSuccess(context::shareText) },
   )
 }
 
@@ -147,6 +146,7 @@ fun AlertDetailContent(
             canReportSighting = state.canReportSighting,
             onReportSighting = onReportSighting,
             onBack = onBack,
+            shareErrorMessage = state.shareErrorMessage,
             onShare = { onShare(state.alert) },
             modifier = modifier,
         )
@@ -185,6 +185,7 @@ private fun AlertDetails(
     canReportSighting: Boolean,
     onReportSighting: () -> Unit,
     onBack: () -> Unit,
+    shareErrorMessage: String?,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -222,6 +223,17 @@ private fun AlertDetails(
         onReportSighting = onReportSighting,
         onShare = onShare,
     )
+    shareErrorMessage?.let { message ->
+      Text(
+          text = message,
+          color = SpottedTheme.colors.error,
+          modifier =
+              Modifier.fillMaxWidth()
+                  .background(SpottedTheme.colors.surface)
+                  .padding(horizontal = 20.dp, vertical = 8.dp)
+                  .testTag(AlertDetailTestTags.ERROR),
+      )
+    }
   }
 }
 
