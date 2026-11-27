@@ -19,6 +19,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.spotted.model.alert.buildAlertLink
 import com.android.spotted.ui.StartDestination
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,14 +35,25 @@ class AlertLinkTest {
 
   private fun linkIntent(link: String) = Intent(Intent.ACTION_VIEW, Uri.parse(link))
 
+  /** The activity of this app that the manifest gives [link] to, or null if none takes it. */
+  private fun activityFor(link: String): String? {
+    val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    val intent = linkIntent(link).setPackage(context.packageName)
+    return context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name
+  }
+
   @Test
   fun theLink_isHandledByMainActivity() {
-    val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-    val intent = linkIntent("spotted://alert/a1").setPackage(context.packageName)
+    assertEquals(MainActivity::class.java.name, activityFor(buildAlertLink("a1").getOrThrow()))
+  }
 
-    val activity = context.packageManager.resolveActivity(intent, 0)?.activityInfo
-
-    assertEquals(MainActivity::class.java.name, activity?.name)
+  // The intent filter takes only alert links of our domain; everything else stays in the browser
+  @Test
+  fun anotherHostPathOrScheme_isNotHandledByTheApp() {
+    assertNull(activityFor("https://example.com/alert/a1"))
+    assertNull(activityFor("https://spotted-fd9bf.web.app/"))
+    assertNull(activityFor("https://spotted-fd9bf.web.app/other/a1"))
+    assertNull(activityFor("spotted://alert/a1"))
   }
 
   @Test

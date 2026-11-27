@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Portions of this code were generated with the help of Claude (Anthropic). -->
+<!--
+  Shown for https://spotted-fd9bf.web.app/alert/<alertId> (see the rewrite in firebase.json) when
+  the Spotted app doesn't open the link itself, e.g. on a phone without the app. Static on purpose:
+  it reads no Firestore data, so nothing about the alert or its owner is on the web.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Spotted: missing pet alert</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 48px 16px;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        color: #1c1b1f;
+        background: #fffbfe;
+        text-align: center;
+      }
+      main {
+        max-width: 28rem;
+        margin: 0 auto;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          color: #e6e1e5;
+          background: #1c1b1f;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A pet is missing</h1>
+      <p>Someone shared a missing pet alert with you. Open this link in the Spotted app to see it.</p>
+      <p>Already have the app? Tap the link in the message or email it came in, instead of opening it in a browser.</p>
+    </main>
+  </body>
+</html>

@@ -36,16 +36,18 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Shared alert links: spotted://alert/<alertId> -->
-            <intent-filter>
+            <!-- Shared alert links: https://spotted-fd9bf.web.app/alert/<alertId> (AlertLink.kt).
+                 autoVerify: Android checks firebase/hosting/.well-known/assetlinks.json and then
+                 opens these links in the app directly, without asking which app to use. -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data
-                    android:host="alert"
-                    android:scheme="spotted" />
+                <data android:scheme="https" />
+                <data android:host="spotted-fd9bf.web.app" />
+                <data android:pathPrefix="/alert/" />
             </intent-filter>
         </activity>
         <provider

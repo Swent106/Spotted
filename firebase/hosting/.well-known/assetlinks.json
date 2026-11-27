@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.android.spotted",
+      "sha256_cert_fingerprints": [
+        "48:0F:E6:26:C9:2E:17:B1:AD:9D:2F:83:94:4E:CC:97:75:47:EA:5E:64:15:73:13:89:EC:3C:81:92:DB:DE:6E"
+      ]
+    }
+  }
+]

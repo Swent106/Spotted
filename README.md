@@ -64,6 +64,22 @@ firebase emulators:start                     # start Auth + Firestore emulators
 ./gradlew ktfmtFormat                        # format the code
 ```
 
+### Shared alert links (Firebase Hosting)
+
+A shared alert is a link like `https://spotted-fd9bf.web.app/alert/<alertId>`. On a phone with
+the app, Android opens it in the app. Otherwise the browser shows a static page from
+`firebase/hosting/` that reads no data.
+
+- **Deploy the page** after changing anything in `firebase/hosting/`:
+  `firebase deploy --only hosting --project spotted-fd9bf`.
+- **Update the fingerprint** if the app is signed with another key. Android only opens links in
+  apps whose key is listed in `firebase/hosting/.well-known/assetlinks.json`. Get the key's
+  SHA-256 with `keytool -list -v -keystore app/debug.keystore -alias androiddebugkey -storepass android`,
+  add it to `sha256_cert_fingerprints`, then deploy.
+- **Check it on a phone:** install the app, then run
+  `adb shell pm get-app-links com.android.spotted`. The domain should be `verified`. If it isn't,
+  run `adb shell pm verify-app-links --re-verify com.android.spotted`.
+
 ## Tech stack
 
 | Area | Technologies                                                                                          |
