@@ -118,6 +118,14 @@ object HomeScreenTestTags {
   const val TAB_MAP = "home_tabMap"
   const val TAB_CAMERA = "home_tabCamera"
   const val TAB_PROFILE = "home_tabProfile"
+  const val WAITING_BANNER = "home_waitingBanner"
+  const val WAITING_SHEET = "home_waitingSheet"
+  const val WAITING_CLOSE = "home_waitingClose"
+  const val WAITING_ERROR = "home_waitingError"
+  const val DELETE_DIALOG = "home_deleteDialog"
+  const val DELETE_CONFIRM = "home_deleteConfirm"
+  const val DELETE_CANCEL = "home_deleteCancel"
+  const val SENT_SNACKBAR = "home_sentSnackbar"
 
   fun petCard(petId: String) = "home_pet_$petId"
 
@@ -128,6 +136,10 @@ object HomeScreenTestTags {
   fun alertDistance(alertId: String) = "home_alertDistance_$alertId"
 
   fun seenButton(alertId: String) = "home_seenButton_$alertId"
+
+  fun waitingRow(sightingId: String) = "home_waitingRow_$sightingId"
+
+  fun waitingDelete(sightingId: String) = "home_waitingDelete_$sightingId"
 }
 
 /** Texts of the Home screen that tests check. */
@@ -180,6 +192,12 @@ fun HomeScreen(
       onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,
       onNotificationsClick = onNotificationsClick,
+      onWaitingBannerClick = viewModel::openWaitingSheet,
+      onWaitingSheetClose = viewModel::closeWaitingSheet,
+      onWaitingDeleteClick = viewModel::askToDeleteWaiting,
+      onWaitingDeleteConfirm = viewModel::confirmDeleteWaiting,
+      onWaitingDeleteCancel = viewModel::cancelDeleteWaiting,
+      onSentSightingShown = viewModel::sentSightingShown,
       onSettingsClick = onSettingsClick,
   )
 }
@@ -201,6 +219,12 @@ fun HomeScreenContent(
     onCameraClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onScanTagClick: () -> Unit = {},
+    onWaitingBannerClick: () -> Unit = {},
+    onWaitingSheetClose: () -> Unit = {},
+    onWaitingDeleteClick: (sightingId: String) -> Unit = {},
+    onWaitingDeleteConfirm: () -> Unit = {},
+    onWaitingDeleteCancel: () -> Unit = {},
+    onSentSightingShown: () -> Unit = {},
 ) {
   var isOpeningPetProfile by remember { mutableStateOf(false) }
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -212,6 +236,16 @@ fun HomeScreenContent(
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
   val snackbarHostState = remember { SnackbarHostState() }
+  // "Your sighting of Milo was sent": marked as shown once it is gone, as a new state would cancel
+  // it. It waits for the "Waiting to send" sheet to close, as it would be hidden behind it.
+  val sentMessage = state.sentSighting?.let { sentMessage(it) }
+  LaunchedEffect(state.sentSighting, state.isWaitingSheetOpen) {
+    if (sentMessage != null && !state.isWaitingSheetOpen) {
+      snackbarHostState.currentSnackbarData?.dismiss()
+      snackbarHostState.showSnackbar(SentSnackbarVisuals(sentMessage))
+      onSentSightingShown()
+    }
+  }
 
   Box(
       Modifier.fillMaxSize()
@@ -231,7 +265,10 @@ fun HomeScreenContent(
     Scaffold(
         containerColor = Color.Transparent,
         snackbarHost = {
-          SnackbarHost(snackbarHostState, Modifier.testTag(HomeScreenTestTags.SNACKBAR))
+          // The "sighting sent" message is the only snackbar on Home
+          SnackbarHost(snackbarHostState, Modifier.testTag(HomeScreenTestTags.SNACKBAR)) { data ->
+            SentSnackbar(data.visuals.message)
+          }
         },
         bottomBar = {
           Box(Modifier.fillMaxWidth().navigationBarsPadding(), Alignment.Center) {
@@ -262,9 +299,22 @@ fun HomeScreenContent(
           onSettingsClick = onSettingsClick,
           onNotificationsClick = onNotificationsClick,
           onScanTagClick = onScanTagClick,
+          onWaitingBannerClick = onWaitingBannerClick,
           modifier = Modifier.padding(innerPadding),
       )
     }
+  }
+
+  if (state.isWaitingSheetOpen) {
+    WaitingSightingsSheet(
+        sightings = state.waitingSightings,
+        errorMessage = state.waitingErrorMessage,
+        onDeleteClick = onWaitingDeleteClick,
+        onClose = onWaitingSheetClose,
+    )
+  }
+  if (state.waitingDeleteId != null) {
+    DeleteWaitingDialog(onConfirm = onWaitingDeleteConfirm, onCancel = onWaitingDeleteCancel)
   }
 }
 
@@ -282,6 +332,7 @@ private fun HomeList(
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onScanTagClick: () -> Unit,
+    onWaitingBannerClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   // Lazy, so that a long list of lost pets only composes what is on screen
@@ -310,6 +361,8 @@ private fun HomeList(
     }
 
     petsSection(state, onRetryClick, onAddPetClick, onPetClick, onMissingPetClick)
+
+    waitingBanner(state, onWaitingBannerClick)
 
     lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
 

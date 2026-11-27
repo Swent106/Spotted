@@ -13,6 +13,9 @@ import com.android.spotted.model.fakes.FakePendingSightingRepository
 import com.android.spotted.model.sighting.PendingSighting
 import com.android.spotted.model.sighting.Sighting
 import com.android.spotted.model.user.FakeUserRepository
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -292,25 +295,86 @@ class HomeWaitingSightingsTest {
       }
 
   @Test
-  fun deleteFailing_keepsTheSightingAndShowsAnError() =
+  fun deleteFailing_keepsTheSightingAndShowsTheErrorInTheSheet() =
       runTest(testDispatcher) {
         enqueue(pending("s1"))
         val vm = viewModel()
         advanceUntilIdle()
+        vm.openWaitingSheet()
         queue.deleteFailure = IllegalStateException("disk")
 
         vm.askToDeleteWaiting("s1")
         vm.confirmDeleteWaiting()
         advanceUntilIdle()
 
-        assertEquals(HomeViewModel.WAITING_DELETE_FAILED, vm.uiState.value.errorMessage)
-        assertEquals(listOf("s1"), vm.uiState.value.waitingSightings.map { it.id })
+        val state = vm.uiState.value
+        assertEquals(HomeViewModel.WAITING_DELETE_FAILED, state.waitingErrorMessage)
+        // Not in Home's header, which the sheet hides
+        assertNull(state.errorMessage)
+        assertTrue(state.isWaitingSheetOpen)
+        assertEquals(listOf("s1"), state.waitingSightings.map { it.id })
 
         // Sent later: it is now told as sent, since the user's delete did not happen
         queue.deleteFailure = null
         queue.delete("s1")
         advanceUntilIdle()
         assertEquals("s1", vm.uiState.value.sentSighting?.id)
+      }
+
+  @Test
+  fun theSheetError_isClearedByTheNextDelete_andWhenTheSheetCloses() =
+      runTest(testDispatcher) {
+        enqueue(pending("s1"))
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.openWaitingSheet()
+        queue.deleteFailure = IllegalStateException("disk")
+        vm.askToDeleteWaiting("s1")
+        vm.confirmDeleteWaiting()
+        advanceUntilIdle()
+
+        vm.askToDeleteWaiting("s1")
+        assertNull(vm.uiState.value.waitingErrorMessage)
+
+        vm.confirmDeleteWaiting()
+        advanceUntilIdle()
+        assertEquals(HomeViewModel.WAITING_DELETE_FAILED, vm.uiState.value.waitingErrorMessage)
+        vm.closeWaitingSheet()
+        assertNull(vm.uiState.value.waitingErrorMessage)
+      }
+
+  // ===================== Saved time =====================
+
+  @Test
+  fun waitingTime_showsOnlyTheTime_today() {
+    assertEquals(
+        "14:32",
+        waitingTime(at(24, 14, 32), at(24, 23, 0), is24Hour = true, UTC, Locale.UK),
+    )
+  }
+
+  @Test
+  fun waitingTime_addsTheDay_onAnotherDay() {
+    assertEquals(
+        "23 Nov, 14:32",
+        waitingTime(at(23, 14, 32), at(24, 9, 0), is24Hour = true, UTC, Locale.UK),
+    )
+  }
+
+  @Test
+  fun waitingTime_follows12HourPhones() {
+    assertEquals(
+        "2:32 pm",
+        waitingTime(at(24, 14, 32), at(24, 15, 0), is24Hour = false, UTC, Locale.UK).lowercase(),
+    )
+  }
+
+  /** [hour]:[minute] UTC on [day] November 2026, in millis. */
+  private fun at(day: Int, hour: Int, minute: Int): Long =
+      Calendar.getInstance(UTC).run {
+        clear()
+        set(2026, Calendar.NOVEMBER, day, hour, minute)
+        timeInMillis
       }
 
   // ===================== Sent =====================
@@ -385,6 +449,7 @@ class HomeWaitingSightingsTest {
     val PLACE = Location(latitude = 46.2044, longitude = 6.1432)
     const val SEEN_AT = 1_700_000_000_000L
     const val MILO_ALERT = "alert-milo"
+    val UTC: TimeZone = TimeZone.getTimeZone("UTC")
 
     fun pending(
         id: String,
