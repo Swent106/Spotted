@@ -107,6 +107,7 @@ object HomeScreenTestTags {
   const val ALERTS_ERROR = "home_alertsError"
   const val ALERTS_RETRY = "home_alertsRetry"
   const val ALERTS_EMPTY = "home_alertsEmpty"
+  const val ALERT_CAROUSEL = "home_alertCarousel"
   const val OFFLINE_BANNER = "home_offlineBanner"
   const val OFFLINE_RETRY = "home_offlineRetry"
   const val REPORT_MISSING_BUTTON = "home_reportMissingButton"
@@ -126,8 +127,6 @@ object HomeScreenTestTags {
   fun alertCard(alertId: String) = "home_alert_$alertId"
 
   fun alertDistance(alertId: String) = "home_alertDistance_$alertId"
-
-  fun seenButton(alertId: String) = "home_seenButton_$alertId"
 }
 
 /** Texts of the Home screen that tests check. */
@@ -148,7 +147,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
     onReportMissingClick: () -> Unit = {},
     onAlertClick: (alertId: String) -> Unit = {},
-    onSeenPetClick: (alertId: String) -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
     onMissingPetClick: (alertId: String) -> Unit = {},
@@ -177,7 +175,6 @@ fun HomeScreen(
       onProfileClick = onProfileClick,
       onScanTagClick = onScanTagClick,
       onAlertClick = onAlertClick,
-      onSeenPetClick = onSeenPetClick,
       onRetryClick = viewModel::refresh,
       onNotificationsClick = onNotificationsClick,
       onSettingsClick = onSettingsClick,
@@ -190,7 +187,6 @@ fun HomeScreenContent(
     state: HomeUiState,
     onReportMissingClick: () -> Unit = {},
     onAlertClick: (alertId: String) -> Unit = {},
-    onSeenPetClick: (alertId: String) -> Unit = {},
     onRetryClick: () -> Unit = {},
     onAddPetClick: () -> Unit = {},
     onPetClick: (petId: String) -> Unit = {},
@@ -243,7 +239,6 @@ fun HomeScreenContent(
           state = state,
           onReportMissingClick = onReportMissingClick,
           onAlertClick = onAlertClick,
-          onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
           onAddPetClick = onAddPetClick,
           onPetClick = { petId ->
@@ -274,7 +269,6 @@ private fun HomeList(
     state: HomeUiState,
     onReportMissingClick: () -> Unit,
     onAlertClick: (alertId: String) -> Unit,
-    onSeenPetClick: (alertId: String) -> Unit,
     onRetryClick: () -> Unit,
     onAddPetClick: () -> Unit,
     onPetClick: (petId: String) -> Unit,
@@ -311,7 +305,7 @@ private fun HomeList(
 
     petsSection(state, onRetryClick, onAddPetClick, onPetClick, onMissingPetClick)
 
-    lostPetsSection(state, onAlertClick, onSeenPetClick, onRetryClick)
+    lostPetsSection(state, onAlertClick, onRetryClick)
 
     // Report a pet missing: at the end of the scroll, as in Figma
     item(key = "reportMissing") {
@@ -866,7 +860,7 @@ private val previewState =
                     petPhotoUrl = "preview://milo",
                 )
             ),
-        lostPetsNearby =
+        carouselAlerts =
             HomeSection(
                 listOf(
                     Alert(

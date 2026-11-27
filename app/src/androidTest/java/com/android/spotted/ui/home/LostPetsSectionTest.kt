@@ -18,7 +18,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
-/** UI tests for the "Lost near you" section of [HomeScreenContent], with hand-built states. */
+/**
+ * UI tests for the "Lost near you" section of [HomeScreenContent] (the alert carousel), with
+ * hand-built states.
+ */
 class LostPetsSectionTest {
 
   @get:Rule val composeTestRule = createComposeRule()
@@ -26,14 +29,12 @@ class LostPetsSectionTest {
   private fun setContent(
       state: HomeUiState,
       onAlertClick: (String) -> Unit = {},
-      onSeenPetClick: (String) -> Unit = {},
       onRetryClick: () -> Unit = {},
   ) {
     composeTestRule.setContent {
       HomeScreenContent(
           state = state,
           onAlertClick = onAlertClick,
-          onSeenPetClick = onSeenPetClick,
           onRetryClick = onRetryClick,
       )
     }
@@ -47,12 +48,19 @@ class LostPetsSectionTest {
     return node(tag)
   }
 
+  /** Scrolls Home to the carousel, then the carousel until the card of [alertId] is composed. */
+  private fun scrollToCard(alertId: String): SemanticsNodeInteraction {
+    val card = HomeScreenTestTags.alertCard(alertId)
+    scrollTo(HomeScreenTestTags.ALERT_CAROUSEL).performScrollToNode(hasTestTag(card))
+    return node(card)
+  }
+
   @Test
   fun lostPetsAreListed_withNameSpeciesAndTimeLost() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO, NALA)), nowMillis = NOW))
+    setContent(HomeUiState(carouselAlerts = HomeSection(listOf(MILO, NALA)), nowMillis = NOW))
 
-    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertIsDisplayed()
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
+    scrollToCard(MILO.id).assertIsDisplayed()
+    scrollToCard(NALA.id).assertIsDisplayed()
     composeTestRule.onNodeWithText("Cat").assertExists()
     composeTestRule.onNodeWithText("Lost 2 h ago").assertExists()
     composeTestRule.onNodeWithText("Lost yesterday").assertExists()
@@ -61,53 +69,33 @@ class LostPetsSectionTest {
   }
 
   @Test
-  fun onlyTheNewestLostPet_hasTheSeenButton() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO, NALA))))
-
-    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).assertExists()
-    // Nala's card is composed before checking that it has no button
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertExists()
-    node(HomeScreenTestTags.seenButton(NALA.id)).assertDoesNotExist()
-  }
-
-  @Test
-  fun firstLostPetOfTheState_isFeatured() {
-    // The ViewModel sorts the alerts newest first: the screen keeps the order it is given
-    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(NALA, MILO))))
-
-    scrollTo(HomeScreenTestTags.seenButton(NALA.id)).assertExists()
-    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertExists()
-    node(HomeScreenTestTags.seenButton(MILO.id)).assertDoesNotExist()
-  }
-
-  @Test
   fun refreshingLostPets_keepsTheListAndShowsNoLoader() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO), isLoading = true)))
+    setContent(HomeUiState(carouselAlerts = HomeSection(listOf(MILO), isLoading = true)))
 
-    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertIsDisplayed()
+    scrollToCard(MILO.id).assertIsDisplayed()
     node(HomeScreenTestTags.ALERTS_LOADER).assertDoesNotExist()
     node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
   }
 
   @Test
   fun lostPetsErrorAfterARefresh_keepsTheListAndShowsTheErrorBelow() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO), errorMessage = ALERTS_ERROR)))
+    setContent(HomeUiState(carouselAlerts = HomeSection(listOf(MILO), errorMessage = ALERTS_ERROR)))
 
-    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).assertIsDisplayed()
+    scrollToCard(MILO.id).assertIsDisplayed()
     scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertTextEquals(ALERTS_ERROR)
     node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
   }
 
   @Test
   fun oneLostPet_isCountedInTheSingular() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection(listOf(MILO))))
+    setContent(HomeUiState(carouselAlerts = HomeSection(listOf(MILO))))
 
     node(HomeScreenTestTags.ALERTS_TITLE).assertTextEquals("1 pet missing near you")
   }
 
   @Test
   fun noLostPets_showsTheirEmptyState() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection()))
+    setContent(HomeUiState(carouselAlerts = HomeSection()))
 
     scrollTo(HomeScreenTestTags.ALERTS_EMPTY).assertTextEquals(HomeScreenTexts.NO_LOST_PETS)
     node(HomeScreenTestTags.ALERTS_TITLE).assertTextEquals("0 pets missing near you")
@@ -115,7 +103,7 @@ class LostPetsSectionTest {
 
   @Test
   fun lostPetsError_showsTheirError_andNoEmptyState() {
-    setContent(HomeUiState(lostPetsNearby = HomeSection(errorMessage = ALERTS_ERROR)))
+    setContent(HomeUiState(carouselAlerts = HomeSection(errorMessage = ALERTS_ERROR)))
 
     scrollTo(HomeScreenTestTags.ALERTS_ERROR).assertTextEquals(ALERTS_ERROR)
     node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
@@ -125,7 +113,7 @@ class LostPetsSectionTest {
   fun lostPetsRetry_callsItsCallback() {
     var retries = 0
     setContent(
-        HomeUiState(lostPetsNearby = HomeSection(errorMessage = ALERTS_ERROR)),
+        HomeUiState(carouselAlerts = HomeSection(errorMessage = ALERTS_ERROR)),
         onRetryClick = { retries++ },
     )
 
@@ -143,7 +131,7 @@ class LostPetsSectionTest {
 
   @Test
   fun bothSections_showTheirOwnEmptyState() {
-    setContent(HomeUiState(pets = HomeSection(), lostPetsNearby = HomeSection()))
+    setContent(HomeUiState(pets = HomeSection(), carouselAlerts = HomeSection()))
 
     scrollTo(HomeScreenTestTags.PETS_EMPTY).assertIsDisplayed()
     scrollTo(HomeScreenTestTags.ALERTS_EMPTY).assertIsDisplayed()
@@ -154,7 +142,7 @@ class LostPetsSectionTest {
     setContent(
         HomeUiState(
             pets = HomeSection(listOf(LUNA)),
-            lostPetsNearby = HomeSection(errorMessage = ALERTS_ERROR),
+            carouselAlerts = HomeSection(errorMessage = ALERTS_ERROR),
         )
     )
 
@@ -164,35 +152,67 @@ class LostPetsSectionTest {
   }
 
   @Test
-  fun alertCard_andSeenButton_passTheAlertId() {
+  fun tappingACard_passesItsAlertId() {
     val clicked = mutableListOf<String>()
-    val seen = mutableListOf<String>()
     setContent(
-        HomeUiState(lostPetsNearby = HomeSection(listOf(MILO, NALA))),
+        HomeUiState(carouselAlerts = HomeSection(listOf(MILO, NALA))),
         onAlertClick = { clicked += it },
-        onSeenPetClick = { seen += it },
     )
 
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
-    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).performClick()
+    scrollToCard(NALA.id).performClick()
 
     assertEquals(listOf(NALA.id), clicked)
-    assertEquals(listOf(MILO.id), seen)
+  }
+
+  @Test
+  fun carousel_scrollsHorizontally_toTheLastCard() {
+    val alerts = (1..6).map { MILO.copy(id = "alert-$it", petName = "Pet $it") }
+    setContent(HomeUiState(carouselAlerts = HomeSection(alerts)))
+
+    scrollTo(HomeScreenTestTags.ALERT_CAROUSEL)
+    // Cards are 220 dp wide: the last one starts off screen, to the right
+    node(HomeScreenTestTags.alertCard("alert-6")).assertDoesNotExist()
+    val rowTop = node(HomeScreenTestTags.alertCard("alert-1")).fetchSemanticsNode().boundsInRoot.top
+
+    scrollToCard("alert-6").assertIsDisplayed()
+
+    // Same row as the first card: the carousel scrolled sideways, not the page
+    val lastTop =
+        node(HomeScreenTestTags.alertCard("alert-6")).fetchSemanticsNode().boundsInRoot.top
+    assertEquals(rowTop, lastTop, 1f)
+    node(HomeScreenTestTags.ALERTS_TITLE).assertTextEquals("6 pets missing near you")
+  }
+
+  @Test
+  fun loadingWithoutCards_showsTheLoaderAndNoCarousel() {
+    setContent(HomeUiState(carouselAlerts = HomeSection(isLoading = true)))
+
+    scrollTo(HomeScreenTestTags.ALERTS_LOADER).assertIsDisplayed()
+    node(HomeScreenTestTags.ALERT_CAROUSEL).assertDoesNotExist()
+    node(HomeScreenTestTags.ALERTS_EMPTY).assertDoesNotExist()
+  }
+
+  @Test
+  fun noLostPets_showsNoCarousel() {
+    setContent(HomeUiState(carouselAlerts = HomeSection()))
+
+    scrollTo(HomeScreenTestTags.ALERTS_EMPTY).assertIsDisplayed()
+    node(HomeScreenTestTags.ALERT_CAROUSEL).assertDoesNotExist()
   }
 
   @Test
   fun lostPetDistance_isShownOnlyWhenKnown() {
     setContent(
         HomeUiState(
-            lostPetsNearby = HomeSection(listOf(MILO, NALA)),
+            carouselAlerts = HomeSection(listOf(MILO, NALA)),
             distanceTexts = mapOf(MILO.id to "600 m away"),
         )
     )
 
     // The clickable card merges its texts: scroll to the card, then look inside it
-    scrollTo(HomeScreenTestTags.alertCard(MILO.id))
+    scrollToCard(MILO.id)
     node(HomeScreenTestTags.alertDistance(MILO.id)).assertTextEquals("600 m away")
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).assertIsDisplayed()
+    scrollToCard(NALA.id).assertIsDisplayed()
     node(HomeScreenTestTags.alertDistance(NALA.id)).assertDoesNotExist()
   }
 

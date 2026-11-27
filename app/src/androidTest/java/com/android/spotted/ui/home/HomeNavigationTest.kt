@@ -49,7 +49,6 @@ class HomeNavigationTest {
                   state = STATE,
                   onReportMissingClick = navigation.onReportMissingClick,
                   onAlertClick = navigation.onAlertClick,
-                  onSeenPetClick = navigation.onSeenPetClick,
                   onAddPetClick = navigation.onAddPetClick,
                   onPetClick = navigation.onPetClick,
                   onMapClick = navigation.onMapClick,
@@ -110,21 +109,19 @@ class HomeNavigationTest {
     return node(tag)
   }
 
-  @Test
-  fun tappingAnAlert_opensItsDetail() {
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
-
-    node(ALERT_DETAIL_SCREEN).assertIsDisplayed().assertTextEquals("Alert ${NALA.id}")
-    assertEquals(Route.ALERT_DETAIL, navController.currentDestination?.route)
+  /** Scrolls Home to the carousel, then the carousel until the card of [alertId] is composed. */
+  private fun scrollToCard(alertId: String): SemanticsNodeInteraction {
+    val card = HomeScreenTestTags.alertCard(alertId)
+    scrollTo(HomeScreenTestTags.ALERT_CAROUSEL).performScrollToNode(hasTestTag(card))
+    return node(card)
   }
 
   @Test
-  fun seenButton_opensReportSightingForThatAlert() {
-    scrollTo(HomeScreenTestTags.seenButton(MILO.id)).performClick()
+  fun tappingAnAlert_opensItsDetail() {
+    scrollToCard(NALA.id).performClick()
 
-    node(REPORT_SIGHTING_SCREEN)
-        .assertIsDisplayed()
-        .assertTextEquals("Report a sighting of ${MILO.id}")
+    node(ALERT_DETAIL_SCREEN).assertIsDisplayed().assertTextEquals("Alert ${NALA.id}")
+    assertEquals(Route.ALERT_DETAIL, navController.currentDestination?.route)
   }
 
   @Test
@@ -136,7 +133,7 @@ class HomeNavigationTest {
 
   @Test
   fun reportSighting_fromAlertDetail_opensReportSightingForThatAlert() {
-    scrollTo(HomeScreenTestTags.alertCard(NALA.id)).performClick()
+    scrollToCard(NALA.id).performClick()
 
     node(ALERT_DETAIL_REPORT_SIGHTING).performClick()
 
@@ -195,7 +192,7 @@ class HomeNavigationTest {
 
   @Test
   fun back_fromAlertDetail_returnsHome() {
-    scrollTo(HomeScreenTestTags.alertCard(MILO.id)).performClick()
+    scrollToCard(MILO.id).performClick()
     composeTestRule.runOnIdle { navController.popBackStack() }
 
     node(HomeScreenTestTags.SCREEN).assertIsDisplayed()
@@ -225,6 +222,6 @@ class HomeNavigationTest {
         )
     val NALA = MILO.copy(id = "nala", petId = "nala", petName = "Nala")
 
-    val STATE = HomeUiState(lostPetsNearby = HomeSection(listOf(MILO, NALA)))
+    val STATE = HomeUiState(carouselAlerts = HomeSection(listOf(MILO, NALA)))
   }
 }
