@@ -121,6 +121,7 @@ object HomeScreenTestTags {
   const val WAITING_BANNER = "home_waitingBanner"
   const val WAITING_SHEET = "home_waitingSheet"
   const val WAITING_CLOSE = "home_waitingClose"
+  const val WAITING_ERROR = "home_waitingError"
   const val DELETE_DIALOG = "home_deleteDialog"
   const val DELETE_CONFIRM = "home_deleteConfirm"
   const val DELETE_CANCEL = "home_deleteCancel"
@@ -236,10 +237,10 @@ fun HomeScreenContent(
   }
   val snackbarHostState = remember { SnackbarHostState() }
   // "Your sighting of Milo was sent": marked as shown once it is gone, as a new state would cancel
-  // it
+  // it. It waits for the "Waiting to send" sheet to close, as it would be hidden behind it.
   val sentMessage = state.sentSighting?.let { sentMessage(it) }
-  LaunchedEffect(state.sentSighting) {
-    if (sentMessage != null) {
+  LaunchedEffect(state.sentSighting, state.isWaitingSheetOpen) {
+    if (sentMessage != null && !state.isWaitingSheetOpen) {
       snackbarHostState.currentSnackbarData?.dismiss()
       snackbarHostState.showSnackbar(SentSnackbarVisuals(sentMessage))
       onSentSightingShown()
@@ -307,6 +308,7 @@ fun HomeScreenContent(
   if (state.isWaitingSheetOpen) {
     WaitingSightingsSheet(
         sightings = state.waitingSightings,
+        errorMessage = state.waitingErrorMessage,
         onDeleteClick = onWaitingDeleteClick,
         onClose = onWaitingSheetClose,
     )

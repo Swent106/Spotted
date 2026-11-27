@@ -283,14 +283,16 @@ class HomeViewModel(
   }
 
   fun closeWaitingSheet() {
-    _uiState.update { it.copy(isWaitingSheetOpen = false, waitingDeleteId = null) }
+    _uiState.update {
+      it.copy(isWaitingSheetOpen = false, waitingDeleteId = null, waitingErrorMessage = null)
+    }
   }
 
   /** Asks to confirm the deletion of the waiting sighting [sightingId]. */
   fun askToDeleteWaiting(sightingId: String) {
     _uiState.update { state ->
       if (state.waitingSightings.none { it.id == sightingId }) state
-      else state.copy(waitingDeleteId = sightingId)
+      else state.copy(waitingDeleteId = sightingId, waitingErrorMessage = null)
     }
   }
 
@@ -310,7 +312,7 @@ class HomeViewModel(
     viewModelScope.launch {
       repository.delete(sightingId).onFailure {
         deletingIds -= sightingId
-        _uiState.update { it.copy(errorMessage = WAITING_DELETE_FAILED) }
+        _uiState.update { it.copy(waitingErrorMessage = WAITING_DELETE_FAILED) }
       }
     }
   }

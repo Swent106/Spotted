@@ -61,6 +61,8 @@ data class WaitingSighting(
  * @property waitingSightings the signed-in user's sightings waiting to be sent, oldest first.
  * @property isWaitingSheetOpen true while the "Waiting to send" sheet is shown.
  * @property waitingDeleteId the waiting sighting whose deletion is being confirmed, or null.
+ * @property waitingErrorMessage why the last delete from the "Waiting to send" sheet failed, shown
+ *   in the sheet, or null.
  * @property sentSighting a waiting sighting that was just sent, for the "was sent" snackbar.
  */
 data class HomeUiState(
@@ -82,6 +84,7 @@ data class HomeUiState(
     val waitingSightings: List<WaitingSighting> = emptyList(),
     val isWaitingSheetOpen: Boolean = false,
     val waitingDeleteId: String? = null,
+    val waitingErrorMessage: String? = null,
     val sentSighting: WaitingSighting? = null,
     /** New sightings waiting for the user's review on their alerts: the badge on the bell. */
     val pendingSightings: Int = 0,

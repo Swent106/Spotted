@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -50,6 +53,7 @@ import com.android.spotted.ui.theme.jakarta
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * "N sightings waiting to send", from the Figma frame "05b · Home · Sighting waiting to send":
@@ -106,6 +110,7 @@ internal fun LazyListScope.waitingBanner(state: HomeUiState, onClick: () -> Unit
 @Composable
 internal fun WaitingSightingsSheet(
     sightings: List<WaitingSighting>,
+    errorMessage: String?,
     onDeleteClick: (sightingId: String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -139,7 +144,17 @@ internal fun WaitingSightingsSheet(
             style = jakarta(13, 16f, 500, SpottedTheme.colors.textSecondary),
         )
       }
-      sightings.forEach { sighting -> WaitingRow(sighting, onDeleteClick) }
+      // In the sheet, as Home's header is hidden behind it
+      if (errorMessage != null) {
+        Text(
+            errorMessage,
+            style = jakarta(13, 16f, 600, SpottedTheme.colors.lostRed),
+            modifier = Modifier.testTag(HomeScreenTestTags.WAITING_ERROR),
+        )
+      }
+      val nowMillis = remember(sightings) { System.currentTimeMillis() }
+      val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
+      sightings.forEach { sighting -> WaitingRow(sighting, nowMillis, is24Hour, onDeleteClick) }
       GreyButton(
           stringResource(R.string.home_waiting_close),
           onClose,
@@ -150,7 +165,12 @@ internal fun WaitingSightingsSheet(
 }
 
 @Composable
-private fun WaitingRow(sighting: WaitingSighting, onDeleteClick: (sightingId: String) -> Unit) {
+private fun WaitingRow(
+    sighting: WaitingSighting,
+    nowMillis: Long,
+    is24Hour: Boolean,
+    onDeleteClick: (sightingId: String) -> Unit,
+) {
   Row(
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -190,7 +210,7 @@ private fun WaitingRow(sighting: WaitingSighting, onDeleteClick: (sightingId: St
       Text(
           stringResource(
               R.string.home_waiting_saved,
-              waitingTime(sighting.savedAtMillis),
+              waitingTime(sighting.savedAtMillis, nowMillis, is24Hour),
               sighting.place,
           ),
           style = jakarta(12, 15f, 500, SpottedTheme.colors.textSecondary),
@@ -335,6 +355,21 @@ internal fun sentMessage(sighting: WaitingSighting): String =
 internal fun speciesName(species: Species): String =
     species.name.lowercase().replaceFirstChar(Char::titlecase)
 
-/** "14:32": the time of [millis], in the phone's time zone. */
-internal fun waitingTime(millis: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))
+/**
+ * "14:32" when [millis] is on the same day as [nowMillis], else "24 Nov, 14:32", as a sighting can
+ * wait for days. "2:32 PM" when the phone is not set to [is24Hour].
+ */
+internal fun waitingTime(
+    millis: Long,
+    nowMillis: Long,
+    is24Hour: Boolean,
+    zone: TimeZone = TimeZone.getDefault(),
+    locale: Locale = Locale.getDefault(),
+): String {
+  fun format(pattern: String) =
+      SimpleDateFormat(pattern, locale).apply { timeZone = zone }.format(Date(millis))
+  val day = SimpleDateFormat("yyyyMMdd", locale).apply { timeZone = zone }
+  val time = format(if (is24Hour) "HH:mm" else "h:mm a")
+  return if (day.format(Date(millis)) == day.format(Date(nowMillis))) time
+  else "${format("d MMM")}, $time"
+}

@@ -1,6 +1,7 @@
 // Portions of this code were generated with the help of Claude (Anthropic).
 package com.android.spotted.ui.home
 
+import android.text.format.DateFormat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.android.spotted.model.Pet.Species
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -108,7 +110,7 @@ class HomeWaitingSightingsContentTest {
     // Without an alert, the row shows the species
     composeTestRule.onNodeWithText("Dog").assertIsDisplayed()
     composeTestRule
-        .onNodeWithText("Saved ${waitingTime(MILO.savedAtMillis)} · Plainpalais, Geneva")
+        .onNodeWithText("Saved ${savedTime(MILO)} · Plainpalais, Geneva")
         .assertIsDisplayed()
 
     node(HomeScreenTestTags.WAITING_CLOSE).performClick()
@@ -188,10 +190,59 @@ class HomeWaitingSightingsContentTest {
   }
 
   @Test
+  fun aFailedDelete_isShownInTheSheet() {
+    setContent(
+        HomeUiState(
+            waitingSightings = listOf(MILO),
+            isWaitingSheetOpen = true,
+            waitingErrorMessage = HomeViewModel.WAITING_DELETE_FAILED,
+        )
+    )
+
+    node(HomeScreenTestTags.WAITING_ERROR).assertIsDisplayed()
+    composeTestRule.onNodeWithText(HomeViewModel.WAITING_DELETE_FAILED).assertIsDisplayed()
+  }
+
+  @Test
+  fun aSightingSentWhileTheSheetIsOpen_isToldOnceTheSheetCloses() {
+    setContent(
+        HomeUiState(
+            waitingSightings = listOf(STRAY),
+            isWaitingSheetOpen = true,
+            sentSighting = MILO,
+        )
+    )
+    composeTestRule.waitForIdle()
+
+    // Not behind the sheet, and not marked as shown
+    node(HomeScreenTestTags.SENT_SNACKBAR).assertDoesNotExist()
+    assertEquals(0, sentShown)
+
+    node(HomeScreenTestTags.WAITING_CLOSE).performClick()
+
+    composeTestRule.waitUntil(TIMEOUT_MILLIS) {
+      composeTestRule
+          .onAllNodes(hasTestTag(HomeScreenTestTags.SENT_SNACKBAR), useUnmergedTree = true)
+          .fetchSemanticsNodes()
+          .isNotEmpty()
+    }
+    composeTestRule.onNodeWithText("Your sighting of Milo was sent").assertIsDisplayed()
+    composeTestRule.waitUntil(SNACKBAR_TIMEOUT_MILLIS) { sentShown == 1 }
+  }
+
+  @Test
   fun speciesName_isCapitalised() {
     assertEquals("Dog", speciesName(Species.DOG))
     assertEquals("Other", speciesName(Species.OTHER))
   }
+
+  /** The saved time the row shows for [sighting], with this phone's clock and 12/24 h setting. */
+  private fun savedTime(sighting: WaitingSighting) =
+      waitingTime(
+          sighting.savedAtMillis,
+          System.currentTimeMillis(),
+          DateFormat.is24HourFormat(InstrumentationRegistry.getInstrumentation().targetContext),
+      )
 
   private companion object {
     const val TIMEOUT_MILLIS = 5_000L
