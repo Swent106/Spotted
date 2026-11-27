@@ -332,6 +332,9 @@ class HelperProfileViewModelTest {
 
     override suspend fun confirmSighting(sightingId: String): Result<Unit> =
         error("Not used by the profile")
+
+    override suspend fun restoreSighting(sightingId: String): Result<Unit> =
+        error("Not used by the profile")
   }
 
   private suspend fun addRexAndHisAlert() {

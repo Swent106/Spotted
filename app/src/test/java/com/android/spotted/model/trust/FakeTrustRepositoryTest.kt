@@ -128,6 +128,77 @@ class FakeTrustRepositoryTest {
     assertEquals(TrustScore.INITIAL, repository.getTrust("helper-1").getOrThrow())
   }
 
+  @Test
+  fun hideByVotes_appliesAFalseVerdictAndHidesTheSighting() = runTest {
+    val sightings = FakeSightingRepository()
+    sightings.reportSighting(SIGHTING)
+    val repository = FakeTrustRepository(mapOf("helper-1" to trusted), sightings = sightings)
+
+    repository.hideByVotes(SIGHTING.id)
+
+    assertEquals(SightingStatus.VOTED_FALSE, sightings.reportedSightings.single().status)
+    assertEquals(trusted.after(Verdict.FALSE), repository.getTrust("helper-1").getOrThrow())
+    assertEquals(mapOf(SIGHTING.id to Verdict.FALSE), repository.verdicts)
+  }
+
+  @Test
+  fun hideByVotes_ofAConfirmedSighting_changesNothing() = runTest {
+    val repository =
+        FakeTrustRepository(mapOf("helper-1" to trusted), mapOf("sighting-1" to "helper-1"))
+    repository.confirmSighting("sighting-1").getOrThrow()
+
+    repository.hideByVotes("sighting-1")
+
+    assertEquals(trusted.after(Verdict.CONFIRMED), repository.getTrust("helper-1").getOrThrow())
+    assertEquals(mapOf("sighting-1" to Verdict.CONFIRMED), repository.verdicts)
+  }
+
+  @Test
+  fun restoreSighting_cancelsThePenaltyAndSetsItPending() = runTest {
+    val sightings = FakeSightingRepository()
+    sightings.reportSighting(SIGHTING)
+    val repository = FakeTrustRepository(mapOf("helper-1" to trusted), sightings = sightings)
+    repository.hideByVotes(SIGHTING.id)
+
+    repository.restoreSighting(SIGHTING.id).getOrThrow()
+
+    assertEquals(SightingStatus.PENDING, sightings.reportedSightings.single().status)
+    val restored = repository.getTrust("helper-1").getOrThrow()
+    assertEquals(trusted.score, restored.score, 1e-9)
+    assertEquals(trusted.judged, restored.judged)
+    assertEquals(0, restored.falseSightings)
+  }
+
+  @Test
+  fun restoreSighting_twice_failsTheSecondTime() = runTest {
+    val repository =
+        FakeTrustRepository(mapOf("helper-1" to trusted), mapOf("sighting-1" to "helper-1"))
+    repository.hideByVotes("sighting-1")
+    repository.restoreSighting("sighting-1").getOrThrow()
+    val afterRestore = repository.getTrust("helper-1").getOrThrow()
+
+    val error = repository.restoreSighting("sighting-1").exceptionOrNull()
+
+    assertTrue(error is SightingNotHiddenException)
+    assertEquals(afterRestore, repository.getTrust("helper-1").getOrThrow())
+  }
+
+  @Test
+  fun restoreSighting_ofASightingNotHidden_fails() = runTest {
+    val repository = FakeTrustRepository(reporters = mapOf("sighting-1" to "helper-1"))
+
+    val error = repository.restoreSighting("sighting-1").exceptionOrNull()
+
+    assertTrue(error is SightingNotHiddenException)
+  }
+
+  @Test
+  fun restoreSighting_ofAnUnknownSighting_fails() = runTest {
+    val error = FakeTrustRepository().restoreSighting("sighting-1").exceptionOrNull()
+
+    assertTrue(error is SightingNotFoundException)
+  }
+
   private companion object {
     val SIGHTING =
         Sighting(

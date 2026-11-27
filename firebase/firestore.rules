@@ -358,15 +358,15 @@ service cloud.firestore {
 
       // Full schema of a sighting document (matches SightingRepositoryFirestore).
       // species and status must be names of the Species and SightingStatus enums.
-      // voteWeight and penalty are checked by the only rule that may change them (the votes,
-      // below): checking them here too would cost expressions
+      // voteWeight, penalty and penaltyCancelled are checked by the only rules that may change
+      // them (the votes and the restore, below): checking them here too would cost expressions
       // in every update, which already come close to the limit of 1000 per request.
       function validSighting(d, previousHeadingDegrees) {
         return d.keys().hasAll(['id', 'reporterId', 'location', 'seenAtMillis', 'species'])
           && d.keys().hasOnly([
                 'id', 'reporterId', 'location', 'seenAtMillis', 'species', 'photoUrl', 'alertId',
                 'status', 'headingDegrees', 'activities', 'conditions', 'reactions', 'placeType',
-                'collar', 'trustVerdict', 'voteWeight', 'penalty'])
+                'collar', 'trustVerdict', 'voteWeight', 'penalty', 'penaltyCancelled'])
           && d.get('status', 'PENDING') in ['PENDING', 'CONFIRMED', 'DISMISSED', 'VOTED_FALSE']
           && d.get('trustVerdict', 'CONFIRMED') in ['CONFIRMED', 'FALSE']
           && validSightingDetails(d)
@@ -425,9 +425,9 @@ service cloud.firestore {
         return 'trustVerdict' in d;
       }
 
-      // Fields only the votes write (see below)
+      // Fields only the votes and the restore write (see below)
       function voteFields() {
-        return ['voteWeight', 'penalty'];
+        return ['voteWeight', 'penalty', 'penaltyCancelled'];
       }
 
       allow create: if request.auth != null
@@ -475,9 +475,8 @@ service cloud.firestore {
       // The status stays explicit once reviewed (it cannot be deleted).
       // The first confirmation must judge the sighting too (next rule), so it moves the trust
       // score of its reporter. Once judged, the status alone may change again.
-      // VOTED_FALSE is set only by the votes (below), so the owner cannot hide a sighting alone.
-      // It cannot be left yet: the restore, which also cancels the reporter's penalty, comes in
-      // #463 part 3. A plain status change would let the reporter keep the penalty.
+      // VOTED_FALSE is set only by the votes, and left only by a restore (both below), so the
+      // owner can neither hide a sighting alone nor skip cancelling the reporter's penalty.
       allow update: if request.auth != null
           && ownsLinkedAlert()
           && validSighting(
@@ -512,7 +511,7 @@ service cloud.firestore {
       // (voteThreshold()) hides the sighting: VOTED_FALSE, a FALSE verdict, and the
       // reporter's trust before it (penalty), in the same write as the trust update it causes
       // (see trust/{uid}). It must hide it, unless the sighting was already judged: then the
-      // votes only add weight, so a sighting is penalised once.
+      // votes only add weight, so a sighting is penalised once and a restored one stays visible.
       function votesNow() {
         let votePath = /databases/$(database)/documents/sightings/$(sightingId)/votes/$(request.auth.uid);
         return !exists(votePath) && existsAfter(votePath);
@@ -536,9 +535,15 @@ service cloud.firestore {
                .data.get('lastSightingId', null) == sightingId;
       }
 
-      // No validSighting here: the rule fixes every field it lets change, and a request may run
-      // each update rule, so a third validSighting would pass the limit of 1000 expressions on a
-      // sighting with every animal detail.
+      // The reporter's trust is written by this same write, with one false sighting less. Its
+      // lastSightingId alone is not enough: it already names this sighting since the penalty.
+      function cancelsReporterPenalty() {
+        let trustPath = /databases/$(database)/documents/trust/$(resource.data.reporterId);
+        return getAfter(trustPath).data.get('lastSightingId', null) == sightingId
+          && getAfter(trustPath).data.get('falseSightings', 0)
+               == get(trustPath).data.get('falseSightings', 0) - 1;
+      }
+
       allow update: if request.auth != null
           && 'voteWeight' in request.resource.data
           && votesNow()
@@ -546,6 +551,23 @@ service cloud.firestore {
           && (reachesThreshold(request.resource.data.voteWeight) && !isJudged(resource.data)
               ? hidesForVotes()
               : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voteWeight']));
+
+      // The owner of the linked alert may restore a sighting hidden by the votes, once
+      // (TrustRepositoryFirestore.restoreSighting): back to PENDING, marked penaltyCancelled, in
+      // the same write as the trust update that cancels its reporter's penalty (see trust/{uid}).
+      // It stays judged, so the votes can never hide it again.
+      // No validSighting in the two rules above: they fix every field they let change, and a
+      // request may run each update rule, so a third validSighting would pass the limit of 1000
+      // expressions on a sighting with every animal detail.
+      allow update: if request.auth != null
+          && statusOf(resource.data) == 'VOTED_FALSE'
+          && !resource.data.get('penaltyCancelled', false)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'penaltyCancelled'])
+          && request.resource.data.status == 'PENDING'
+          && request.resource.data.penaltyCancelled == true
+          && ownsLinkedAlert()
+          && cancelsReporterPenalty();
 
       // Once reviewed, the sighting is evidence the owner relies on, so it cannot be deleted.
       // A judged one cannot either: created again with the same id, it would be counted twice.
@@ -627,10 +649,10 @@ service cloud.firestore {
     // them count as false), penaltiesApplied (false verdicts ever applied, cancelled ones included)
     // of a user, and lastSightingId, the sighting whose verdict changed last. Kept apart from
     // users/{uid}, which holds private contact details, so any signed-in user can see how reliable
-    // a helper is. Written in one transaction with a sighting of the user, in two ways:
+    // a helper is. Written in one transaction with a sighting of the user, in three ways:
     // - the owner of its alert confirms it (TrustRepositoryFirestore.confirmSighting);
-    // - a vote brings it to the threshold, a false verdict (VoteRepositoryFirestore.castVote).
-    // Cancelling a false verdict comes in #463 part 3.
+    // - a vote brings it to the threshold, a false verdict (VoteRepositoryFirestore.castVote);
+    // - the owner of its alert restores it, cancelling that verdict (restoreSighting).
     // The constants match TrustRules in model/trust/TrustScore.kt and VoteRules in VoteRules.kt.
     match /trust/{uid} {
       function judgedSightingPath() {
@@ -723,12 +745,44 @@ service cloud.firestore {
           && request.resource.data.score == scoreAfter(verdict);
       }
 
+      // The sighting named by lastSightingId: reported by this user, hidden by the votes and not
+      // restored before this write, restored by it, by the owner of its alert.
+      function restoresSightingNow() {
+        let before = get(judgedSightingPath()).data;
+        return before.reporterId == uid
+          && before.get('status', 'PENDING') == 'VOTED_FALSE'
+          && !before.get('penaltyCancelled', false)
+          && getAfter(judgedSightingPath()).data.get('penaltyCancelled', false) == true
+          && ownsAlertOf(before);
+      }
+
+      // TrustScore.withoutPenalty: the false verdict applied when the trust was [p] (the
+      // sighting's penalty) is cancelled. The score gets back the gap the penalty opened,
+      // p.score * (1 - 0.5), times the slope of every verdict since: 0.9 per confirmation, 0.5 per
+      // false verdict (cancelled ones included). math.pow may round differently from Kotlin, so
+      // the score is accepted within 1e-9.
+      function cancelsPenalty(p) {
+        let confirmedSince = (judgedBefore() - falseBefore()) - (p.judged - p.falseSightings);
+        let penaltiesSince = penaltiesBefore() - p.penaltiesApplied - 1;
+        let expected = scoreBefore()
+          + math.pow(1 - 0.1, confirmedSince) * math.pow(0.5, penaltiesSince)
+            * p.score * (1 - 0.5);
+        return confirmedSince >= 0
+          && penaltiesSince >= 0
+          && request.resource.data.judged == judgedBefore() - 1
+          && request.resource.data.falseSightings == falseBefore() - 1
+          && request.resource.data.penaltiesApplied == penaltiesBefore()
+          && math.abs(request.resource.data.score - expected) < 0.000000001;
+      }
+
       allow get: if isAuthenticated();
       allow create, update: if isAuthenticated()
           && validTrust(request.resource.data)
           && exists(judgedSightingPath())
           && ((judgesSightingNow() && appliesOneVerdict('CONFIRMED'))
-              || (penalisesForVotesNow() && appliesOneVerdict('FALSE')));
+              || (penalisesForVotesNow() && appliesOneVerdict('FALSE'))
+              || (restoresSightingNow()
+                  && cancelsPenalty(get(judgedSightingPath()).data.penalty)));
     }
 
     // thanks/{alertId}_{helperId}: a thank-you from the owner of a closed alert to a helper who

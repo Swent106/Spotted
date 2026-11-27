@@ -177,6 +177,43 @@ class VoteRepositoryFirestoreTest {
   }
 
   @Test
+  fun hiddenByVotes_thenRestoredByTheOwner_givesTheReporterTheirTrustBack() = runTest {
+    // The signed-in user votes and also owns the alert, so one test user can do both
+    seedEligibleVoter()
+    val sightingId = seedSighting(voteWeight = 1.5, alertId = seedAlert(ownerId = voterId()))
+    repository.castVote(sightingId, voterId()).getOrThrow()
+    val reporterId = sightingSnapshot(sightingId).getString("reporterId")!!
+
+    trustRepository().restoreSighting(sightingId).getOrThrow()
+
+    val sighting = sightingSnapshot(sightingId)
+    assertEquals("PENDING", sighting.getString("status"))
+    assertEquals(true, sighting.getBoolean("penaltyCancelled"))
+    val restored = trustRepository().getTrust(reporterId).getOrThrow()
+    assertEquals(TrustScore.INITIAL.score, restored.score, 1e-9)
+    assertEquals(TrustScore(restored.score, 0, 0, 1), restored)
+  }
+
+  @Test
+  fun aRestoredSighting_reachingTheThresholdAgain_isNeitherHiddenNorPenalised() = runTest {
+    seedEligibleVoter()
+    val sightingId = seedSighting(voteWeight = 1.5, alertId = seedAlert(ownerId = voterId()))
+    repository.castVote(sightingId, voterId()).getOrThrow()
+    trustRepository().restoreSighting(sightingId).getOrThrow()
+    val reporterId = sightingSnapshot(sightingId).getString("reporterId")!!
+    val afterRestore = trustRepository().getTrust(reporterId).getOrThrow()
+
+    // A second user votes: the weight goes from 2.0 to 2.5
+    signInAsAnotherVoter()
+    repository.castVote(sightingId, voterId()).getOrThrow()
+
+    val sighting = sightingSnapshot(sightingId)
+    assertEquals(2.5, sighting.getDouble("voteWeight")!!, 1e-9)
+    assertEquals("PENDING", sighting.getString("status"))
+    assertEquals(afterRestore, trustRepository().getTrust(reporterId).getOrThrow())
+  }
+
+  @Test
   fun getVoteCount_sightingWithoutVotes_isZero() = runTest {
     val sightingId = seedSighting()
 
@@ -193,10 +230,43 @@ class VoteRepositoryFirestoreTest {
 
   private fun trustRepository() = TrustRepositoryFirestore(firestore)
 
+  /**
+   * Signs in as a new eligible voter. The previous voter's quota and the new voter's votes on the
+   * seeded sightings are deleted after the test, like the first voter's.
+   */
+  private suspend fun signInAsAnotherVoter() {
+    val previousVoter = voterId()
+    withContext(Dispatchers.IO) {
+      auth.signOut()
+      Tasks.await(auth.signInAnonymously())
+    }
+    seededDocuments += "voteQuota/$previousVoter"
+    seededDocuments +=
+        seededDocuments
+            .filter { it.startsWith("sightings/") && it.contains("/votes/$previousVoter") }
+            .map { it.replace("/votes/$previousVoter", "/votes/${voterId()}") }
+    seedEligibleVoter()
+  }
+
   private suspend fun sightingSnapshot(sightingId: String) =
       withContext(Dispatchers.IO) {
         Tasks.await(firestore.collection("sightings").document(sightingId).get())
       }
+
+  /** Writes an open alert of [ownerId], bypassing the rules, and returns its id. */
+  private suspend fun seedAlert(ownerId: String): String {
+    val alertId = "alert-${UUID.randomUUID()}"
+    seedDocument(
+        "alerts",
+        alertId,
+        mapOf(
+            "id" to stringValue(alertId),
+            "ownerId" to stringValue(ownerId),
+            "status" to stringValue("OPEN"),
+        ),
+    )
+    return alertId
+  }
 
   private fun voterId(): String =
       requireNotNull(auth.currentUser) { "Test user was not authenticated" }.uid
@@ -235,6 +305,7 @@ class VoteRepositoryFirestoreTest {
       voteWeight: Double? = null,
       status: String = "PENDING",
       trustVerdict: String? = null,
+      alertId: String? = null,
       extraFields: Map<String, Any> = emptyMap(),
   ): String {
     val sightingId = "sighting-${UUID.randomUUID()}"
@@ -254,6 +325,7 @@ class VoteRepositoryFirestoreTest {
         listOfNotNull(
                 voteWeight?.let { "voteWeight" to mapOf("doubleValue" to it) },
                 trustVerdict?.let { "trustVerdict" to stringValue(it) },
+                alertId?.let { "alertId" to stringValue(it) },
             )
             .toMap()
     seedDocument(
